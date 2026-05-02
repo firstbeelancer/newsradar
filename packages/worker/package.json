@@ -1,0 +1,32 @@
+{
+  "name": "@newsradar/worker",
+  "version": "3.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Newsradar worker — background job processors on BullMQ",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "bullmq": "^5.52.0",
+    "drizzle-orm": "^0.43.0",
+    "ioredis": "^5.6.1",
+    "pg": "^8.15.6",
+    "dotenv": "^16.5.0",
+    "pino": "^9.6.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "tsx": "^4.19.4",
+    "@types/node": "^22.15.0",
+    "@types/pg": "^8.11.0",
+    "drizzle-kit": "^0.31.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
