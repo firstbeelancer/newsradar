@@ -1,8 +1,9 @@
+import { sql } from "drizzle-orm";
 import pino from "pino";
 import { env } from "./config/env.js";
 import { redis } from "./connection/redis.js";
 import { db, closeDb } from "./db/index.js";
-import { allQueues } from "./queues.js";
+import { allQueues, registerWorkers, closeWorkers } from "./queues.js";
 import { startHeartbeat, stopHeartbeat } from "./workers/heartbeat.worker.js";
 
 /* ------------------------------------------------------------------ */
@@ -28,10 +29,11 @@ let isShuttingDown = false;
  * Sequence:
  *   1. Stop accepting new jobs (pause queues)
  *   2. Stop heartbeat
- *   3. Close BullMQ queues
- *   4. Close Redis connection
- *   5. Close PostgreSQL pool
- *   6. Exit process
+ *   3. Close all workers (drain active jobs)
+ *   4. Close BullMQ queues
+ *   5. Close Redis connection
+ *   6. Close PostgreSQL pool
+ *   7. Exit process
  */
 async function gracefulShutdown(signal: string): Promise<void> {
   if (isShuttingDown) {
@@ -51,16 +53,20 @@ async function gracefulShutdown(signal: string): Promise<void> {
     logger.info("Stopping heartbeat...");
     stopHeartbeat(logger);
 
-    // 3. Close all queues
+    // 3. Close all workers — wait for active jobs to finish
+    logger.info("Closing workers...");
+    await closeWorkers();
+
+    // 4. Close all queues
     logger.info("Closing queues...");
     await Promise.all(allQueues.map((q) => q.close()));
 
-    // 4. Close Redis
+    // 5. Close Redis
     logger.info("Closing Redis connection...");
     const { closeRedis } = await import("./connection/redis.js");
     await closeRedis();
 
-    // 5. Close PostgreSQL pool
+    // 6. Close PostgreSQL pool
     logger.info("Closing database pool...");
     await closeDb();
 
@@ -109,7 +115,7 @@ async function main(): Promise<void> {
   // 2. Verify PostgreSQL connection
   logger.info("Verifying database connection...");
   try {
-    const result = await db.execute("SELECT 1");
+    const result = await db.execute(sql`SELECT 1`);
     logger.info({ rows: result.rows.length }, "Database connected");
   } catch (err) {
     logger.fatal(
@@ -121,6 +127,10 @@ async function main(): Promise<void> {
 
   // 3. Start heartbeat
   startHeartbeat(redis, logger);
+
+  // 4. Register all worker processors
+  logger.info("Registering workers...");
+  registerWorkers(logger);
 
   logger.info(
     { queues: allQueues.map((q) => q.name) },
