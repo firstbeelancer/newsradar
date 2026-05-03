@@ -13,6 +13,6 @@ RUN npm install
 COPY packages/worker ./
 
 HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
-  CMD redis-cli -u redis://redis:6379/0 get newsradar:worker:heartbeat || exit 1
+  CMD node healthcheck.mjs
 
 CMD ["npx", "tsx", "src/index.ts"]
