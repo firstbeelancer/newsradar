@@ -14,7 +14,7 @@ import {
   contentTemplates,
   generatedPosts,
   agents,
-} from "../../api/src/db/schema.js";
+} from "../db/schema.js";
 import { eq, and, desc, gte, sql } from "drizzle-orm";
 import { streamComplete, complete } from "../lib/ai-client.js";
 import { redis } from "../connection/redis.js";

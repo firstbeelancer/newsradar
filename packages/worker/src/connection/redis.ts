@@ -1,4 +1,4 @@
-import IORedis from "ioredis";
+import { Redis } from "ioredis";
 import { Queue } from "bullmq";
 import { env } from "../config/env.js";
 
@@ -12,7 +12,7 @@ import { env } from "../config/env.js";
  *
  * This connection is shared to avoid resource exhaustion.
  */
-export const redis = new IORedis(env.REDIS_URL, {
+export const redis = new Redis(env.REDIS_URL, {
   maxRetriesPerRequest: null,
   enableReadyCheck: false,
   lazyConnect: true,

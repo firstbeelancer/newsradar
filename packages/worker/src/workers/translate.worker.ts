@@ -8,7 +8,7 @@
  */
 
 import { db } from "../db/index.js";
-import { articles } from "../../api/src/db/schema.js";
+import { articles } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import { detectLanguage, translateArticle } from "../lib/translator.js";
 import { ingestAnalysisQueue } from "../connection/redis.js";

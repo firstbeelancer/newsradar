@@ -9,7 +9,7 @@
  */
 
 import { db } from "../db/index.js";
-import { sources, articles, agents, agentSources } from "../../api/src/db/schema.js";
+import { sources, articles, agents, agentSources } from "../db/schema.js";
 import { eq, and, sql } from "drizzle-orm";
 import { parseRssFeed } from "../lib/rss-parser.js";
 import { parseTelegramChannel } from "../lib/telegram-parser.js";

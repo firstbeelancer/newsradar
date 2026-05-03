@@ -8,7 +8,7 @@
  */
 
 import { db } from "../db/index.js";
-import { generatedPosts, usageCounters } from "../../api/src/db/schema.js";
+import { generatedPosts, usageCounters } from "../db/schema.js";
 import { eq, lt, and, sql } from "drizzle-orm";
 import { isS3Configured, deleteFromS3 } from "../lib/s3-client.js";
 import type { Job } from "bullmq";

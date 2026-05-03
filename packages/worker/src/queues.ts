@@ -23,16 +23,16 @@
  */
 
 import { createQueue, createWorker, attachWorkerLogging } from "./connection/bullmq.js";
-import { processFetchSource } from "./workers/fetch-source.worker.js";
-import { processRawDedup } from "./workers/raw-dedup.worker.js";
-import { processTranslate } from "./workers/translate.worker.js";
-import { processSemanticDedup } from "./workers/semantic-dedup.worker.js";
-import { processScoreArticle } from "./workers/score-article.worker.js";
-import { processGeneratePost } from "./workers/generate-post.worker.js";
-import { processGenerateDigest } from "./workers/generate-digest.worker.js";
-import { processCleanup } from "./workers/cleanup.worker.js";
-import { processFavoritesCleanup } from "./workers/favorites-cleanup.worker.js";
-import { processPostsCleanup } from "./workers/posts-cleanup.worker.js";
+import { processFetchSource, type FetchSourceJob } from "./workers/fetch-source.worker.js";
+import { processRawDedup, type RawDedupJob } from "./workers/raw-dedup.worker.js";
+import { processTranslate, type TranslateJob } from "./workers/translate.worker.js";
+import { processSemanticDedup, type SemanticDedupJob } from "./workers/semantic-dedup.worker.js";
+import { processScoreArticle, type ScoreArticleJob } from "./workers/score-article.worker.js";
+import { processGeneratePost, type GeneratePostJob } from "./workers/generate-post.worker.js";
+import { processGenerateDigest, type GenerateDigestJob } from "./workers/generate-digest.worker.js";
+import { processCleanup, type CleanupJob } from "./workers/cleanup.worker.js";
+import { processFavoritesCleanup, type FavoritesCleanupJob } from "./workers/favorites-cleanup.worker.js";
+import { processPostsCleanup, type PostsCleanupJob } from "./workers/posts-cleanup.worker.js";
 import type { Logger } from "pino";
 import type { Worker } from "bullmq";
 
@@ -110,7 +110,7 @@ export function registerWorkers(logger: Logger): Worker[] {
   }
 
   /* 1. fetch-source */
-  const fetchSourceWorker = createWorker(
+  const fetchSourceWorker = createWorker<FetchSourceJob>(
     "fetch-source",
     async (job) => processFetchSource(job, logger),
     { concurrency: 3 }
@@ -118,7 +118,7 @@ export function registerWorkers(logger: Logger): Worker[] {
   attachWorkerLogging(fetchSourceWorker, logger);
 
   /* 2. raw-dedup */
-  const rawDedupWorker = createWorker(
+  const rawDedupWorker = createWorker<RawDedupJob>(
     "raw-dedup",
     async (job) => processRawDedup(job, logger),
     { concurrency: 5 }
@@ -126,7 +126,7 @@ export function registerWorkers(logger: Logger): Worker[] {
   attachWorkerLogging(rawDedupWorker, logger);
 
   /* 3. translate */
-  const translateWorker = createWorker(
+  const translateWorker = createWorker<TranslateJob>(
     "translate",
     async (job) => processTranslate(job, logger),
     { concurrency: 3 }
@@ -134,7 +134,7 @@ export function registerWorkers(logger: Logger): Worker[] {
   attachWorkerLogging(translateWorker, logger);
 
   /* 4. semantic-dedup */
-  const semanticDedupWorker = createWorker(
+  const semanticDedupWorker = createWorker<SemanticDedupJob>(
     "semantic-dedup",
     async (job) => processSemanticDedup(job, logger),
     { concurrency: 3 }
@@ -158,7 +158,7 @@ export function registerWorkers(logger: Logger): Worker[] {
   attachWorkerLogging(ingestAnalysisWorker, logger);
 
   /* 6. score-article */
-  const scoreArticleWorker = createWorker(
+  const scoreArticleWorker = createWorker<ScoreArticleJob>(
     "score-article",
     async (job) => processScoreArticle(job, logger),
     { concurrency: 3 }
@@ -166,7 +166,7 @@ export function registerWorkers(logger: Logger): Worker[] {
   attachWorkerLogging(scoreArticleWorker, logger);
 
   /* 7. generate-post */
-  const generatePostWorker = createWorker(
+  const generatePostWorker = createWorker<GeneratePostJob>(
     "generate-post",
     async (job) => processGeneratePost(job, logger),
     { concurrency: 2 }
@@ -174,7 +174,7 @@ export function registerWorkers(logger: Logger): Worker[] {
   attachWorkerLogging(generatePostWorker, logger);
 
   /* 8. generate-digest */
-  const generateDigestWorker = createWorker(
+  const generateDigestWorker = createWorker<GenerateDigestJob>(
     "generate-digest",
     async (job) => processGenerateDigest(job, logger),
     { concurrency: 2 }
@@ -193,7 +193,7 @@ export function registerWorkers(logger: Logger): Worker[] {
   attachWorkerLogging(deepsearchWorker, logger);
 
   /* 10. cleanup */
-  const cleanupWorker = createWorker(
+  const cleanupWorker = createWorker<CleanupJob>(
     "cleanup",
     async (job) => processCleanup(job, logger),
     { concurrency: 1 }
@@ -201,7 +201,7 @@ export function registerWorkers(logger: Logger): Worker[] {
   attachWorkerLogging(cleanupWorker, logger);
 
   /* 11. favorites-cleanup */
-  const favoritesCleanupWorker = createWorker(
+  const favoritesCleanupWorker = createWorker<FavoritesCleanupJob>(
     "favorites-cleanup",
     async (job) => processFavoritesCleanup(job, logger),
     { concurrency: 2 }
@@ -209,7 +209,7 @@ export function registerWorkers(logger: Logger): Worker[] {
   attachWorkerLogging(favoritesCleanupWorker, logger);
 
   /* 12. posts-cleanup */
-  const postsCleanupWorker = createWorker(
+  const postsCleanupWorker = createWorker<PostsCleanupJob>(
     "posts-cleanup",
     async (job) => processPostsCleanup(job, logger),
     { concurrency: 1 }

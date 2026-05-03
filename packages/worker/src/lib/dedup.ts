@@ -6,7 +6,7 @@
 
 import { createHash } from "crypto";
 import { db } from "../db/index.js";
-import { articles } from "../../api/src/db/schema.js";
+import { articles } from "../db/schema.js";
 import { eq, sql, and, ne } from "drizzle-orm";
 
 /* ─── Raw dedup: MD5 hash ─── */

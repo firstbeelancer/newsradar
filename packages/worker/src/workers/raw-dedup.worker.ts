@@ -9,7 +9,7 @@
  */
 
 import { db } from "../db/index.js";
-import { articles } from "../../api/src/db/schema.js";
+import { articles } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import { computeRawHash, findByRawHash } from "../lib/dedup.js";
 import { translateQueue } from "../connection/redis.js";

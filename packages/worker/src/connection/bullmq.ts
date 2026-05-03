@@ -1,4 +1,4 @@
-import { Queue, Worker, type Job, type Processor } from "bullmq";
+import { Queue, Worker, type Job, type Processor, type WorkerOptions } from "bullmq";
 import { redis } from "./redis.js";
 import type pino from "pino";
 
@@ -47,7 +47,7 @@ export function createQueue(
 export function createWorker<T = unknown, R = unknown>(
   name: string,
   processor: Processor<T, R>,
-  opts?: ConstructorParameters<typeof Worker>[2]
+  opts?: Omit<WorkerOptions, "connection">
 ): Worker<T, R> {
   return new Worker<T, R>(name, processor, {
     connection: redis,

@@ -11,7 +11,7 @@
  */
 
 import { db, executeRaw } from "../db/index.js";
-import { articles, generatedPosts, operationLogs } from "../../api/src/db/schema.js";
+import { articles, generatedPosts, operationLogs } from "../db/schema.js";
 import { sql, lt, and, eq } from "drizzle-orm";
 import type { Job } from "bullmq";
 import type { Logger } from "pino";

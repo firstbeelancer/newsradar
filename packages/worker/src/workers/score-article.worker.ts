@@ -14,7 +14,7 @@ import {
   articleScores,
   agents,
   sources,
-} from "../../api/src/db/schema.js";
+} from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import {
   scoreArticle,
@@ -126,7 +126,7 @@ export async function processScoreArticle(
         sourceTrust: scoreResult.sourceTrust.toFixed(2),
         overallScore: scoreResult.overallScore.toFixed(3),
         weightedScore: scoreResult.weightedScore.toFixed(3),
-        weightsSnapshot: weights as Record<string, unknown>,
+        weightsSnapshot: weights as unknown as Record<string, unknown>,
         chips: scoreResult.chips,
         scoredAt,
       })
@@ -140,7 +140,7 @@ export async function processScoreArticle(
       sourceTrust: scoreResult.sourceTrust.toFixed(2),
       overallScore: scoreResult.overallScore.toFixed(3),
       weightedScore: scoreResult.weightedScore.toFixed(3),
-      weightsSnapshot: weights as Record<string, unknown>,
+      weightsSnapshot: weights as unknown as Record<string, unknown>,
       chips: scoreResult.chips,
       scoredAt,
     });

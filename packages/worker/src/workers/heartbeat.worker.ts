@@ -1,4 +1,4 @@
-import type IORedis from "ioredis";
+import type { Redis } from "ioredis";
 import type pino from "pino";
 
 /**
@@ -28,7 +28,7 @@ const HEARTBEAT_TTL_S = 120;
  * @param redis — shared Redis connection
  * @param logger — pino logger instance
  */
-export function startHeartbeat(redis: IORedis, logger: pino.Logger): void {
+export function startHeartbeat(redis: Redis, logger: pino.Logger): void {
   if (state.isRunning) {
     logger.warn("Heartbeat already running — skipping start");
     return;

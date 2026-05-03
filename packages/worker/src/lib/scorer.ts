@@ -13,7 +13,7 @@
  */
 
 import { db } from "../db/index.js";
-import { sources, articles } from "../../api/src/db/schema.js";
+import { sources, articles } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import { complete } from "./ai-client.js";
 

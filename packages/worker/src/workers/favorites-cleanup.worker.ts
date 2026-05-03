@@ -8,7 +8,7 @@
  */
 
 import { db } from "../db/index.js";
-import { articles, workspaces, usageCounters } from "../../api/src/db/schema.js";
+import { articles, workspaces, usageCounters } from "../db/schema.js";
 import { eq, and, sql, desc, asc } from "drizzle-orm";
 import type { Job } from "bullmq";
 import type { Logger } from "pino";

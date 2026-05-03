@@ -13,7 +13,7 @@ import {
   articles,
   contentTemplates,
   generatedPosts,
-} from "../../api/src/db/schema.js";
+} from "../db/schema.js";
 import { eq, and, sql } from "drizzle-orm";
 import { streamComplete, complete } from "../lib/ai-client.js";
 import { redis } from "../connection/redis.js";
