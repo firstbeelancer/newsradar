@@ -107,9 +107,9 @@ async function main(): Promise<void> {
     "Starting Newsradar worker"
   );
 
-  // 1. Connect to Redis
-  logger.info("Connecting to Redis...");
-  await redis.connect();
+  // 1. Touch Redis. BullMQ queues may already have started the shared connection.
+  logger.info({ status: redis.status }, "Checking Redis connection...");
+  await redis.ping();
   logger.info("Redis connected");
 
   // 2. Verify PostgreSQL connection

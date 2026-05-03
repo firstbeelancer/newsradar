@@ -2,7 +2,8 @@ import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import { users, refreshTokens } from "../../db/schema.js";
-import { signAccessToken, signRefreshToken, verifyRefreshToken, hashToken } from "../../lib/jwt.js";
+import { hashToken } from "../../lib/encryption.js";
+import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../../lib/jwt.js";
 import { AppError } from "../../middleware/error-handler.js";
 import type { RegisterInput, LoginInput } from "./schemas.js";
 
