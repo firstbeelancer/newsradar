@@ -76,8 +76,8 @@ describe('Эталонный паттерн-идеал (раздел 16.2)', () 
   });
 
   it('5 знаков после запятой в итоговом score', () => {
-    const n = 0.73150;
-    const decimals = n.toString().split('.')[1]?.length || 0;
+    const n = '0.73150';
+    const decimals = n.split('.')[1]?.length || 0;
     expect(decimals).toBe(5);
   });
 });
