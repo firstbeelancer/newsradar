@@ -2,10 +2,24 @@ import { createRouter, createRoute, createRootRoute, redirect } from '@tanstack/
 import { useAuthStore } from '@shared/stores/auth-store';
 import { RootLayout } from './layout';
 import { App } from './app';
+
+// Lazy-loaded pages
 import { DashboardPage } from '@/features/dashboard/dashboard-page';
 import { LoginForm } from '@/features/auth/login-form';
 import { RegisterForm } from '@/features/auth/register-form';
-import { SettingsPage } from '@/features/dashboard/settings-page';
+import { AgentsListPage } from '@/features/agents/agents-list-page';
+import { AgentDetailPage } from '@/features/agents/agent-detail-page';
+import { SourcesPage } from '@/features/sources/sources-page';
+import { FeedPage } from '@/features/feed/feed-page';
+import { ArticleDetail } from '@/features/feed/article-detail';
+import { GenerationPage } from '@/features/generation/generation-page';
+import { GeneratedPostsPage } from '@/features/generation/generated-posts-page';
+import { SettingsLayout } from '@/features/settings/settings-layout';
+import { ProfileSettings } from '@/features/settings/profile-settings';
+import { AgentsSettings } from '@/features/settings/agents-settings';
+import { TemplatesSettings } from '@/features/settings/templates-settings';
+import { AIProvidersSettings } from '@/features/settings/ai-providers-settings';
+import { ScoringSettings } from '@/features/settings/scoring-settings';
 
 const rootRoute = createRootRoute({
   component: RootLayout,
@@ -22,6 +36,8 @@ const appRoute = createRoute({
     }
   },
 });
+
+// ─── Main Routes ─────────────────────────────────────────────────────────────
 
 const indexRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -53,14 +69,142 @@ const registerRoute = createRoute({
   },
 });
 
-const settingsRoute = createRoute({
+// ─── Agents ──────────────────────────────────────────────────────────────────
+
+const agentsListRoute = createRoute({
   getParentRoute: () => appRoute,
-  path: '/settings',
-  component: SettingsPage,
+  path: '/agents',
+  component: AgentsListPage,
 });
 
+const agentNewRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/agents/new',
+  component: AgentsListPage,
+});
+
+const agentDetailRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/agents/$id',
+  component: AgentDetailPage,
+});
+
+// ─── Sources ─────────────────────────────────────────────────────────────────
+
+const sourcesRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/sources',
+  component: SourcesPage,
+});
+
+// ─── Feed ────────────────────────────────────────────────────────────────────
+
+const feedRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/feed',
+  component: FeedPage,
+});
+
+const feedByAgentRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/feed/$agentId',
+  component: FeedPage,
+});
+
+const articleDetailRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/feed/article/$id',
+  component: ArticleDetailRouteComponent,
+});
+
+function ArticleDetailRouteComponent() {
+  const { id } = articleDetailRoute.useParams();
+  return <ArticleDetail articleId={id} />;
+}
+
+// ─── Search ──────────────────────────────────────────────────────────────────
+
+const searchRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/search',
+  component: FeedPage,
+});
+
+// ─── Generation ──────────────────────────────────────────────────────────────
+
+const generationRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/generation',
+  component: GenerationPage,
+});
+
+const generatedPostsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/generated',
+  component: GeneratedPostsPage,
+});
+
+// ─── Settings ────────────────────────────────────────────────────────────────
+
+const settingsLayoutRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/settings',
+  component: SettingsLayout,
+});
+
+const settingsProfileRoute = createRoute({
+  getParentRoute: () => settingsLayoutRoute,
+  path: '/settings/profile',
+  component: ProfileSettings,
+});
+
+const settingsAgentsRoute = createRoute({
+  getParentRoute: () => settingsLayoutRoute,
+  path: '/settings/agents',
+  component: AgentsSettings,
+});
+
+const settingsTemplatesRoute = createRoute({
+  getParentRoute: () => settingsLayoutRoute,
+  path: '/settings/templates',
+  component: TemplatesSettings,
+});
+
+const settingsAIProvidersRoute = createRoute({
+  getParentRoute: () => settingsLayoutRoute,
+  path: '/settings/ai-providers',
+  component: AIProvidersSettings,
+});
+
+const settingsScoringRoute = createRoute({
+  getParentRoute: () => settingsLayoutRoute,
+  path: '/settings/scoring',
+  component: ScoringSettings,
+});
+
+// ─── Route Tree ──────────────────────────────────────────────────────────────
+
 const routeTree = rootRoute.addChildren([
-  appRoute.addChildren([indexRoute, settingsRoute]),
+  appRoute.addChildren([
+    indexRoute,
+    agentsListRoute,
+    agentNewRoute,
+    agentDetailRoute,
+    sourcesRoute,
+    feedRoute,
+    feedByAgentRoute,
+    articleDetailRoute,
+    searchRoute,
+    generationRoute,
+    generatedPostsRoute,
+    settingsLayoutRoute.addChildren([
+      settingsProfileRoute,
+      settingsAgentsRoute,
+      settingsTemplatesRoute,
+      settingsAIProvidersRoute,
+      settingsScoringRoute,
+    ]),
+  ]),
   loginRoute,
   registerRoute,
 ]);

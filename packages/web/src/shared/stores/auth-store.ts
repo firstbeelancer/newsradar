@@ -101,7 +101,15 @@ export const useAuthStore = create<AuthState & AuthActions>()(
         }
       },
 
-      logout: () => {
+      logout: async () => {
+        try {
+          await fetch('/api/v1/auth/logout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          });
+        } catch {
+          // Ignore logout error
+        }
         set({
           user: null,
           access_token: null,

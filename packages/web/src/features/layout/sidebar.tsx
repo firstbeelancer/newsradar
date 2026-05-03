@@ -6,19 +6,20 @@ import { Separator } from '@shared/ui/separator';
 import {
   LayoutDashboard,
   Bot,
+  Newspaper,
   Sparkles,
   Bookmark,
   Settings,
   LogOut,
-  Newspaper,
 } from 'lucide-react';
 
 const navItems = [
   { to: '/', label: 'Главная', icon: LayoutDashboard },
   { to: '/agents', label: 'Агенты', icon: Bot },
-  { to: '/generations', label: 'Генерации', icon: Sparkles },
-  { to: '/bookmarks', label: 'Избранное', icon: Bookmark },
-  { to: '/settings', label: 'Настройки', icon: Settings },
+  { to: '/feed', label: 'Лента', icon: Newspaper },
+  { to: '/generation', label: 'Генерация', icon: Sparkles },
+  { to: '/feed', label: 'Избранное', icon: Bookmark, search: { favorites: '1' } },
+  { to: '/settings/profile', label: 'Настройки', icon: Settings },
 ];
 
 export function Sidebar() {
@@ -32,6 +33,16 @@ export function Sidebar() {
       .join('')
       .toUpperCase()
       .slice(0, 2);
+  };
+
+  const isActiveRoute = (item: typeof navItems[0]) => {
+    if (item.to === '/') {
+      return location.pathname === '/';
+    }
+    if (item.to === '/feed' && item.search) {
+      return location.pathname === '/feed' && location.search?.includes('favorites');
+    }
+    return location.pathname.startsWith(item.to);
   };
 
   return (
@@ -51,15 +62,13 @@ export function Sidebar() {
         <ul className="space-y-1">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive =
-              item.to === '/'
-                ? location.pathname === '/'
-                : location.pathname.startsWith(item.to);
+            const isActive = isActiveRoute(item);
 
             return (
-              <li key={item.to}>
+              <li key={item.label}>
                 <Link
                   to={item.to}
+                  search={item.search}
                   className={cn(
                     'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                     isActive
