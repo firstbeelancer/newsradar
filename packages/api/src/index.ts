@@ -30,6 +30,15 @@ import aiProviderRoutes from "./modules/ai-providers/routes.js";
 import templateRoutes from "./modules/templates/routes.js";
 import generationRoutes from "./modules/generation/routes.js";
 
+// Layer 5 — Notifications
+import notificationRoutes from "./modules/notifications/routes.js";
+
+// Layer 6 — Subscriptions & Usage
+import subscriptionRoutes from "./modules/subscriptions/routes.js";
+
+// Layer 7 — iBoard (Pro dashboard)
+import iboardRoutes from "./modules/iboard/routes.js";
+
 const app = express();
 const PORT = parseInt(env.PORT, 10);
 
@@ -70,6 +79,15 @@ app.use("/api/v1/ai-providers", aiProviderRoutes);
 // Layer 4
 app.use("/api/v1/templates", templateRoutes);
 app.use("/api/v1/generation", generationRoutes);
+
+// Layer 5
+app.use("/api/v1/notifications", notificationRoutes);
+
+// Layer 6
+app.use("/api/v1/subscription", subscriptionRoutes);
+
+// Layer 7
+app.use("/api/v1/iboard", iboardRoutes);
 
 // Global error handler
 app.use(errorHandler);

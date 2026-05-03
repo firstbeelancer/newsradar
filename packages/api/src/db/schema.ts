@@ -48,6 +48,7 @@ export const workspaces = pgTable(
       .notNull(),
     name: varchar("name", { length: 255 }).notNull(),
     plan: varchar("plan", { length: 50 }).default("free").notNull(),
+    periodEnd: timestamp("period_end", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -338,6 +339,33 @@ export const generatedPosts = pgTable(
     index("generated_posts_type_idx").on(table.type),
     index("generated_posts_created_at_idx").on(table.createdAt),
     check("generated_posts_type_check", sql`${table.type} IN ('manual', 'digest', 'deepsearch')`),
+  ]
+);
+
+// ─────────────────────────────────────────────────────────────
+// Layer 5 — Notifications
+// ─────────────────────────────────────────────────────────────
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .references(() => workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    type: varchar("type", { length: 30 }).notNull(),
+    title: varchar("title", { length: 255 }).notNull(),
+    message: text("message").notNull(),
+    isRead: boolean("is_read").default(false).notNull(),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("notifications_workspace_id_idx").on(table.workspaceId),
+    index("notifications_type_idx").on(table.type),
+    index("notifications_is_read_idx").on(table.isRead),
+    index("notifications_created_at_idx").on(table.createdAt),
+    check("notifications_type_check", sql`${table.type} IN ('collection_done', 'generation_done', 'error', 'limit_80', 'subscription_expiring', 'downgrade_complete')`),
   ]
 );
 

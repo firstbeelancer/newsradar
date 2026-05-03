@@ -10,8 +10,12 @@ import {
   Settings,
   Bookmark,
   LogOut,
+  Crown,
+  BarChart3,
+  Bell,
 } from 'lucide-react';
 import { useAuthStore } from '@shared/stores/auth-store';
+import { NotificationBell } from '@/features/notifications/notification-bell';
 
 const mainNavItems = [
   { to: '/', label: 'Главная', icon: LayoutDashboard },
@@ -22,6 +26,9 @@ const mainNavItems = [
 
 const moreMenuItems = [
   { to: '/feed', label: 'Избранное', icon: Bookmark, search: { favorites: '1' } as Record<string, string> },
+  { to: '/iboard', label: 'Аналитика', icon: BarChart3 },
+  { to: '/subscription', label: 'Подписка', icon: Crown },
+  { to: '/notifications', label: 'Уведомления', icon: Bell },
   { to: '/settings/profile', label: 'Настройки', icon: Settings },
 ];
 
@@ -63,6 +70,11 @@ export function MobileNav() {
             </Link>
           );
         })}
+
+        {/* Notification Bell (mobile) */}
+        <div className="flex flex-col items-center justify-center min-w-[56px]">
+          <NotificationBell />
+        </div>
 
         {/* More button */}
         <button

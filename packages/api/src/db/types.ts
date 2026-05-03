@@ -14,6 +14,7 @@ import {
   generatedPosts,
   subscriptionPayments,
   usageCounters,
+  notifications,
 } from "./schema.js";
 
 // Layer 1
@@ -55,6 +56,10 @@ export type NewContentTemplate = InferInsertModel<typeof contentTemplates>;
 
 export type GeneratedPost = InferSelectModel<typeof generatedPosts>;
 export type NewGeneratedPost = InferInsertModel<typeof generatedPosts>;
+
+// Layer 5
+export type Notification = InferSelectModel<typeof notifications>;
+export type NewNotification = InferInsertModel<typeof notifications>;
 
 // Layer 6
 export type SubscriptionPayment = InferSelectModel<typeof subscriptionPayments>;

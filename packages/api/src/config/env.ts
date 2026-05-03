@@ -21,6 +21,10 @@ const envSchema = z.object({
 
   YANDEX_CLIENT_ID: z.string().optional(),
   YANDEX_CLIENT_SECRET: z.string().optional(),
+
+  YOOKASSA_SHOP_ID: z.string().optional(),
+  YOOKASSA_SECRET_KEY: z.string().optional(),
+  YOOKASSA_RETURN_URL: z.string().default("http://localhost:3000/payment/success"),
 });
 
 const parsed = envSchema.safeParse(process.env);

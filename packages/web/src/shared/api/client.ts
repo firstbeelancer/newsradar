@@ -312,6 +312,98 @@ export interface ScoringConfig {
   keyword_match: number;
   freshness: number;
   source_trust: number;
+  exclusive?: boolean;
+  actionable?: boolean;
+  trending?: boolean;
+  controversy?: boolean;
+  verified?: boolean;
+}
+
+// ─── Subscription Types ──────────────────────────────────────────────────────
+
+export type PlanType = 'free' | 'pro';
+
+export interface Subscription {
+  plan: PlanType;
+  status: 'active' | 'canceled' | 'expired';
+  current_period_start: string;
+  current_period_end: string;
+  cancel_at_period_end: boolean;
+}
+
+export interface SubscriptionLimits {
+  favorites_used: number;
+  favorites_limit: number;
+  collections_used: number;
+  collections_limit: number;
+  agents_used: number;
+  agents_limit: number;
+  sources_used: number;
+  sources_limit: number;
+  generation_used: number;
+  generation_limit: number;
+}
+
+export interface Payment {
+  id: string;
+  amount: number;
+  currency: string;
+  status: 'pending' | 'succeeded' | 'failed' | 'canceled';
+  description: string;
+  created_at: string;
+  paid_at?: string;
+}
+
+export interface CreatePaymentResponse {
+  confirmation_url: string;
+}
+
+// ─── iBoard Types ────────────────────────────────────────────────────────────
+
+export interface IBoardStats {
+  total_articles: number;
+  avg_score: number;
+  active_sources: number;
+  news_today: number;
+}
+
+export interface TimelinePoint {
+  date: string;
+  count: number;
+}
+
+export interface LeaderboardArticle {
+  id: string;
+  title: string;
+  source_name: string;
+  score: number;
+  published_at: string;
+}
+
+export interface SourceHealth {
+  id: string;
+  name: string;
+  url: string;
+  type: string;
+  status: 'healthy' | 'warning' | 'error' | 'inactive';
+  last_fetch_at?: string;
+  last_error?: string;
+  fetch_success_rate: number;
+  articles_count_7d: number;
+}
+
+// ─── Notification Types ──────────────────────────────────────────────────────
+
+export type NotificationType = 'system' | 'article' | 'agent' | 'subscription' | 'error';
+
+export interface Notification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  is_read: boolean;
+  data?: Record<string, unknown>;
+  created_at: string;
 }
 
 // ─── API Functions ───────────────────────────────────────────────────────────
@@ -394,4 +486,31 @@ export const scoringApi = {
   getConfig: () => apiGet<ScoringConfig>('/scoring/config'),
   updateConfig: (data: ScoringConfig) => apiPost<ScoringConfig, ScoringConfig>('/scoring/config', data),
   recalculate: () => apiPost<void>('/scoring/recalculate', {}),
+};
+
+// ─── Subscription API ────────────────────────────────────────────────────────
+
+export const subscriptionApi = {
+  get: () => apiGet<Subscription>('/subscription'),
+  getLimits: () => apiGet<SubscriptionLimits>('/subscription/limits'),
+  getPayments: () => apiGet<Payment[]>('/subscription/payments'),
+  create: () => apiPost<CreatePaymentResponse>('/subscription/create', {}),
+  cancel: () => apiPost<void>('/subscription/cancel', {}),
+};
+
+// ─── iBoard API ──────────────────────────────────────────────────────────────
+
+export const iboardApi = {
+  stats: () => apiGet<IBoardStats>('/iboard/stats'),
+  timeline: () => apiGet<TimelinePoint[]>('/iboard/timeline'),
+  leaderboard: () => apiGet<LeaderboardArticle[]>('/iboard/leaderboard'),
+  sourcesHealth: () => apiGet<SourceHealth[]>('/iboard/sources-health'),
+};
+
+// ─── Notifications API ───────────────────────────────────────────────────────
+
+export const notificationsApi = {
+  list: () => apiGet<Notification[]>('/notifications'),
+  markRead: (id: string) => apiPost<void>(`/notifications/${id}/read`, {}),
+  markAllRead: () => apiPost<void>('/notifications/read-all', {}),
 };

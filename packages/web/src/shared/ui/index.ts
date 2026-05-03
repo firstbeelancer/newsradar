@@ -12,3 +12,4 @@ export { Tabs, TabsList, TabsTrigger, TabsContent } from './tabs';
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from './tooltip';
 export { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription, DialogClose } from './dialog';
 export { Toast, ToastProvider, ToastViewport, ToastTitle, ToastDescription, ToastClose, Toaster, useToast } from './toast';
+export { ProFeatureGate } from './pro-gate';

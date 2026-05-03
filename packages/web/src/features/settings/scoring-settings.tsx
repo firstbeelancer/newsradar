@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@shar
 import { Skeleton } from '@shared/ui/skeleton';
 import { useSettingsStore } from '@shared/stores/settings-store';
 import { useToast } from '@shared/ui/toast';
-import { BarChart3, RotateCcw, Save } from 'lucide-react';
+import { BarChart3, RotateCcw, Save, Filter } from 'lucide-react';
 
 const SLIDER_CONFIG = [
   { key: 'ai_relevance' as const, label: 'AI релевантность', description: 'Оценка релевантности статьи теме агента', min: 0, max: 1, step: 0.05 },
@@ -12,6 +12,14 @@ const SLIDER_CONFIG = [
   { key: 'freshness' as const, label: 'Свежесть', description: 'Время публикации статьи', min: 0, max: 1, step: 0.05 },
   { key: 'source_trust' as const, label: 'Доверие к источнику', description: 'Рейтинг доверия к источнику', min: 0, max: 1, step: 0.05 },
 ];
+
+const CHIP_FILTERS = [
+  { key: 'exclusive' as const, label: 'Эксклюзив', description: 'Приоритет уникальным материалам' },
+  { key: 'actionable' as const, label: 'Actionable', description: 'Статьи с конкретными действиями' },
+  { key: 'trending' as const, label: 'Трендинг', description: 'Популярные темы в источниках' },
+  { key: 'controversy' as const, label: 'Контроверсия', description: 'Противоречивые материалы' },
+  { key: 'verified' as const, label: 'Проверено', description: 'Только из проверенных источников' },
+] as const;
 
 export function ScoringSettings() {
   const { addToast } = useToast();
@@ -25,6 +33,7 @@ export function ScoringSettings() {
   } = useSettingsStore();
 
   const [localWeights, setLocalWeights] = useState<Record<string, number>>({});
+  const [chipToggles, setChipToggles] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     fetchScoringConfig();
@@ -37,6 +46,13 @@ export function ScoringSettings() {
         keyword_match: scoringConfig.keyword_match,
         freshness: scoringConfig.freshness,
         source_trust: scoringConfig.source_trust,
+      });
+      setChipToggles({
+        exclusive: scoringConfig.exclusive ?? false,
+        actionable: scoringConfig.actionable ?? false,
+        trending: scoringConfig.trending ?? false,
+        controversy: scoringConfig.controversy ?? false,
+        verified: scoringConfig.verified ?? false,
       });
     }
   }, [scoringConfig]);
@@ -52,11 +68,20 @@ export function ScoringSettings() {
         keyword_match: localWeights.keyword_match ?? 0.3,
         freshness: localWeights.freshness ?? 0.2,
         source_trust: localWeights.source_trust ?? 0.1,
+        exclusive: chipToggles.exclusive ?? false,
+        actionable: chipToggles.actionable ?? false,
+        trending: chipToggles.trending ?? false,
+        controversy: chipToggles.controversy ?? false,
+        verified: chipToggles.verified ?? false,
       });
-      addToast({ title: 'Сохранено', description: 'Веса скоринга обновлены', variant: 'success' });
+      addToast({ title: 'Сохранено', description: 'Настройки скоринга обновлены', variant: 'success' });
     } catch {
       // Error handled by store
     }
+  };
+
+  const toggleChip = (key: string) => {
+    setChipToggles((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const handleRecalculate = async () => {
@@ -148,6 +173,48 @@ export function ScoringSettings() {
               </Button>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Chip Filters */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Filter className="h-5 w-5" />
+            Фильтры скоринга
+          </CardTitle>
+          <CardDescription>
+            Включите дополнительные факторы для тонкой настройки ранжирования
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-2">
+            {CHIP_FILTERS.map((chip) => {
+              const isActive = chipToggles[chip.key] ?? false;
+              return (
+                <button
+                  key={chip.key}
+                  onClick={() => toggleChip(chip.key)}
+                  className={cn(
+                    'relative flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-all',
+                    isActive
+                      ? 'border-accent bg-accent-light text-accent'
+                      : 'border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground'
+                  )}
+                  title={chip.description}
+                >
+                  <div className={cn(
+                    'h-2 w-2 rounded-full transition-colors',
+                    isActive ? 'bg-accent' : 'bg-muted-foreground/30'
+                  )} />
+                  {chip.label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-muted-foreground mt-3">
+            Нажмите на фильтр для включения/выключения. Сохраните изменения кнопкой выше.
+          </p>
         </CardContent>
       </Card>
     </div>

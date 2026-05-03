@@ -20,6 +20,9 @@ import { AgentsSettings } from '@/features/settings/agents-settings';
 import { TemplatesSettings } from '@/features/settings/templates-settings';
 import { AIProvidersSettings } from '@/features/settings/ai-providers-settings';
 import { ScoringSettings } from '@/features/settings/scoring-settings';
+import { SubscriptionPage } from '@/features/subscriptions/subscription-page';
+import { IBoardPage } from '@/features/iboard/iboard-page';
+import { NotificationsPage } from '@/features/notifications/notifications-page';
 
 const rootRoute = createRootRoute({
   component: RootLayout,
@@ -144,6 +147,30 @@ const generatedPostsRoute = createRoute({
   component: GeneratedPostsPage,
 });
 
+// ─── Subscription ────────────────────────────────────────────────────────────
+
+const subscriptionRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/subscription',
+  component: SubscriptionPage,
+});
+
+// ─── iBoard ──────────────────────────────────────────────────────────────────
+
+const iboardRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/iboard',
+  component: IBoardPage,
+});
+
+// ─── Notifications ───────────────────────────────────────────────────────────
+
+const notificationsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/notifications',
+  component: NotificationsPage,
+});
+
 // ─── Settings ────────────────────────────────────────────────────────────────
 
 const settingsLayoutRoute = createRoute({
@@ -197,6 +224,9 @@ const routeTree = rootRoute.addChildren([
     searchRoute,
     generationRoute,
     generatedPostsRoute,
+    subscriptionRoute,
+    iboardRoute,
+    notificationsRoute,
     settingsLayoutRoute.addChildren([
       settingsProfileRoute,
       settingsAgentsRoute,

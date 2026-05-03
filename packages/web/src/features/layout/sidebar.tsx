@@ -3,6 +3,7 @@ import { cn } from '@shared/lib/utils';
 import { useAuthStore } from '@shared/stores/auth-store';
 import { Avatar, AvatarFallback } from '@shared/ui/avatar';
 import { Separator } from '@shared/ui/separator';
+import { NotificationBell } from '@/features/notifications/notification-bell';
 import {
   LayoutDashboard,
   Bot,
@@ -11,6 +12,8 @@ import {
   Bookmark,
   Settings,
   LogOut,
+  Crown,
+  BarChart3,
 } from 'lucide-react';
 
 const navItems = [
@@ -19,6 +22,8 @@ const navItems = [
   { to: '/feed', label: 'Лента', icon: Newspaper },
   { to: '/generation', label: 'Генерация', icon: Sparkles },
   { to: '/feed', label: 'Избранное', icon: Bookmark, search: { favorites: '1' } },
+  { to: '/iboard', label: 'Аналитика', icon: BarChart3 },
+  { to: '/subscription', label: 'Подписка', icon: Crown },
   { to: '/settings/profile', label: 'Настройки', icon: Settings },
 ];
 
@@ -48,11 +53,14 @@ export function Sidebar() {
   return (
     <aside className="fixed left-0 top-0 z-40 flex h-[100dvh] w-64 flex-col border-r border-border bg-card">
       {/* Logo */}
-      <div className="flex items-center gap-3 px-5 py-5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent text-white">
-          <Newspaper className="h-5 w-5" />
+      <div className="flex items-center justify-between px-5 py-5">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent text-white">
+            <Newspaper className="h-5 w-5" />
+          </div>
+          <span className="text-lg font-bold tracking-tight">Newsradar</span>
         </div>
-        <span className="text-lg font-bold tracking-tight">Newsradar</span>
+        <NotificationBell />
       </div>
 
       <Separator />
