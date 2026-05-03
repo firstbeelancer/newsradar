@@ -90,7 +90,9 @@ services:
       retries: 3
       start_period: 60s
     networks:
-      - newsradar
+      newsradar:
+        aliases:
+          - newsradar-api
 
   worker:
     build:
