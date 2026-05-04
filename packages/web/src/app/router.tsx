@@ -24,6 +24,11 @@ import { SubscriptionPage } from '@/features/subscriptions/subscription-page';
 import { IBoardPage } from '@/features/iboard/iboard-page';
 import { NotificationsPage } from '@/features/notifications/notifications-page';
 
+function hasValidAuthState() {
+  const state = useAuthStore.getState();
+  return Boolean(state.isAuthenticated && state.access_token);
+}
+
 const rootRoute = createRootRoute({
   component: RootLayout,
 });
@@ -33,8 +38,7 @@ const appRoute = createRoute({
   id: 'app',
   component: App,
   beforeLoad: () => {
-    const isAuthenticated = useAuthStore.getState().isAuthenticated;
-    if (!isAuthenticated) {
+    if (!hasValidAuthState()) {
       throw redirect({ to: '/login' });
     }
   },
@@ -53,8 +57,7 @@ const loginRoute = createRoute({
   path: '/login',
   component: LoginForm,
   beforeLoad: () => {
-    const isAuthenticated = useAuthStore.getState().isAuthenticated;
-    if (isAuthenticated) {
+    if (hasValidAuthState()) {
       throw redirect({ to: '/' });
     }
   },
@@ -65,8 +68,7 @@ const registerRoute = createRoute({
   path: '/register',
   component: RegisterForm,
   beforeLoad: () => {
-    const isAuthenticated = useAuthStore.getState().isAuthenticated;
-    if (isAuthenticated) {
+    if (hasValidAuthState()) {
       throw redirect({ to: '/' });
     }
   },
