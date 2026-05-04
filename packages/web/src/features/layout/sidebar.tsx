@@ -1,5 +1,6 @@
 import { Link, useLocation } from '@tanstack/react-router';
 import { cn } from '@shared/lib/utils';
+import { NEWSRADAR_ICON_SRC } from '@shared/brand/newsradar-icon';
 import { useAuthStore } from '@shared/stores/auth-store';
 import { Avatar, AvatarFallback } from '@shared/ui/avatar';
 import { Separator } from '@shared/ui/separator';
@@ -32,42 +33,35 @@ export function Sidebar() {
   const { user, logout } = useAuthStore();
 
   const getInitials = (name: string) => {
-    return name
-      .split(' ')
-      .map((n) => n[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
+    return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
   const isActiveRoute = (item: typeof navItems[0]) => {
-    if (item.to === '/') {
-      return location.pathname === '/';
-    }
-    if (item.to === '/feed' && item.search) {
-      return location.pathname === '/feed' && location.search?.favorites === '1';
-    }
+    if (item.to === '/') return location.pathname === '/';
+    if (item.to === '/feed' && item.search) return location.pathname === '/feed' && location.search?.favorites === '1';
     return location.pathname.startsWith(item.to);
   };
 
   return (
-    <aside className="fixed left-0 top-0 z-40 flex h-[100dvh] w-64 flex-col border-r border-border bg-card">
-      {/* Logo */}
+    <aside className="fixed left-0 top-0 z-40 flex h-[100dvh] w-64 flex-col border-r border-cyan-100/70 bg-white/75 shadow-2xl shadow-blue-950/5 backdrop-blur-2xl">
       <div className="flex items-center justify-between px-5 py-5">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent text-white">
-            <Newspaper className="h-5 w-5" />
+          <div className="relative flex h-11 w-11 items-center justify-center rounded-2xl nr-glow-hover">
+            <span className="absolute inset-1 rounded-2xl bg-cyan-300/20 blur-md" />
+            <img src={NEWSRADAR_ICON_SRC} alt="Newsradar" className="relative h-full w-full object-contain nr-icon-orb" />
           </div>
-          <span className="text-lg font-bold tracking-tight">Newsradar</span>
+          <div>
+            <span className="block text-lg font-black tracking-tight text-slate-950">Newsradar</span>
+            <span className="block text-[11px] font-medium text-cyan-700">AI news radar</span>
+          </div>
         </div>
         <NotificationBell />
       </div>
 
-      <Separator />
+      <Separator className="bg-cyan-100/80" />
 
-      {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-3 py-4">
-        <ul className="space-y-1">
+        <ul className="space-y-1.5">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = isActiveRoute(item);
@@ -78,13 +72,13 @@ export function Sidebar() {
                   to={item.to}
                   search={item.search}
                   className={cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                    'group flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-semibold transition-all',
                     isActive
-                      ? 'bg-accent-light text-accent'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                      ? 'bg-gradient-to-r from-blue-600 to-cyan-500 text-white shadow-lg shadow-cyan-200/70'
+                      : 'text-slate-500 hover:-translate-y-0.5 hover:bg-white hover:text-slate-950 hover:shadow-md hover:shadow-cyan-100/80'
                   )}
                 >
-                  <Icon className="h-[18px] w-[18px]" />
+                  <Icon className={cn('h-[18px] w-[18px] transition-transform group-hover:scale-110', isActive && 'drop-shadow')} />
                   {item.label}
                 </Link>
               </li>
@@ -93,28 +87,21 @@ export function Sidebar() {
         </ul>
       </nav>
 
-      <Separator />
+      <Separator className="bg-cyan-100/80" />
 
-      {/* User section */}
       <div className="p-3">
-        <div className="flex items-center gap-3 rounded-lg px-3 py-2.5">
-          <Avatar className="h-8 w-8">
-            {user?.avatar ? (
-              <img src={user.avatar} alt={user?.name || ''} />
-            ) : null}
-            <AvatarFallback className="bg-accent-light text-accent text-xs">
+        <div className="flex items-center gap-3 rounded-2xl border border-cyan-100/70 bg-white/70 px-3 py-2.5 shadow-inner shadow-cyan-50">
+          <Avatar className="h-9 w-9 ring-2 ring-cyan-100">
+            {user?.avatar ? <img src={user.avatar} alt={user?.name || ''} /> : null}
+            <AvatarFallback className="bg-accent-light text-accent text-xs font-bold">
               {user?.name ? getInitials(user.name) : '?'}
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{user?.name || 'Пользователь'}</p>
-            <p className="text-xs text-muted-foreground truncate">{user?.email || ''}</p>
+            <p className="truncate text-sm font-semibold text-slate-950">{user?.name || 'Пользователь'}</p>
+            <p className="truncate text-xs text-muted-foreground">{user?.email || ''}</p>
           </div>
-          <button
-            onClick={logout}
-            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-danger-light hover:text-danger"
-            title="Выйти"
-          >
+          <button onClick={logout} className="rounded-xl p-1.5 text-muted-foreground transition-colors hover:bg-danger-light hover:text-danger" title="Выйти">
             <LogOut className="h-4 w-4" />
           </button>
         </div>
