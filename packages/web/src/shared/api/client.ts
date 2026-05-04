@@ -612,7 +612,7 @@ export const agentsApi = {
 
 // Sources
 export const sourcesApi = {
-  list: () => apiGet<Source[]>('/sources'),
+  list: () => apiGet<{ data: Source[] }>('/sources').then((res) => res.data ?? []),
   create: (data: CreateSourceDto) => apiPost<Source, CreateSourceDto>('/sources', data),
   update: (id: string, data: UpdateSourceDto) => apiPut<Source, UpdateSourceDto>(`/sources/${id}`, data),
   delete: (id: string) => apiDelete<void>(`/sources/${id}`),
@@ -737,7 +737,7 @@ export const iboardApi = {
 // ─── Notifications API ───────────────────────────────────────
 
 export const notificationsApi = {
-  list: () => apiGet<Notification[]>('/notifications'),
+  list: () => apiGet<{ data: Notification[] }>('/notifications').then((res) => res.data ?? []),
   markRead: (id: string) => apiPost<void>(`/notifications/${id}/read`, {}),
   markAllRead: () => apiPost<void>('/notifications/read-all', {}),
 };
