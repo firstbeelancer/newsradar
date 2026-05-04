@@ -9,6 +9,8 @@ import { SSEStream } from './sse-stream';
 import { GenerationResult } from './generation-result';
 import { Sparkles } from 'lucide-react';
 
+const DEFAULT_TEMPLATE_VALUE = '__default_template__';
+
 export function DigestGenerator() {
   const {
     selectedAgentId,
@@ -43,7 +45,6 @@ export function DigestGenerator() {
     resetGeneration();
   }, [fetchAgents, fetchTemplates, resetGeneration]);
 
-  // Auto-start stream when opId is set
   useEffect(() => {
     if (opId && !isStreaming && !streamContent) {
       streamUnsubscribe.current = startStream(opId);
@@ -52,7 +53,7 @@ export function DigestGenerator() {
     return () => {
       streamUnsubscribe.current?.();
     };
-  }, [opId]);
+  }, [opId, isStreaming, streamContent, startStream]);
 
   const handleGenerate = async () => {
     if (!selectedAgentId) return;
@@ -94,10 +95,9 @@ export function DigestGenerator() {
         <CardTitle className="text-base">Настройки дайджеста</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Agent */}
         <div className="space-y-1.5">
           <label className="text-sm font-medium">Агент</label>
-          <Select value={selectedAgentId ?? ''} onValueChange={setSelectedAgentId}>
+          <Select value={selectedAgentId ?? undefined} onValueChange={setSelectedAgentId}>
             <SelectTrigger>
               <SelectValue placeholder="Выберите агента" />
             </SelectTrigger>
@@ -111,7 +111,6 @@ export function DigestGenerator() {
           </Select>
         </div>
 
-        {/* Period */}
         <div className="space-y-1.5">
           <label className="text-sm font-medium">Период</label>
           <Select value={selectedPeriod} onValueChange={(v) => setSelectedPeriod(v as 'day' | 'week' | 'month')}>
@@ -126,15 +125,17 @@ export function DigestGenerator() {
           </Select>
         </div>
 
-        {/* Template */}
         <div className="space-y-1.5">
           <label className="text-sm font-medium">Шаблон</label>
-          <Select value={selectedTemplateId ?? ''} onValueChange={setSelectedTemplateId}>
+          <Select
+            value={selectedTemplateId ?? DEFAULT_TEMPLATE_VALUE}
+            onValueChange={(value) => setSelectedTemplateId(value === DEFAULT_TEMPLATE_VALUE ? null : value)}
+          >
             <SelectTrigger>
               <SelectValue placeholder="По умолчанию" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">По умолчанию</SelectItem>
+              <SelectItem value={DEFAULT_TEMPLATE_VALUE}>По умолчанию</SelectItem>
               {templates
                 .filter((t) => t.type === 'digest')
                 .map((t) => (
@@ -146,7 +147,6 @@ export function DigestGenerator() {
           </Select>
         </div>
 
-        {/* Provider & Model */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Провайдер</label>
