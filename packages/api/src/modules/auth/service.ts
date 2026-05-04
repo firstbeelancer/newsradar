@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { db } from "../../db/index.js";
-import { users, refreshTokens } from "../../db/schema.js";
+import { users, refreshTokens, workspaces } from "../../db/schema.js";
 import { hashToken } from "../../lib/encryption.js";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../../lib/jwt.js";
 import { AppError } from "../../middleware/error-handler.js";
@@ -14,7 +14,63 @@ export interface AuthTokens {
   refreshToken: string;
 }
 
-export async function registerUser(input: RegisterInput): Promise<{ userId: string; tokens: AuthTokens }> {
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+  role: "user";
+}
+
+export interface AuthResult {
+  user: AuthUser;
+  userId: string;
+  workspaceId: string;
+  tokens: AuthTokens;
+}
+
+function toAuthUser(user: typeof users.$inferSelect): AuthUser {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name ?? user.email.split("@")[0],
+    role: "user",
+  };
+}
+
+async function ensureWorkspace(userId: string, fallbackName: string) {
+  const existing = await db.query.workspaces.findFirst({
+    where: eq(workspaces.userId, userId),
+  });
+
+  if (existing) return existing;
+
+  const [workspace] = await db
+    .insert(workspaces)
+    .values({
+      userId,
+      name: `${fallbackName || "Newsradar"} workspace`,
+      plan: "free",
+    })
+    .returning();
+
+  return workspace;
+}
+
+async function issueTokens(user: typeof users.$inferSelect): Promise<AuthTokens> {
+  const accessToken = signAccessToken({ sub: user.id, email: user.email });
+  const refreshToken = signRefreshToken(user.id);
+  const tokenHash = hashToken(refreshToken);
+
+  await db.insert(refreshTokens).values({
+    userId: user.id,
+    tokenHash,
+    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+  });
+
+  return { accessToken, refreshToken };
+}
+
+export async function registerUser(input: RegisterInput): Promise<AuthResult> {
   const existing = await db.query.users.findFirst({
     where: eq(users.email, input.email),
   });
@@ -33,23 +89,18 @@ export async function registerUser(input: RegisterInput): Promise<{ userId: stri
     })
     .returning();
 
-  const accessToken = signAccessToken({ sub: user.id, email: user.email });
-  const refreshToken = signRefreshToken(user.id);
-  const tokenHash = hashToken(refreshToken);
-
-  await db.insert(refreshTokens).values({
-    userId: user.id,
-    tokenHash,
-    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-  });
+  const workspace = await ensureWorkspace(user.id, input.name);
+  const tokens = await issueTokens(user);
 
   return {
+    user: toAuthUser(user),
     userId: user.id,
-    tokens: { accessToken, refreshToken },
+    workspaceId: workspace.id,
+    tokens,
   };
 }
 
-export async function loginUser(input: LoginInput): Promise<{ userId: string; tokens: AuthTokens }> {
+export async function loginUser(input: LoginInput): Promise<AuthResult> {
   const user = await db.query.users.findFirst({
     where: eq(users.email, input.email),
   });
@@ -62,19 +113,15 @@ export async function loginUser(input: LoginInput): Promise<{ userId: string; to
     throw new AppError(401, "Invalid credentials", "INVALID_CREDENTIALS");
   }
 
-  const accessToken = signAccessToken({ sub: user.id, email: user.email });
-  const refreshToken = signRefreshToken(user.id);
-  const tokenHash = hashToken(refreshToken);
-
-  await db.insert(refreshTokens).values({
-    userId: user.id,
-    tokenHash,
-    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-  });
+  const authUser = toAuthUser(user);
+  const workspace = await ensureWorkspace(user.id, authUser.name);
+  const tokens = await issueTokens(user);
 
   return {
+    user: authUser,
     userId: user.id,
-    tokens: { accessToken, refreshToken },
+    workspaceId: workspace.id,
+    tokens,
   };
 }
 
@@ -105,17 +152,7 @@ export async function rotateRefreshToken(refreshToken: string): Promise<AuthToke
     throw new AppError(401, "User not found", "INVALID_REFRESH_TOKEN");
   }
 
-  const newAccessToken = signAccessToken({ sub: user.id, email: user.email });
-  const newRefreshToken = signRefreshToken(user.id);
-  const newTokenHash = hashToken(newRefreshToken);
-
-  await db.insert(refreshTokens).values({
-    userId: user.id,
-    tokenHash: newTokenHash,
-    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-  });
-
-  return { accessToken: newAccessToken, refreshToken: newRefreshToken };
+  return issueTokens(user);
 }
 
 export async function revokeRefreshToken(refreshToken: string): Promise<void> {
@@ -132,7 +169,7 @@ export async function findOrCreateOAuthUser(params: {
   name?: string;
   googleId?: string;
   yandexId?: string;
-}): Promise<{ userId: string; tokens: AuthTokens }> {
+}): Promise<AuthResult> {
   let user = params.googleId
     ? await db.query.users.findFirst({ where: eq(users.googleId, params.googleId) })
     : params.yandexId
@@ -163,18 +200,14 @@ export async function findOrCreateOAuthUser(params: {
     user = newUser;
   }
 
-  const accessToken = signAccessToken({ sub: user.id, email: user.email });
-  const refreshToken = signRefreshToken(user.id);
-  const tokenHash = hashToken(refreshToken);
-
-  await db.insert(refreshTokens).values({
-    userId: user.id,
-    tokenHash,
-    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-  });
+  const authUser = toAuthUser(user);
+  const workspace = await ensureWorkspace(user.id, authUser.name);
+  const tokens = await issueTokens(user);
 
   return {
+    user: authUser,
     userId: user.id,
-    tokens: { accessToken, refreshToken },
+    workspaceId: workspace.id,
+    tokens,
   };
 }
