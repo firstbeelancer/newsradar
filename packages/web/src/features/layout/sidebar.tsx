@@ -45,7 +45,7 @@ export function Sidebar() {
       return location.pathname === '/';
     }
     if (item.to === '/feed' && item.search) {
-      return location.pathname === '/feed' && location.search?.includes('favorites');
+      return location.pathname === '/feed' && location.search?.favorites === '1';
     }
     return location.pathname.startsWith(item.to);
   };
