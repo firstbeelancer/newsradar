@@ -10,9 +10,10 @@ import { articlesApi } from '@shared/api/client';
 import { SSEStream } from './sse-stream';
 import { GenerationResult } from './generation-result';
 import { Checkbox } from '@shared/ui/checkbox';
-import { Sparkles, Loader2 } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 
 const PAGE_SIZE = 20;
+const DEFAULT_TEMPLATE_VALUE = '__default_template__';
 
 function useArticlesForSelection() {
   return useInfiniteQuery({
@@ -59,7 +60,6 @@ export function PostGenerator() {
     resetGeneration();
   }, [fetchTemplates, resetGeneration]);
 
-  // Auto-start stream when opId is set
   useEffect(() => {
     if (opId && !isStreaming && !streamContent) {
       streamUnsubscribe.current = startStream(opId);
@@ -68,7 +68,7 @@ export function PostGenerator() {
     return () => {
       streamUnsubscribe.current?.();
     };
-  }, [opId]);
+  }, [opId, isStreaming, streamContent, startStream]);
 
   const { data, isLoading } = useArticlesForSelection();
   const articles = data?.pages.flatMap((p) => p.data) ?? [];
@@ -117,7 +117,6 @@ export function PostGenerator() {
 
   return (
     <div className="space-y-6">
-      {/* Options */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Настройки генерации</CardTitle>
@@ -126,12 +125,15 @@ export function PostGenerator() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1.5">
               <label className="text-sm font-medium">Шаблон</label>
-              <Select value={selectedTemplateId ?? ''} onValueChange={setSelectedTemplateId}>
+              <Select
+                value={selectedTemplateId ?? DEFAULT_TEMPLATE_VALUE}
+                onValueChange={(value) => setSelectedTemplateId(value === DEFAULT_TEMPLATE_VALUE ? null : value)}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="По умолчанию" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">По умолчанию</SelectItem>
+                  <SelectItem value={DEFAULT_TEMPLATE_VALUE}>По умолчанию</SelectItem>
                   {templates
                     .filter((t) => t.type === 'post')
                     .map((t) => (
@@ -176,7 +178,6 @@ export function PostGenerator() {
         </CardContent>
       </Card>
 
-      {/* Articles selection */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-medium">
@@ -223,7 +224,7 @@ export function PostGenerator() {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium line-clamp-1">{article.title}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {article.source_name} • {new Date(article.published_at).toLocaleDateString('ru-RU')}
+                    {article.source_name} • {article.published_at ? new Date(article.published_at).toLocaleDateString('ru-RU') : 'без даты'}
                   </p>
                 </div>
               </label>
