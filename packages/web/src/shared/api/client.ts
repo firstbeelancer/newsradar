@@ -13,32 +13,53 @@ export class ApiError extends Error {
   }
 }
 
+interface ApiEnvelope<T> {
+  success?: boolean;
+  data?: T;
+  message?: string;
+  error?: { message?: string } | string;
+  next_cursor?: string | null;
+  has_more?: boolean;
+}
+
+function readErrorMessage(errorData: unknown, fallback: string) {
+  if (!errorData || typeof errorData !== 'object') return fallback;
+  const obj = errorData as ApiEnvelope<unknown>;
+  if (typeof obj.message === 'string') return obj.message;
+  if (typeof obj.error === 'string') return obj.error;
+  if (obj.error && typeof obj.error === 'object' && typeof obj.error.message === 'string') {
+    return obj.error.message;
+  }
+  return fallback;
+}
+
+function unwrapResponse<T>(body: ApiEnvelope<T> | T): T {
+  if (body && typeof body === 'object' && 'success' in body && 'data' in body) {
+    return (body as ApiEnvelope<T>).data as T;
+  }
+  return body as T;
+}
+
 async function handleResponse<T>(response: Response): Promise<T> {
   if (response.status === 401) {
     useAuthStore.getState().logout();
-    window.location.href = '/login';
     throw new ApiError(401, 'Не авторизован');
   }
 
+  let body: unknown = undefined;
+  if (response.status !== 204) {
+    body = await response.json().catch(() => undefined);
+  }
+
   if (!response.ok) {
-    let errorMessage = `Ошибка ${response.status}`;
-    let errorData: unknown;
-    try {
-      errorData = await response.json();
-      if (errorData && typeof errorData === 'object' && 'message' in errorData) {
-        errorMessage = (errorData as { message: string }).message;
-      }
-    } catch {
-      // Ignore JSON parse error
-    }
-    throw new ApiError(response.status, errorMessage, errorData);
+    throw new ApiError(response.status, readErrorMessage(body, `Ошибка ${response.status}`), body);
   }
 
   if (response.status === 204) {
     return undefined as T;
   }
 
-  return response.json() as Promise<T>;
+  return unwrapResponse<T>(body as ApiEnvelope<T> | T);
 }
 
 function getHeaders(): HeadersInit {
@@ -54,16 +75,23 @@ function getHeaders(): HeadersInit {
   return headers;
 }
 
-export async function apiGet<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
+function withWorkspace(path: string) {
+  const workspaceId = useAuthStore.getState().workspace_id;
+  if (!workspaceId) return path;
+  const separator = path.includes('?') ? '&' : '?';
+  return `${path}${separator}workspaceId=${encodeURIComponent(workspaceId)}`;
+}
+
+export async function apiGet<T>(path: string, options?: { workspace?: boolean }): Promise<T> {
+  const response = await fetch(`${API_BASE}${options?.workspace === false ? path : withWorkspace(path)}`, {
     method: 'GET',
     headers: getHeaders(),
   });
   return handleResponse<T>(response);
 }
 
-export async function apiPost<T, B = unknown>(path: string, body: B): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
+export async function apiPost<T, B = unknown>(path: string, body: B, options?: { workspace?: boolean }): Promise<T> {
+  const response = await fetch(`${API_BASE}${options?.workspace === false ? path : withWorkspace(path)}`, {
     method: 'POST',
     headers: getHeaders(),
     body: JSON.stringify(body),
@@ -71,8 +99,8 @@ export async function apiPost<T, B = unknown>(path: string, body: B): Promise<T>
   return handleResponse<T>(response);
 }
 
-export async function apiPut<T, B = unknown>(path: string, body: B): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
+export async function apiPut<T, B = unknown>(path: string, body: B, options?: { workspace?: boolean }): Promise<T> {
+  const response = await fetch(`${API_BASE}${options?.workspace === false ? path : withWorkspace(path)}`, {
     method: 'PUT',
     headers: getHeaders(),
     body: JSON.stringify(body),
@@ -80,8 +108,8 @@ export async function apiPut<T, B = unknown>(path: string, body: B): Promise<T> 
   return handleResponse<T>(response);
 }
 
-export async function apiPatch<T, B = unknown>(path: string, body: B): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
+export async function apiPatch<T, B = unknown>(path: string, body: B, options?: { workspace?: boolean }): Promise<T> {
+  const response = await fetch(`${API_BASE}${options?.workspace === false ? path : withWorkspace(path)}`, {
     method: 'PATCH',
     headers: getHeaders(),
     body: JSON.stringify(body),
@@ -89,8 +117,8 @@ export async function apiPatch<T, B = unknown>(path: string, body: B): Promise<T
   return handleResponse<T>(response);
 }
 
-export async function apiDelete<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
+export async function apiDelete<T>(path: string, options?: { workspace?: boolean }): Promise<T> {
+  const response = await fetch(`${API_BASE}${options?.workspace === false ? path : withWorkspace(path)}`, {
     method: 'DELETE',
     headers: getHeaders(),
   });
@@ -99,22 +127,14 @@ export async function apiDelete<T>(path: string): Promise<T> {
 
 // SSE subscription helper
 export function subscribeToSSE<T>(path: string, onMessage: (data: T) => void, onError?: (error: Event) => void): () => void {
-  const token = useAuthStore.getState().access_token;
-  const url = `${API_BASE}${path}`;
-  
-  const eventSource = new EventSource(url, {
-    withCredentials: true,
-  });
+  const url = `${API_BASE}${withWorkspace(path)}`;
+  const eventSource = new EventSource(url, { withCredentials: true });
 
-  // If token exists, we need to handle auth differently since EventSource doesn't support custom headers
-  // The backend should support cookie-based auth for SSE, or we use fetch-based SSE alternative
-  
   eventSource.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data) as T;
       onMessage(data);
     } catch {
-      // If not JSON, pass raw string
       onMessage(event.data as unknown as T);
     }
   };
@@ -488,7 +508,7 @@ export const scoringApi = {
   recalculate: () => apiPost<void>('/scoring/recalculate', {}),
 };
 
-// ─── Subscription API ────────────────────────────────────────────────────────
+// ─── Subscription API ────────────────────────────────────────
 
 export const subscriptionApi = {
   get: () => apiGet<Subscription>('/subscription'),
@@ -498,7 +518,7 @@ export const subscriptionApi = {
   cancel: () => apiPost<void>('/subscription/cancel', {}),
 };
 
-// ─── iBoard API ──────────────────────────────────────────────────────────────
+// ─── iBoard API ──────────────────────────────────────────────
 
 export const iboardApi = {
   stats: () => apiGet<IBoardStats>('/iboard/stats'),
@@ -507,7 +527,7 @@ export const iboardApi = {
   sourcesHealth: () => apiGet<SourceHealth[]>('/iboard/sources-health'),
 };
 
-// ─── Notifications API ───────────────────────────────────────────────────────
+// ─── Notifications API ───────────────────────────────────────
 
 export const notificationsApi = {
   list: () => apiGet<Notification[]>('/notifications'),
