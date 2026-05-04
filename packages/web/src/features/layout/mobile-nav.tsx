@@ -38,15 +38,13 @@ export function MobileNav() {
   const [moreOpen, setMoreOpen] = useState(false);
 
   const isActiveRoute = (to: string) => {
-    if (to === '/') {
-      return location.pathname === '/';
-    }
+    if (to === '/') return location.pathname === '/';
     return location.pathname.startsWith(to);
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/95 backdrop-blur-md env-safe-bottom md:hidden">
-      <div className="flex h-16 items-center justify-around px-1 relative">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-cyan-100/80 bg-white/82 shadow-[0_-18px_45px_rgba(0,39,126,0.10)] backdrop-blur-2xl env-safe-bottom md:hidden">
+      <div className="relative flex h-16 items-center justify-around px-1">
         {mainNavItems.map((item) => {
           const Icon = item.icon;
           const isActive = isActiveRoute(item.to);
@@ -56,45 +54,35 @@ export function MobileNav() {
               key={item.to}
               to={item.to}
               className={cn(
-                'flex flex-col items-center justify-center gap-0.5 rounded-lg px-3 py-1.5 transition-colors min-w-[56px]',
-                isActive ? 'text-accent' : 'text-muted-foreground'
+                'flex min-w-[56px] flex-col items-center justify-center gap-0.5 rounded-2xl px-3 py-1.5 transition-all',
+                isActive ? 'bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-lg shadow-cyan-200' : 'text-muted-foreground hover:bg-white hover:text-slate-950 hover:shadow-md hover:shadow-cyan-100'
               )}
             >
-              <Icon
-                className={cn(
-                  'h-[22px] w-[22px]',
-                  isActive && 'stroke-[2.5]'
-                )}
-              />
-              <span className="text-[10px] font-medium leading-none">{item.label}</span>
+              <Icon className={cn('h-[22px] w-[22px]', isActive && 'stroke-[2.5]')} />
+              <span className="text-[10px] font-semibold leading-none">{item.label}</span>
             </Link>
           );
         })}
 
-        {/* Notification Bell (mobile) */}
-        <div className="flex flex-col items-center justify-center min-w-[56px]">
+        <div className="flex min-w-[56px] flex-col items-center justify-center">
           <NotificationBell />
         </div>
 
-        {/* More button */}
         <button
           className={cn(
-            'flex flex-col items-center justify-center gap-0.5 rounded-lg px-3 py-1.5 transition-colors min-w-[56px] relative',
-            moreOpen ? 'text-accent' : 'text-muted-foreground'
+            'relative flex min-w-[56px] flex-col items-center justify-center gap-0.5 rounded-2xl px-3 py-1.5 transition-all',
+            moreOpen ? 'bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-lg shadow-cyan-200' : 'text-muted-foreground hover:bg-white hover:text-slate-950 hover:shadow-md hover:shadow-cyan-100'
           )}
           onClick={() => setMoreOpen(!moreOpen)}
         >
-          <MoreHorizontal
-            className={cn('h-[22px] w-[22px]', moreOpen && 'stroke-[2.5]')}
-          />
-          <span className="text-[10px] font-medium leading-none">Ещё</span>
+          <MoreHorizontal className={cn('h-[22px] w-[22px]', moreOpen && 'stroke-[2.5]')} />
+          <span className="text-[10px] font-semibold leading-none">Ещё</span>
         </button>
 
-        {/* More menu dropdown */}
         {moreOpen && (
           <>
             <div className="fixed inset-0 z-40" onClick={() => setMoreOpen(false)} />
-            <div className="absolute bottom-16 right-2 z-50 w-48 rounded-xl border border-border bg-card shadow-lg py-1">
+            <div className="absolute bottom-16 right-2 z-50 w-52 rounded-3xl border border-cyan-100 bg-white/92 py-1.5 shadow-2xl shadow-blue-950/15 backdrop-blur-2xl">
               {moreMenuItems.map((item) => {
                 const Icon = item.icon;
                 return (
@@ -103,10 +91,8 @@ export function MobileNav() {
                     to={item.to}
                     search={item.search}
                     className={cn(
-                      'flex items-center gap-3 px-3 py-2.5 text-sm transition-colors',
-                      isActiveRoute(item.to)
-                        ? 'text-accent bg-accent-light'
-                        : 'text-muted-foreground hover:bg-muted'
+                      'mx-1.5 flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium transition-all',
+                      isActiveRoute(item.to) ? 'bg-accent-light text-accent' : 'text-muted-foreground hover:bg-cyan-50 hover:text-slate-950'
                     )}
                     onClick={() => setMoreOpen(false)}
                   >
@@ -115,10 +101,10 @@ export function MobileNav() {
                   </Link>
                 );
               })}
-              <div className="border-t border-border my-1" />
+              <div className="my-1 border-t border-cyan-100" />
               <button
                 onClick={() => { setMoreOpen(false); logout(); }}
-                className="flex w-full items-center gap-3 px-3 py-2.5 text-sm text-danger hover:bg-danger-light transition-colors"
+                className="mx-1.5 flex w-[calc(100%-0.75rem)] items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium text-danger transition-colors hover:bg-danger-light"
               >
                 <LogOut className="h-4 w-4" />
                 Выйти
