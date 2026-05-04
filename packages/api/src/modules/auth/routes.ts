@@ -38,6 +38,16 @@ function clearAuthCookies(res: Response) {
   res.clearCookie("access_token");
 }
 
+function makeAuthPayload(result: Awaited<ReturnType<typeof registerUser>>) {
+  return {
+    user: result.user,
+    userId: result.userId,
+    workspaceId: result.workspaceId,
+    accessToken: result.tokens.accessToken,
+    access_token: result.tokens.accessToken,
+  };
+}
+
 // Passport OAuth setup
 if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
   passport.use(
@@ -84,11 +94,11 @@ passport.deserializeUser((obj, done) => done(null, obj as Express.User));
 router.post("/register", authRateLimit, async (req, res, next) => {
   try {
     const input = registerSchema.parse(req.body);
-    const { userId, tokens } = await registerUser(input);
-    setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
+    const result = await registerUser(input);
+    setAuthCookies(res, result.tokens.accessToken, result.tokens.refreshToken);
     res.status(201).json({
       success: true,
-      data: { userId, accessToken: tokens.accessToken },
+      data: makeAuthPayload(result),
     });
   } catch (err) {
     next(err);
@@ -99,11 +109,11 @@ router.post("/register", authRateLimit, async (req, res, next) => {
 router.post("/login", authRateLimit, async (req, res, next) => {
   try {
     const input = loginSchema.parse(req.body);
-    const { userId, tokens } = await loginUser(input);
-    setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
+    const result = await loginUser(input);
+    setAuthCookies(res, result.tokens.accessToken, result.tokens.refreshToken);
     res.status(200).json({
       success: true,
-      data: { userId, accessToken: tokens.accessToken },
+      data: makeAuthPayload(result),
     });
   } catch (err) {
     next(err);
@@ -121,7 +131,7 @@ router.post("/refresh", async (req, res, next) => {
     setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
     res.status(200).json({
       success: true,
-      data: { accessToken: tokens.accessToken },
+      data: { accessToken: tokens.accessToken, access_token: tokens.accessToken },
     });
   } catch (err) {
     clearAuthCookies(res);
@@ -159,13 +169,13 @@ router.get(
   async (req, res, next) => {
     try {
       const profile = req.user as { email: string; name?: string; googleId?: string; yandexId?: string };
-      const { tokens } = await findOrCreateOAuthUser({
+      const result = await findOrCreateOAuthUser({
         email: profile.email,
         name: profile.name,
         googleId: profile.googleId,
       });
-      setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
-      res.redirect(`${req.protocol}://${req.get("host")}/dashboard`);
+      setAuthCookies(res, result.tokens.accessToken, result.tokens.refreshToken);
+      res.redirect(`${req.protocol}://${req.get("host")}/`);
     } catch (err) {
       next(err);
     }
@@ -188,13 +198,13 @@ router.get(
   async (req, res, next) => {
     try {
       const profile = req.user as { email: string; name?: string; googleId?: string; yandexId?: string };
-      const { tokens } = await findOrCreateOAuthUser({
+      const result = await findOrCreateOAuthUser({
         email: profile.email,
         name: profile.name,
         yandexId: profile.yandexId,
       });
-      setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
-      res.redirect(`${req.protocol}://${req.get("host")}/dashboard`);
+      setAuthCookies(res, result.tokens.accessToken, result.tokens.refreshToken);
+      res.redirect(`${req.protocol}://${req.get("host")}/`);
     } catch (err) {
       next(err);
     }
