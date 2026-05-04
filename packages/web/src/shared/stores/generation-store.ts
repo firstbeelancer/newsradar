@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { generationApi, type GeneratePostDto, type GenerateDigestDto, type GenerationResult, type GeneratedPost } from '@shared/api/client';
+import { generationApi, type GeneratePostDto, type GenerateDigestDto, type GenerationResult, type GeneratedPost, type GenerationStreamState } from '@shared/api/client';
 
 type GenerationType = 'post' | 'digest' | null;
 
@@ -129,8 +129,18 @@ export const useGenerationStore = create<GenerationState & GenerationActions>((s
 
     const unsubscribe = generationApi.stream(
       opId,
-      (chunk) => {
-        set((state) => ({ streamContent: state.streamContent + chunk }));
+      (state: GenerationStreamState) => {
+        if (state.status === 'error') {
+          set({ isStreaming: false, streamError: state.error ?? 'Ошибка генерации' });
+          return;
+        }
+        set({
+          streamContent: state.content || '',
+          isStreaming: state.status === 'generating' || state.status === 'pending',
+        });
+        if (state.status === 'completed') {
+          set({ isStreaming: false, generationResult: state.content });
+        }
       },
       (error) => {
         set({ isStreaming: false, streamError: 'Ошибка потокового соединения' });

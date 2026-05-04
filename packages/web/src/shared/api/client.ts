@@ -22,6 +22,161 @@ interface ApiEnvelope<T> {
   has_more?: boolean;
 }
 
+// ─── Backend response shapes (what the API actually returns) ─────────────────
+
+interface BackendCursorResponse<T> {
+  data: T[];
+  nextCursor?: string | null;
+  hasMore?: boolean;
+  next_cursor?: string | null;
+  has_more?: boolean;
+}
+
+interface BackendAgent {
+  id: string;
+  name: string;
+  description?: string | null;
+  icon?: string | null;
+  color?: string | null;
+  position?: number | null;
+  isActive?: boolean;
+  is_active?: boolean;
+  createdAt?: string;
+  created_at?: string;
+  updatedAt?: string;
+  updated_at?: string;
+  articleCount?: number;
+  article_count?: number;
+  sourceCount?: number;
+  source_count?: number;
+}
+
+interface BackendArticle {
+  id: string;
+  title: string;
+  description?: string | null;
+  content?: string | null;
+  link?: string;
+  url?: string;
+  publishedAt?: string | null;
+  published_at?: string | null;
+  createdAt?: string;
+  created_at?: string;
+  collectedAt?: string;
+  collected_at?: string;
+  score?: string | number | null;
+  isFavorite?: boolean;
+  is_favorite?: boolean;
+  status?: string | null;
+  sourceId?: string;
+  source_id?: string;
+  sourceName?: string | null;
+  source_name?: string | null;
+  sourceUrl?: string | null;
+  source_url?: string | null;
+  agentId?: string;
+  agent_id?: string;
+  agentName?: string | null;
+  agent_name?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+interface BackendGeneratedPost {
+  id: string;
+  title?: string | null;
+  content: string;
+  type: 'manual' | 'digest' | 'deepsearch' | 'post';
+  modelSnapshot?: string | null;
+  model?: string | null;
+  provider?: string | null;
+  metadata?: Record<string, unknown>;
+  createdAt?: string;
+  created_at?: string;
+  updatedAt?: string;
+  updated_at?: string;
+  isEdited?: boolean;
+  is_edited?: boolean;
+  isCopied?: boolean;
+  is_copied?: boolean;
+  agentId?: string;
+  agent_id?: string;
+}
+
+// ─── Normalizers ─────────────────────────────────────────────────────────────
+
+function normalizeCursorResponse<TInput, TOutput>(
+  payload: BackendCursorResponse<TInput>,
+  mapItem: (item: TInput) => TOutput
+): CursorPaginatedResponse<TOutput> {
+  return {
+    data: payload.data.map(mapItem),
+    next_cursor: payload.next_cursor ?? payload.nextCursor ?? null,
+    has_more: payload.has_more ?? payload.hasMore ?? false,
+  };
+}
+
+export function normalizeAgent(raw: BackendAgent): Agent {
+  return {
+    id: raw.id,
+    name: raw.name,
+    description: raw.description ?? '',
+    icon: raw.icon ?? '',
+    color: raw.color ?? '#0ea5e9',
+    position: raw.position ?? 0,
+    is_active: raw.is_active ?? raw.isActive ?? true,
+    article_count: raw.article_count ?? raw.articleCount,
+    created_at: raw.created_at ?? raw.createdAt ?? new Date(0).toISOString(),
+    updated_at: raw.updated_at ?? raw.updatedAt ?? new Date(0).toISOString(),
+  };
+}
+
+export function normalizeArticle(raw: BackendArticle): Article {
+  const publishedAt = raw.published_at ?? raw.publishedAt ?? raw.created_at ?? raw.createdAt ?? new Date(0).toISOString();
+  const createdAt = raw.created_at ?? raw.createdAt ?? publishedAt;
+  const collectedAt = raw.collected_at ?? raw.collectedAt ?? createdAt;
+
+  return {
+    id: raw.id,
+    title: raw.title,
+    description: raw.description ?? '',
+    content: raw.content ?? undefined,
+    url: raw.url ?? raw.link ?? '',
+    source_name: raw.source_name ?? raw.sourceName ?? raw.source_id ?? raw.sourceId ?? 'Источник',
+    source_url: raw.source_url ?? raw.sourceUrl ?? undefined,
+    agent_id: raw.agent_id ?? raw.agentId ?? '',
+    agent_name: raw.agent_name ?? raw.agentName ?? undefined,
+    published_at: publishedAt,
+    collected_at: collectedAt,
+    score: typeof raw.score === 'number' ? raw.score : Number(raw.score ?? 0),
+    is_favorite: raw.is_favorite ?? raw.isFavorite ?? false,
+    status: (raw.status as Article['status']) ?? 'new',
+    metadata: raw.metadata,
+  };
+}
+
+export function normalizeGeneratedPost(raw: BackendGeneratedPost): GeneratedPost {
+  return {
+    id: raw.id,
+    type: raw.type === 'manual' ? 'post' : raw.type,
+    content: raw.content,
+    provider: raw.provider ?? 'AI',
+    model: raw.model ?? raw.modelSnapshot ?? 'default',
+    metadata: raw.metadata,
+    created_at: raw.created_at ?? raw.createdAt ?? new Date(0).toISOString(),
+  };
+}
+
+export function normalizeGenerationResult(
+  payload: { operationId?: string; op_id?: string; status?: string; content?: string; error?: string }
+): GenerationResult {
+  return {
+    op_id: payload.op_id ?? payload.operationId ?? '',
+    status: (payload.status as GenerationResult['status']) ?? 'pending',
+    content: payload.content,
+    error: payload.error,
+  };
+}
+
 function readErrorMessage(errorData: unknown, fallback: string) {
   if (!errorData || typeof errorData !== 'object') return fallback;
   const obj = errorData as ApiEnvelope<unknown>;
@@ -196,10 +351,14 @@ export interface UpdateAgentDto {
 }
 
 export interface AgentStats {
-  total_articles: number;
-  total_sources: number;
+  total_articles?: number;
+  total_sources?: number;
   last_collection_at?: string;
-  avg_articles_per_day: number;
+  avg_articles_per_day?: number;
+  sourceCount?: number;
+  articleCount?: number;
+  todayCount?: number;
+  statusBreakdown?: Record<string, number>;
 }
 
 // ─── Source Types ────────────────────────────────────────────────────────────
@@ -258,7 +417,7 @@ export interface Article {
   collected_at: string;
   score: number;
   is_favorite: boolean;
-  status: 'new' | 'read' | 'archived';
+  status: 'new' | 'read' | 'archived' | 'fetched' | 'translated' | 'analyzed' | 'scored' | 'deduped' | 'published';
   metadata?: Record<string, unknown>;
 }
 
@@ -302,7 +461,7 @@ export interface GeneratePostDto {
 
 export interface GenerateDigestDto {
   agent_id: string;
-  period: 'day' | 'week' | 'month';
+  period?: 'day' | 'week' | 'month';
   template_id?: string;
   provider?: string;
   model?: string;
@@ -310,14 +469,20 @@ export interface GenerateDigestDto {
 
 export interface GenerationResult {
   op_id: string;
-  status: 'pending' | 'processing' | 'completed' | 'error';
+  status: 'pending' | 'processing' | 'queued' | 'completed' | 'error';
   content?: string;
+  error?: string;
+}
+
+export interface GenerationStreamState {
+  status: 'pending' | 'generating' | 'completed' | 'error';
+  content: string;
   error?: string;
 }
 
 export interface GeneratedPost {
   id: string;
-  type: 'post' | 'digest';
+  type: 'post' | 'digest' | 'deepsearch';
   content: string;
   provider: string;
   model: string;
@@ -431,13 +596,17 @@ export interface Notification {
 // Agents
 export const agentsApi = {
   list: (cursor?: string, limit = 20) =>
-    apiGet<CursorPaginatedResponse<Agent>>(`/agents?limit=${limit}${cursor ? `&cursor=${cursor}` : ''}`),
-  get: (id: string) => apiGet<Agent>(`/agents/${id}`),
-  create: (data: CreateAgentDto) => apiPost<Agent, CreateAgentDto>('/agents', data),
-  update: (id: string, data: UpdateAgentDto) => apiPut<Agent, UpdateAgentDto>(`/agents/${id}`, data),
+    apiGet<BackendCursorResponse<BackendAgent>>(`/agents?limit=${limit}${cursor ? `&cursor=${cursor}` : ''}`).then((payload) =>
+      normalizeCursorResponse(payload, normalizeAgent)
+    ),
+  get: (id: string) => apiGet<BackendAgent>(`/agents/${id}`).then(normalizeAgent),
+  create: (data: CreateAgentDto) => apiPost<BackendAgent, CreateAgentDto>('/agents', data).then(normalizeAgent),
+  update: (id: string, data: UpdateAgentDto) => apiPut<BackendAgent, UpdateAgentDto>(`/agents/${id}`, data).then(normalizeAgent),
   delete: (id: string) => apiDelete<void>(`/agents/${id}`),
   stats: (id: string) => apiGet<AgentStats>(`/agents/${id}/stats`),
-  collect: (id: string) => apiPost<{ op_id: string }>(`/agents/${id}/collect`, {}),
+  collect: (id: string) => apiPost<{ operationId?: string; op_id?: string }>(`/agents/${id}/collect`, {}).then((payload) => ({
+    op_id: payload.op_id ?? payload.operationId ?? '',
+  })),
   sources: (id: string) => apiGet<Source[]>(`/agents/${id}/sources`),
 };
 
@@ -448,7 +617,9 @@ export const sourcesApi = {
   update: (id: string, data: UpdateSourceDto) => apiPut<Source, UpdateSourceDto>(`/sources/${id}`, data),
   delete: (id: string) => apiDelete<void>(`/sources/${id}`),
   test: (id: string) => apiPost<SourceTestResult>(`/sources/${id}/test`, {}),
-  fetch: (id: string) => apiPost<{ op_id: string }>(`/sources/${id}/fetch`, {}),
+  fetch: (id: string) => apiPost<{ operationId?: string; op_id?: string }>(`/sources/${id}/fetch`, {}).then((payload) => ({
+    op_id: payload.op_id ?? payload.operationId ?? '',
+  })),
 };
 
 // Articles
@@ -457,22 +628,26 @@ export const articlesApi = {
     const params = new URLSearchParams();
     params.set('limit', String(limit));
     if (cursor) params.set('cursor', cursor);
-    if (filters?.agent_id) params.set('agent_id', filters.agent_id);
+    if (filters?.agent_id) params.set('agentId', filters.agent_id);
     if (filters?.status) params.set('status', filters.status);
-    if (filters?.date_from) params.set('date_from', filters.date_from);
-    if (filters?.date_to) params.set('date_to', filters.date_to);
-    if (filters?.favorites_only) params.set('favorites_only', '1');
-    return apiGet<CursorPaginatedResponse<Article>>(`/articles?${params.toString()}`);
+    if (filters?.date_from) params.set('dateFrom', filters.date_from);
+    if (filters?.date_to) params.set('dateTo', filters.date_to);
+    if (filters?.favorites_only !== undefined) params.set('isFavorite', String(filters.favorites_only));
+    return apiGet<BackendCursorResponse<BackendArticle>>(`/articles?${params.toString()}`).then((payload) =>
+      normalizeCursorResponse(payload, normalizeArticle)
+    );
   },
   search: (q: string, cursor?: string, limit = 20) => {
     const params = new URLSearchParams();
     params.set('q', q);
     params.set('limit', String(limit));
     if (cursor) params.set('cursor', cursor);
-    return apiGet<CursorPaginatedResponse<Article>>(`/articles/search?${params.toString()}`);
+    return apiGet<BackendCursorResponse<BackendArticle>>(`/articles/search?${params.toString()}`).then((payload) =>
+      normalizeCursorResponse(payload, normalizeArticle)
+    );
   },
-  get: (id: string) => apiGet<Article>(`/articles/${id}`),
-  favorite: (id: string) => apiPost<void>(`/articles/${id}/favorite`, {}),
+  get: (id: string) => apiGet<BackendArticle>(`/articles/${id}`).then(normalizeArticle),
+  favorite: (id: string) => apiPost<BackendArticle, Record<string, never>>(`/articles/${id}/favorite`, {}).then(normalizeArticle),
 };
 
 // Templates
@@ -485,20 +660,52 @@ export const templatesApi = {
 
 // Generation
 export const generationApi = {
-  generatePost: (data: GeneratePostDto) => apiPost<GenerationResult, GeneratePostDto>('/generation/post', data),
-  generateDigest: (data: GenerateDigestDto) => apiPost<GenerationResult, GenerateDigestDto>('/generation/digest', data),
-  stream: (opId: string, onMessage: (chunk: string) => void, onError?: (error: Event) => void) =>
-    subscribeToSSE<{ chunk?: string; done?: boolean; error?: string }>(`/generation/stream/${opId}`, (data) => {
-      if (typeof data === 'string') {
-        onMessage(data);
-      } else if (data && typeof data === 'object') {
-        if ('chunk' in data && data.chunk) onMessage(data.chunk as string);
-        if ('error' in data && data.error) onMessage(`Error: ${data.error}`);
-      }
-    }, onError),
+  generatePost: (data: GeneratePostDto) =>
+    apiPost<{ operationId?: string; op_id?: string; status?: string; content?: string; error?: string }, {
+      articleIds?: string[];
+      templateId?: string;
+      customPrompt?: string;
+      agentId?: string;
+    }>('/generation/post', {
+      articleIds: data.article_ids,
+      templateId: data.template_id,
+    }).then(normalizeGenerationResult),
+  generateDigest: (data: GenerateDigestDto) =>
+    apiPost<{ operationId?: string; op_id?: string; status?: string; content?: string; error?: string }, {
+      agentId: string;
+      templateId?: string;
+      articleCount?: number;
+    }>('/generation/digest', {
+      agentId: data.agent_id,
+      templateId: data.template_id,
+    }).then(normalizeGenerationResult),
+  stream: (
+    opId: string,
+    onState: (state: GenerationStreamState) => void,
+    onError?: (error: Event) => void
+  ) =>
+    subscribeToSSE<{ status?: string; content?: string; chunks?: string[]; error?: string }>(
+      `/generation/stream/${opId}`,
+      (data) => {
+        if (typeof data === 'string') {
+          onState({ status: 'generating', content: data });
+          return;
+        }
+
+        onState({
+          status: (data?.status as GenerationStreamState['status']) ?? (data?.error ? 'error' : 'generating'),
+          content: data?.content ?? '',
+          error: data?.error,
+        });
+      },
+      onError
+    ),
   history: (cursor?: string, limit = 20) =>
-    apiGet<CursorPaginatedResponse<GeneratedPost>>(`/generated-posts?limit=${limit}${cursor ? `&cursor=${cursor}` : ''}`),
-  updatePost: (id: string, content: string) => apiPut<GeneratedPost, { content: string }>(`/generated-posts/${id}`, { content }),
+    apiGet<BackendCursorResponse<BackendGeneratedPost>>(`/generation/posts?limit=${limit}${cursor ? `&cursor=${cursor}` : ''}`).then((payload) =>
+      normalizeCursorResponse(payload, normalizeGeneratedPost)
+    ),
+  updatePost: (id: string, content: string) =>
+    apiPut<BackendGeneratedPost, { content: string }>(`/generation/posts/${id}`, { content }).then(normalizeGeneratedPost),
 };
 
 // Scoring
