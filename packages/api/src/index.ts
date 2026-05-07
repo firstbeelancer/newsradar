@@ -35,6 +35,7 @@ import notificationRoutes from "./modules/notifications/routes.js";
 
 // Layer 6 — Subscriptions & Usage
 import subscriptionRoutes from "./modules/subscriptions/routes.js";
+import usageRoutes from "./modules/usage/routes.js";
 
 // Layer 7 — iBoard (Pro dashboard)
 import iboardRoutes from "./modules/iboard/routes.js";
@@ -85,6 +86,7 @@ app.use("/api/v1/notifications", notificationRoutes);
 
 // Layer 6
 app.use("/api/v1/subscription", subscriptionRoutes);
+app.use("/api/v1/usage", usageRoutes);
 
 // Layer 7
 app.use("/api/v1/iboard", iboardRoutes);
