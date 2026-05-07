@@ -15,29 +15,43 @@ import {
 
 const router = Router();
 
-// ─── Schemas ───
+function normalizeGenerationBody(body: unknown) {
+  if (!body || typeof body !== "object") return body;
+  const raw = body as Record<string, unknown>;
+  return {
+    ...raw,
+    agentId: raw.agentId ?? raw.agent_id,
+    templateId: raw.templateId ?? raw.template_id,
+    articleIds: raw.articleIds ?? raw.article_ids,
+    articleCount: raw.articleCount ?? raw.article_count,
+    customPrompt: raw.customPrompt ?? raw.custom_prompt,
+  };
+}
 
-const generatePostSchema = z.object({
-  agentId: z.string().uuid().optional(),
-  templateId: z.string().uuid().optional(),
-  articleIds: z.array(z.string().uuid()).optional(),
-  customPrompt: z.string().optional(),
-});
+const generatePostSchema = z.preprocess(
+  normalizeGenerationBody,
+  z.object({
+    agentId: z.string().uuid().optional(),
+    templateId: z.string().uuid().optional(),
+    articleIds: z.array(z.string().uuid()).optional(),
+    customPrompt: z.string().optional(),
+  })
+);
 
-const generateDigestSchema = z.object({
-  agentId: z.string().uuid(),
-  templateId: z.string().uuid().optional(),
-  articleCount: z.coerce.number().int().min(1).max(50).default(10),
-});
+const generateDigestSchema = z.preprocess(
+  normalizeGenerationBody,
+  z.object({
+    agentId: z.string().uuid(),
+    templateId: z.string().uuid().optional(),
+    articleCount: z.coerce.number().int().min(1).max(50).default(10),
+  })
+);
 
 const updatePostSchema = z.object({
   title: z.string().optional(),
   content: z.string().min(1),
 });
 
-// ─── Routes ───
-
-// Generate a manual post
 router.post("/post", authMiddleware, async (req, res, next) => {
   try {
     const workspaceId = req.query.workspaceId as string;
@@ -58,7 +72,6 @@ router.post("/post", authMiddleware, async (req, res, next) => {
   }
 });
 
-// Generate a digest
 router.post("/digest", authMiddleware, async (req, res, next) => {
   try {
     const workspaceId = req.query.workspaceId as string;
@@ -80,7 +93,6 @@ router.post("/digest", authMiddleware, async (req, res, next) => {
   }
 });
 
-// SSE stream for generation progress
 router.get("/stream/:operationId", authMiddleware, async (req, res, next) => {
   try {
     const { operationId } = req.params;
@@ -90,23 +102,18 @@ router.get("/stream/:operationId", authMiddleware, async (req, res, next) => {
     res.setHeader("Connection", "keep-alive");
     res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders?.();
-
-    // Send initial heartbeat
     res.write(`:ok\n\n`);
 
     const interval = setInterval(() => {
       const op = getStreamOperation(operationId);
 
       if (!op) {
-        res.write(
-          `data: ${JSON.stringify({ status: "error", error: "Operation not found" })}\n\n`
-        );
+        res.write(`data: ${JSON.stringify({ status: "error", error: "Operation not found" })}\n\n`);
         clearInterval(interval);
         res.end();
         return;
       }
 
-      // Send current state
       res.write(
         `data: ${JSON.stringify({
           status: op.status,
@@ -123,22 +130,13 @@ router.get("/stream/:operationId", authMiddleware, async (req, res, next) => {
       }
     }, 1000);
 
-    // Cleanup on client disconnect
-    req.on("close", () => {
-      clearInterval(interval);
-    });
-
-    req.on("error", () => {
-      clearInterval(interval);
-    });
+    req.on("close", () => clearInterval(interval));
+    req.on("error", () => clearInterval(interval));
   } catch (err) {
     next(err);
   }
 });
 
-// ─── Generated Posts CRUD ───
-
-// List generated posts
 router.get("/posts", authMiddleware, async (req, res, next) => {
   try {
     const { cursor, limit } = paginationQuerySchema.parse(req.query);
@@ -160,7 +158,6 @@ router.get("/posts", authMiddleware, async (req, res, next) => {
   }
 });
 
-// Get single generated post
 router.get("/posts/:id", authMiddleware, async (req, res, next) => {
   try {
     const workspaceId = req.query.workspaceId as string;
@@ -173,7 +170,6 @@ router.get("/posts/:id", authMiddleware, async (req, res, next) => {
   }
 });
 
-// Update generated post
 router.put("/posts/:id", authMiddleware, async (req, res, next) => {
   try {
     const workspaceId = req.query.workspaceId as string;
@@ -187,7 +183,6 @@ router.put("/posts/:id", authMiddleware, async (req, res, next) => {
   }
 });
 
-// Delete generated post
 router.delete("/posts/:id", authMiddleware, async (req, res, next) => {
   try {
     const workspaceId = req.query.workspaceId as string;
