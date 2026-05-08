@@ -18,6 +18,7 @@ import operationLogRoutes from "./modules/operation-logs/routes.js";
 import eventRoutes from "./modules/events/routes.js";
 
 // Layer 2 — Product Skeleton
+import dashboardRoutes from "./modules/dashboard/routes.js";
 import agentRoutes from "./modules/agents/routes.js";
 import sourceRoutes from "./modules/sources/routes.js";
 import articleRoutes from "./modules/articles/routes.js";
@@ -70,6 +71,7 @@ app.use("/api/v1/operation-logs", operationLogRoutes);
 app.use("/api/v1/events", eventRoutes);
 
 // Layer 2
+app.use("/api/v1/dashboard", dashboardRoutes);
 app.use("/api/v1/agents", agentRoutes);
 app.use("/api/v1/sources", sourceRoutes);
 app.use("/api/v1/articles", articleRoutes);
