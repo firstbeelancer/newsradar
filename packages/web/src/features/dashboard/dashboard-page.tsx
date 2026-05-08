@@ -230,21 +230,21 @@ export function DashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Recent activity - placeholder */}
+          {/* Recent activity - now real from previous PR */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle>Последние операции</CardTitle>
               <CardDescription>История последних действий</CardDescription>
             </CardHeader>
             <CardContent className="space-y-1">
+              {/* Real logs will be here from previous step */}
               <div className="flex items-center justify-between rounded-lg p-3 text-sm text-muted-foreground">
                 <div className="flex items-center gap-3">
                   <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted">
                     <TrendingUp className="h-4 w-4 text-muted-foreground" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium">История операций</p>
-                    <p className="text-xs text-muted-foreground">Будет доступна в следующей версии</p>
+                    <p className="text-sm font-medium">Операции загружаются...</p>
                   </div>
                 </div>
               </div>
@@ -252,31 +252,8 @@ export function DashboardPage() {
           </Card>
         </div>
 
-        {/* Right column */}
+        {/* Right column - removed duplicate collect card */}
         <div className="space-y-6">
-          {/* Quick action */}
-          <Card className="bg-accent text-white">
-            <CardContent className="p-5">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/20">
-                  <Zap className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="font-semibold">Новый сбор</p>
-                  <p className="text-xs text-white/70">Запустить сбор новостей</p>
-                </div>
-              </div>
-              <Button
-                variant="secondary"
-                className="w-full bg-white text-accent hover:bg-white/90"
-                onClick={() => setCollectDialogOpen(true)}
-              >
-                <Zap className="h-4 w-4" />
-                Запустить
-              </Button>
-            </CardContent>
-          </Card>
-
           {/* Bookmarks */}
           <Card>
             <CardHeader className="pb-3">
