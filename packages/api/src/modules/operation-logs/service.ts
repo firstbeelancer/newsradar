@@ -1,4 +1,4 @@
-import { eq, desc, and, isNotNull } from "drizzle-orm";
+import { eq, desc, and, lt } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import { operationLogs } from "../../db/schema.js";
 import type { NewOperationLog } from "../../db/types.js";
@@ -44,26 +44,20 @@ export async function listOperationLogs(
     conditions.push(eq(operationLogs.status, params.status));
   }
 
-  let query = db
+  if (params.cursor) {
+    const decoded = decodeCursor(params.cursor);
+    if (decoded?.sortValue) {
+      conditions.push(lt(operationLogs.createdAt, new Date(decoded.sortValue)));
+    }
+  }
+
+  const rows = await db
     .select()
     .from(operationLogs)
     .where(and(...conditions))
     .orderBy(desc(operationLogs.createdAt))
     .limit(params.limit + 1);
 
-  if (params.cursor) {
-    const decoded = decodeCursor(params.cursor);
-    if (decoded?.sortValue) {
-      query = query.where(
-        and(
-          ...conditions,
-          operationLogs.createdAt < new Date(decoded.sortValue)
-        )
-      );
-    }
-  }
-
-  const rows = await query;
   const hasMore = rows.length > params.limit;
   const data = hasMore ? rows.slice(0, -1) : rows;
 
@@ -93,10 +87,7 @@ export async function updateOperationLog(
 
   const [updated] = await db
     .update(operationLogs)
-    .set({
-      ...data,
-      updatedAt: new Date(),
-    })
+    .set(data)
     .where(eq(operationLogs.id, id))
     .returning();
 
