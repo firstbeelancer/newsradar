@@ -1,6 +1,6 @@
 import { eq, and, desc, sql } from "drizzle-orm";
 import { db } from "../../db/index.js";
-import { agents, sources, agentSources, articles } from "../../db/schema.js";
+import { agents, sources, agentSources, articles, operationLogs } from "../../db/schema.js";
 import { AppError } from "../../middleware/error-handler.js";
 import type { PaginatedResult, Cursor } from "../../lib/pagination.js";
 import { encodeCursor, decodeCursor } from "../../lib/pagination.js";
@@ -195,16 +195,46 @@ export async function getAgentSources(agentId: string, workspaceId: string) {
   return rows.map((r) => r.source);
 }
 
-// ─── Collect trigger (stub — actual collection done by background worker) ───
+// ─── Collect trigger ───
 
-export async function triggerCollection(agentId: string, workspaceId: string, _userId: string) {
-  await getAgentById(agentId, workspaceId);
+export async function triggerCollection(agentId: string, workspaceId: string, userId: string) {
+  const agent = await getAgentById(agentId, workspaceId);
 
-  // Return a job ID — actual implementation would enqueue a BullMQ job
-  const operationId = crypto.randomUUID();
+  const linkedSources = await getAgentSources(agentId, workspaceId);
+  const activeSources = linkedSources.filter((source) => source.isActive);
+
+  const [log] = await db
+    .insert(operationLogs)
+    .values({
+      userId,
+      workspaceId,
+      agentId,
+      operationType: "collect_agent",
+      entityType: "agent",
+      entityId: agentId,
+      status: activeSources.length > 0 ? "running" : "success",
+      message:
+        activeSources.length > 0
+          ? `Сбор агента «${agent.name}» запущен: ${activeSources.length} источников`
+          : `У агента «${agent.name}» нет активных источников`,
+      metadata: {
+        agentName: agent.name,
+        sourceCount: linkedSources.length,
+        activeSourceCount: activeSources.length,
+        sources: activeSources.map((source) => ({ id: source.id, name: source.name, type: source.type })),
+        note: "Фоновая очередь сбора будет подключена следующим слоем ремонта",
+      },
+      startedAt: new Date(),
+      finishedAt: activeSources.length > 0 ? null : new Date(),
+    })
+    .returning();
+
   return {
-    operationId,
-    status: "queued",
-    message: "Collection job queued for agent",
+    operationId: log.id,
+    op_id: log.id,
+    status: log.status,
+    message: log.message,
+    sourceCount: linkedSources.length,
+    activeSourceCount: activeSources.length,
   };
 }
