@@ -9,9 +9,17 @@ import {
   deleteOperationLog,
 } from "./service.js";
 import { paginationQuerySchema } from "../../lib/pagination.js";
-import { AppError } from "../../middleware/error-handler.js";
 
 const router = Router();
+
+const operationStatusSchema = z.enum([
+  "pending",
+  "running",
+  "success",
+  "failed",
+  "partial",
+  "cancelled",
+]);
 
 const createSchema = z.object({
   workspaceId: z.string().uuid(),
@@ -19,16 +27,18 @@ const createSchema = z.object({
   operationType: z.string().min(1).max(100),
   entityType: z.string().max(100).optional(),
   entityId: z.string().uuid().optional(),
-  status: z.string().min(1).max(50),
+  status: operationStatusSchema,
   message: z.string().optional(),
   metadata: z.record(z.unknown()).optional(),
 });
 
 const updateSchema = z.object({
-  status: z.string().max(50).optional(),
+  status: operationStatusSchema.optional(),
   message: z.string().optional(),
   metadata: z.record(z.unknown()).optional(),
 });
+
+const finishedStatuses = new Set(["success", "failed", "partial", "cancelled"]);
 
 // List
 router.get("/", authMiddleware, async (req, res, next) => {
@@ -70,6 +80,7 @@ router.post("/", authMiddleware, async (req, res, next) => {
       ...input,
       userId: req.user!.sub,
       startedAt: new Date(),
+      finishedAt: finishedStatuses.has(input.status) ? new Date() : undefined,
     });
     res.status(201).json({ success: true, data: log });
   } catch (err) {
@@ -85,7 +96,7 @@ router.patch("/:id", authMiddleware, async (req, res, next) => {
     if (input.status !== undefined) updates.status = input.status;
     if (input.message !== undefined) updates.message = input.message;
     if (input.metadata !== undefined) updates.metadata = input.metadata;
-    if (input.status === "completed" || input.status === "failed") {
+    if (input.status && finishedStatuses.has(input.status)) {
       updates.finishedAt = new Date();
     }
 
