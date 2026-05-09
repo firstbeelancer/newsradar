@@ -264,8 +264,36 @@ export const articles = pgTable(
 );
 
 // ─────────────────────────────────────────────────────────────
-// Layer 3 — AI + Scoring
+// Layer 3 — AI Providers + Scoring
 // ─────────────────────────────────────────────────────────────
+
+export const aiProviders = pgTable(
+  "ai_providers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: varchar("name", { length: 100 }).notNull(),
+    type: varchar("type", { length: 16 }).notNull(), // platform, byok
+    provider: varchar("provider", { length: 20 }).notNull(), // openai, anthropic, openrouter, google
+    baseUrl: text("base_url"),
+    apiKeyEncrypted: text("api_key_encrypted"),
+    model: varchar("model", { length: 100 }).default("gpt-4o-mini").notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    workspaceId: uuid("workspace_id")
+      .references(() => workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("ai_providers_workspace_id_idx").on(table.workspaceId),
+    index("ai_providers_is_active_idx").on(table.isActive),
+    check("ai_providers_type_check", sql`${table.type} IN ('platform', 'byok')`),
+    check(
+      "ai_providers_provider_check",
+      sql`${table.provider} IN ('openai', 'anthropic', 'openrouter', 'google')`
+    ),
+  ]
+);
 
 export const articleScores = pgTable(
   "article_scores",

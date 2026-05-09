@@ -8,6 +8,13 @@
       "when": 1778332859455,
       "tag": "0000_flashy_epoch",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1778338000000,
+      "tag": "0001_add_missing_tables",
+      "breakpoints": true
     }
   ]
 }
