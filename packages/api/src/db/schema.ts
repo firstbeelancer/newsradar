@@ -11,6 +11,7 @@ import {
   uniqueIndex,
   index,
   check,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -109,6 +110,25 @@ export const operationLogs = pgTable(
 // Layer 2 — Product Skeleton (Agents, Sources, Articles)
 // ─────────────────────────────────────────────────────────────
 
+export const subjectAreas = pgTable(
+  "subject_areas",
+  {
+    id: varchar("id", { length: 50 }).primaryKey(), // enum value: cybersec, ai, marketing, medical, design
+    label: varchar("label", { length: 100 }).notNull(),
+    icon: varchar("icon", { length: 50 }).default("circle").notNull(),
+    color: varchar("color", { length: 7 }).default("#3b82f6").notNull(),
+    defaultTopic: text("default_topic").notNull(),
+    defaultAudience: text("default_audience").notNull(),
+    defaultsJson: jsonb("defaults_json").default({}).notNull(), // scoring_weights, chip_filters, gpt_prompts
+    position: integer("position").default(0).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("subject_areas_position_idx").on(table.position),
+  ]
+);
+
 export const agents = pgTable(
   "agents",
   {
@@ -120,6 +140,8 @@ export const agents = pgTable(
     workspaceId: uuid("workspace_id")
       .references(() => workspaces.id, { onDelete: "cascade" })
       .notNull(),
+    subjectArea: varchar("subject_area", { length: 50 }), // references subject_areas.id
+    config: jsonb("config").default({}).notNull(), // scoring_weights, chip_filters, gpt_prompts, asset_pack, fetch_schedule
     position: integer("position").default(0).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -127,6 +149,7 @@ export const agents = pgTable(
   (table) => [
     index("agents_workspace_id_idx").on(table.workspaceId),
     index("agents_position_idx").on(table.position),
+    index("agents_subject_area_idx").on(table.subjectArea),
   ]
 );
 
@@ -142,11 +165,13 @@ export const sources = pgTable(
     workspaceId: uuid("workspace_id")
       .references(() => workspaces.id, { onDelete: "cascade" })
       .notNull(),
+    fetchSchedule: varchar("fetch_schedule", { length: 100 }), // cron expression
     fetchCount: integer("fetch_count").default(0).notNull(),
     lastFetchAt: timestamp("last_fetch_at", { withTimezone: true }),
     lastError: text("last_error"),
     errorCount: integer("error_count").default(0).notNull(),
     fetchStatus: varchar("fetch_status", { length: 16 }).default("never").notNull(),
+    health: jsonb("health").default({}).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -156,7 +181,6 @@ export const sources = pgTable(
     index("sources_is_active_idx").on(table.isActive),
     index("sources_fetch_status_idx").on(table.fetchStatus),
     check("sources_type_check", sql`${table.type} IN ('rss', 'telegram')`),
-    check("sources_fetch_status_check", sql`${table.fetchStatus} IN ('never', 'success', 'error')`),
   ]
 );
 
@@ -185,6 +209,12 @@ export const articles = pgTable(
     title: text("title").notNull(),
     description: text("description"),
     content: text("content"),
+    // Original fields for translation support
+    originalTitle: text("original_title"),
+    originalDescription: text("original_description"),
+    detectedLang: varchar("detected_lang", { length: 10 }),
+    needsTranslation: boolean("needs_translation").default(false).notNull(),
+    //
     link: text("link").notNull(),
     guid: text("guid"),
     publishedAt: timestamp("published_at", { withTimezone: true }),
@@ -203,11 +233,14 @@ export const articles = pgTable(
     category: varchar("category", { length: 50 }),
     language: varchar("language", { length: 10 }).default("ru").notNull(),
     score: decimal("score", { precision: 5, scale: 3 }).default("0.000").notNull(),
+    scoreDetail: jsonb("score_detail").default({}).notNull(),
     isRelevant: boolean("is_relevant"),
     relevanceReason: text("relevance_reason"),
     isFavorite: boolean("is_favorite").default(false).notNull(),
     rawHash: text("raw_hash"),
     semanticGroupId: uuid("semantic_group_id"),
+    orderedAt: timestamp("ordered_at", { withTimezone: true }).defaultNow().notNull(),
+    ttlExpiresAt: timestamp("ttl_expires_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -219,6 +252,7 @@ export const articles = pgTable(
     index("articles_score_idx").on(table.score),
     index("articles_is_favorite_idx").on(table.isFavorite),
     index("articles_published_at_idx").on(table.publishedAt),
+    index("articles_ordered_at_idx").on(table.orderedAt),
     index("articles_created_at_idx").on(table.createdAt),
     index("articles_raw_hash_idx").on(table.rawHash),
     index("articles_semantic_group_id_idx").on(table.semanticGroupId),
@@ -248,6 +282,7 @@ export const articleScores = pgTable(
     weightedScore: decimal("weighted_score", { precision: 5, scale: 3 }).default("0.000").notNull(),
     weightsSnapshot: jsonb("weights_snapshot"),
     chips: jsonb("chips").default("[]").notNull(),
+    scoreDetail: jsonb("score_detail").default({}).notNull(),
     scoredAt: timestamp("scored_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -258,28 +293,108 @@ export const articleScores = pgTable(
   ]
 );
 
-export const aiProviders = pgTable(
-  "ai_providers",
+export const scoringCriteria = pgTable(
+  "scoring_criteria",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    name: varchar("name", { length: 100 }).notNull(),
-    type: varchar("type", { length: 16 }).notNull(),
-    provider: varchar("provider", { length: 20 }).notNull(),
-    baseUrl: text("base_url"),
-    apiKeyEncrypted: text("api_key_encrypted"),
-    model: varchar("model", { length: 100 }).default("gpt-4o-mini").notNull(),
-    isActive: boolean("is_active").default(true).notNull(),
-    workspaceId: uuid("workspace_id")
-      .references(() => workspaces.id, { onDelete: "cascade" })
+    agentId: uuid("agent_id")
+      .references(() => agents.id, { onDelete: "cascade" })
       .notNull(),
+    criterionType: varchar("criterion_type", { length: 50 }).notNull(), // ai_relevance, keyword_match, freshness, source_trust, custom
+    label: varchar("label", { length: 100 }).notNull(),
+    weight: decimal("weight", { precision: 5, scale: 4 }).default("0.0000").notNull(),
+    threshold: decimal("threshold", { precision: 5, scale: 4 }),
+    config: jsonb("config").default({}).notNull(),
+    position: integer("position").default(0).notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
-    index("ai_providers_workspace_id_idx").on(table.workspaceId),
-    index("ai_providers_is_active_idx").on(table.isActive),
-    check("ai_providers_type_check", sql`${table.type} IN ('platform', 'byok')`),
-    check("ai_providers_provider_check", sql`${table.provider} IN ('openai', 'anthropic', 'openrouter', 'google')`),
+    index("scoring_criteria_agent_id_idx").on(table.agentId),
+    index("scoring_criteria_type_idx").on(table.criterionType),
+    check("scoring_criteria_type_check", sql`${table.criterionType} IN ('ai_relevance', 'keyword_match', 'freshness', 'source_trust', 'custom')`),
+    check("scoring_criteria_weight_check", sql`${table.weight} >= 0 AND ${table.weight} <= 1`),
+  ]
+);
+
+export const chipFilters = pgTable(
+  "chip_filters",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agentId: uuid("agent_id")
+      .references(() => agents.id, { onDelete: "cascade" })
+      .notNull(),
+    key: varchar("key", { length: 50 }).notNull(),
+    label: varchar("label", { length: 100 }).notNull(),
+    description: text("description"),
+    pattern: text("pattern"),
+    operator: varchar("operator", { length: 20 }).default("contains").notNull(),
+    scoreModifier: decimal("score_modifier", { precision: 5, scale: 4 }).default("0.0000").notNull(),
+    color: varchar("color", { length: 20 }).default("default").notNull(),
+    icon: varchar("icon", { length: 50 }),
+    threshold: decimal("threshold", { precision: 5, scale: 4 }),
+    isActive: boolean("is_active").default(true).notNull(),
+    position: integer("position").default(0).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("chip_filters_agent_id_idx").on(table.agentId),
+    index("chip_filters_key_idx").on(table.key),
+    uniqueIndex("chip_filters_agent_key_unique_idx").on(table.agentId, table.key),
+    check("chip_filters_operator_check", sql`${table.operator} IN ('contains', 'not_contains', 'equals', 'starts_with', 'regex', 'in', 'gt', 'lt', 'gte', 'lte')`),
+  ]
+);
+
+export const articleFingerprints = pgTable(
+  "article_fingerprints",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    articleId: uuid("article_id")
+      .references(() => articles.id, { onDelete: "cascade" })
+      .notNull(),
+    fingerprintHash: varchar("fingerprint_hash", { length: 255 }).notNull(),
+    fingerprintType: varchar("fingerprint_type", { length: 20 }).notNull(), // url_hash, guid, title_hash, semantic
+    sourceGuid: varchar("source_guid", { length: 500 }),
+    canonicalUrl: text("canonical_url"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("article_fingerprints_hash_type_unique").on(table.fingerprintHash, table.fingerprintType),
+    index("article_fingerprints_article_id_idx").on(table.articleId),
+    index("article_fingerprints_expires_idx").on(table.expiresAt),
+    check("article_fingerprints_type_check", sql`${table.fingerprintType} IN ('url_hash', 'guid', 'title_hash', 'semantic')`),
+  ]
+);
+
+export const favoriteArticles = pgTable(
+  "favorite_articles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .references(() => workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    articleId: uuid("article_id")
+      .references(() => articles.id, { onDelete: "cascade" })
+      .notNull(),
+    agentId: uuid("agent_id")
+      .references(() => agents.id, { onDelete: "set null" }),
+    sourceId: uuid("source_id")
+      .references(() => sources.id, { onDelete: "set null" }),
+    ttlMode: varchar("ttl_mode", { length: 10 }).default("30d").notNull(), // 30d, forever
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    note: text("note"),
+    scoreAtFavorite: decimal("score_at_favorite", { precision: 5, scale: 3 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("favorite_articles_workspace_article_unique").on(table.workspaceId, table.articleId),
+    index("favorite_articles_workspace_id_idx").on(table.workspaceId),
+    index("favorite_articles_article_id_idx").on(table.articleId),
+    index("favorite_articles_expires_at_idx").on(table.expiresAt),
+    check("favorite_articles_ttl_mode_check", sql`${table.ttlMode} IN ('30d', 'forever')`),
   ]
 );
 
@@ -343,7 +458,7 @@ export const generatedPosts = pgTable(
 );
 
 // ─────────────────────────────────────────────────────────────
-// Layer 5 — Notifications
+// Layer 5 — Notifications & Rules
 // ─────────────────────────────────────────────────────────────
 
 export const notifications = pgTable(
@@ -365,7 +480,32 @@ export const notifications = pgTable(
     index("notifications_type_idx").on(table.type),
     index("notifications_is_read_idx").on(table.isRead),
     index("notifications_created_at_idx").on(table.createdAt),
-    check("notifications_type_check", sql`${table.type} IN ('collection_done', 'generation_done', 'error', 'limit_80', 'subscription_expiring', 'downgrade_complete')`),
+    check(
+      "notifications_type_check",
+      sql`${table.type} IN ('collection_done', 'generation_done', 'error', 'limit_80', 'subscription_expiring', 'downgrade_complete')`
+    ),
+  ]
+);
+
+export const notificationRules = pgTable(
+  "notification_rules",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .references(() => workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    agentId: uuid("agent_id").references(() => agents.id, { onDelete: "cascade" }),
+    eventType: varchar("event_type", { length: 50 }).notNull(),
+    channel: varchar("channel", { length: 20 }).notNull(), // telegram, email, web
+    threshold: decimal("threshold", { precision: 5, scale: 3 }),
+    isActive: boolean("is_active").default(true).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("notification_rules_workspace_id_idx").on(table.workspaceId),
+    index("notification_rules_agent_id_idx").on(table.agentId),
+    check("notification_rules_channel_check", sql`${table.channel} IN ('telegram', 'email', 'web')`),
   ]
 );
 
@@ -416,6 +556,123 @@ export const usageCounters = pgTable(
   (table) => [
     uniqueIndex("usage_counters_workspace_type_idx").on(table.workspaceId, table.type),
     index("usage_counters_period_idx").on(table.periodEnd),
-    check("usage_counters_type_check", sql`${table.type} IN ('favorites', 'collections', 'digests', 'deepsearches', 'posts')`),
+    check(
+      "usage_counters_type_check",
+      sql`${table.type} IN ('favorites', 'collections', 'digests', 'deepsearches', 'posts')`
+    ),
+  ]
+);
+
+// ─────────────────────────────────────────────────────────────
+// Layer 7 — Assets
+// ─────────────────────────────────────────────────────────────
+
+export const assetPacks = pgTable(
+  "asset_packs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .references(() => workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    name: varchar("name", { length: 100 }).notNull(),
+    description: text("description"),
+    s3Prefix: varchar("s3_prefix", { length: 255 }),
+    itemCount: integer("item_count").default(0).notNull(),
+    maxItems: integer("max_items").default(100).notNull(),
+    isDefault: boolean("is_default").default(false).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("asset_packs_workspace_id_idx").on(table.workspaceId),
+  ]
+);
+
+export const assetItems = pgTable(
+  "asset_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    packId: uuid("pack_id")
+      .references(() => assetPacks.id, { onDelete: "cascade" })
+      .notNull(),
+    type: varchar("type", { length: 20 }).notNull(), // emoji, icon, color, font_size, layout
+    name: varchar("name", { length: 100 }).notNull(),
+    value: text("value").notNull(), // emoji char, icon name, hex color, etc
+    label: varchar("label", { length: 200 }),
+    metadata: jsonb("metadata").default({}).notNull(),
+    position: integer("position").default(0).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("asset_items_pack_id_idx").on(table.packId),
+    check("asset_items_type_check", sql`${table.type} IN ('emoji', 'icon', 'color', 'font_size', 'layout')`),
+    uniqueIndex("asset_items_pack_name_unique").on(table.packId, table.name),
+  ]
+);
+
+// ─────────────────────────────────────────────────────────────
+// Layer 8 — Fetch Schedules
+// ─────────────────────────────────────────────────────────────
+
+export const fetchSchedules = pgTable(
+  "fetch_schedules",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .references(() => workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    name: varchar("name", { length: 100 }).notNull(),
+    cronExpression: varchar("cron_expression", { length: 100 }).notNull(),
+    preset: varchar("preset", { length: 20 }), // every_hour, every_6h, every_day, custom
+    isActive: boolean("is_active").default(true).notNull(),
+    description: text("description"),
+    nextRunAt: timestamp("next_run_at", { withTimezone: true }),
+    lastRunAt: timestamp("last_run_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("fetch_schedules_workspace_id_idx").on(table.workspaceId),
+    index("fetch_schedules_next_run_idx").on(table.nextRunAt),
+    check(
+      "fetch_schedules_preset_check",
+      sql`${table.preset} IN ('every_hour', 'every_6h', 'every_day', 'custom')`
+    ),
+  ]
+);
+
+// ─────────────────────────────────────────────────────────────
+// Layer 9 — DeepSearch Results
+// ─────────────────────────────────────────────────────────────
+
+export const deepsearchResults = pgTable(
+  "deepsearch_results",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .references(() => workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    agentId: uuid("agent_id")
+      .references(() => agents.id, { onDelete: "cascade" })
+      .notNull(),
+    query: text("query").notNull(),
+    status: varchar("status", { length: 20 }).default("pending").notNull(), // pending, running, completed, failed
+    findings: jsonb("findings").default({}).notNull(),
+    reportText: text("report_text"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("deepsearch_results_workspace_id_idx").on(table.workspaceId),
+    index("deepsearch_results_agent_id_idx").on(table.agentId),
+    index("deepsearch_results_status_idx").on(table.status),
+    index("deepsearch_results_created_at_idx").on(table.createdAt),
+    check(
+      "deepsearch_results_status_check",
+      sql`${table.status} IN ('pending', 'running', 'completed', 'failed')`
+    ),
   ]
 );
