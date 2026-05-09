@@ -1,9 +1,7 @@
 # ==========================================
 # Newsradar Worker — Multi-Stage Production Build
 # ==========================================
-# Runs TypeScript directly with tsx because the worker depends on local
-# TypeScript sources during this deploy wave.
-FROM node:22-alpine AS production
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
@@ -11,8 +9,18 @@ COPY packages/worker/package.json ./
 RUN npm install
 
 COPY packages/worker ./
+RUN npm run build
+
+FROM node:22-alpine AS production
+
+WORKDIR /app
+
+COPY --from=builder /app/package.json ./
+RUN npm install --production
+
+COPY --from=builder /app/dist ./dist
 
 HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
   CMD node healthcheck.mjs
 
-CMD ["npx", "tsx", "src/index.ts"]
+CMD ["node", "dist/index.js"]
