@@ -5,6 +5,7 @@ import { AppError } from "../../middleware/error-handler.js";
 import type { PaginatedResult, Cursor } from "../../lib/pagination.js";
 import { encodeCursor, decodeCursor } from "../../lib/pagination.js";
 import type { Agent, NewAgent } from "../../db/types.js";
+import { fetchSourceQueue } from "../../lib/queue.js";
 
 // ─── CRUD ───
 
@@ -203,6 +204,40 @@ export async function triggerCollection(agentId: string, workspaceId: string, us
   const linkedSources = await getAgentSources(agentId, workspaceId);
   const activeSources = linkedSources.filter((source) => source.isActive);
 
+  if (activeSources.length === 0) {
+    // No active sources — log and return immediately
+    const [log] = await db
+      .insert(operationLogs)
+      .values({
+        userId,
+        workspaceId,
+        agentId,
+        operationType: "collect_agent",
+        entityType: "agent",
+        entityId: agentId,
+        status: "success",
+        message: `У агента «${agent.name}» нет активных источников`,
+        metadata: {
+          agentName: agent.name,
+          sourceCount: linkedSources.length,
+          activeSourceCount: 0,
+        },
+        startedAt: new Date(),
+        finishedAt: new Date(),
+      })
+      .returning();
+
+    return {
+      operationId: log.id,
+      op_id: log.id,
+      status: log.status,
+      message: log.message,
+      sourceCount: linkedSources.length,
+      activeSourceCount: 0,
+    };
+  }
+
+  // Create operation log in "running" state
   const [log] = await db
     .insert(operationLogs)
     .values({
@@ -212,22 +247,89 @@ export async function triggerCollection(agentId: string, workspaceId: string, us
       operationType: "collect_agent",
       entityType: "agent",
       entityId: agentId,
-      status: activeSources.length > 0 ? "running" : "success",
-      message:
-        activeSources.length > 0
-          ? `Сбор агента «${agent.name}» запущен: ${activeSources.length} источников`
-          : `У агента «${agent.name}» нет активных источников`,
+      status: "running",
+      message: `Сбор агента «${agent.name}» запущен: ${activeSources.length} источников`,
       metadata: {
         agentName: agent.name,
         sourceCount: linkedSources.length,
         activeSourceCount: activeSources.length,
-        sources: activeSources.map((source) => ({ id: source.id, name: source.name, type: source.type })),
-        note: "Фоновая очередь сбора будет подключена следующим слоем ремонта",
+        sourceIds: activeSources.map((s) => s.id),
       },
       startedAt: new Date(),
-      finishedAt: activeSources.length > 0 ? null : new Date(),
     })
     .returning();
+
+  // Enqueue a fetch-source BullMQ job for each active source
+  const jobPromises = activeSources.map((source) =>
+    fetchSourceQueue.add(
+      "fetch-source",
+      {
+        sourceId: source.id,
+        sourceName: source.name,
+        sourceType: source.type,
+        sourceUrl: source.url,
+        agentId,
+        workspaceId,
+        operationId: log.id,
+        userId,
+      },
+      {
+        jobId: `fetch:${source.id}:${Date.now()}`,
+        // Stagger jobs slightly to avoid thundering herd
+        delay: Math.random() * 500,
+      }
+    )
+  );
+
+  try {
+    const jobs = await Promise.all(jobPromises);
+    const jobIds = jobs.map((j) => j.id ?? "unknown");
+
+    // Update the operation log with enqueued job IDs
+    await db
+      .update(operationLogs)
+      .set({
+        metadata: {
+          agentName: agent.name,
+          sourceCount: linkedSources.length,
+          activeSourceCount: activeSources.length,
+          sourceIds: activeSources.map((s) => s.id),
+          enqueuedJobIds: jobIds,
+        },
+      })
+      .where(eq(operationLogs.id, log.id));
+  } catch (queueErr) {
+    // If enqueue fails, mark the operation as failed but don't throw
+    // — the operation log still records the attempt
+    console.error(
+      "[triggerCollection] Failed to enqueue fetch-source jobs:",
+      queueErr instanceof Error ? queueErr.message : String(queueErr)
+    );
+
+    await db
+      .update(operationLogs)
+      .set({
+        status: "failed",
+        message: `Ошибка постановки в очередь: ${queueErr instanceof Error ? queueErr.message : String(queueErr)}`,
+        finishedAt: new Date(),
+        metadata: {
+          agentName: agent.name,
+          sourceCount: linkedSources.length,
+          activeSourceCount: activeSources.length,
+          enqueueError: queueErr instanceof Error ? queueErr.message : String(queueErr),
+        },
+      })
+      .where(eq(operationLogs.id, log.id));
+
+    return {
+      operationId: log.id,
+      op_id: log.id,
+      status: "failed",
+      message: `Ошибка постановки в очередь: ${queueErr instanceof Error ? queueErr.message : String(queueErr)}`,
+      sourceCount: linkedSources.length,
+      activeSourceCount: activeSources.length,
+    };
+  }
 
   return {
     operationId: log.id,

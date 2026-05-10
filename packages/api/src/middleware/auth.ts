@@ -1,11 +1,18 @@
 import type { Request, Response, NextFunction } from "express";
-import { verifyAccessToken, type TokenPayload } from "../lib/jwt.js";
+import { verifyAccessToken } from "../lib/jwt.js";
 import { AppError } from "./error-handler.js";
 
+// Extend the Express User interface (used by passport) so that
+// req.user carries our TokenPayload shape and req.user!.sub resolves.
+// Optional OAuth fields are included for passport strategy callbacks.
 declare global {
   namespace Express {
-    interface Request {
-      user?: TokenPayload;
+    interface User {
+      sub: string;
+      email: string;
+      name?: string;
+      googleId?: string;
+      yandexId?: string;
     }
   }
 }
