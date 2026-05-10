@@ -10,6 +10,7 @@ import { Strategy as YandexStrategy } from "passport-yandex";
 import { env } from "../../config/env.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { authRateLimit } from "../../middleware/rate-limit.js";
+import { authMiddleware } from "../../middleware/auth.js";
 
 import {
   registerUser,
