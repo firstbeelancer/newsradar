@@ -27,6 +27,7 @@ import searchRoutes from "./modules/search/routes.js";
 // Layer 3 — AI + Scoring
 import scoringRoutes from "./modules/scoring/routes.js";
 import aiProviderRoutes from "./modules/ai-providers/routes.js";
+import chipFilterRoutes from "./modules/chip-filters/routes.js";
 
 // Layer 4 — Generation
 import templateRoutes from "./modules/templates/routes.js";
@@ -80,6 +81,7 @@ app.use("/api/v1/search", searchRoutes);
 // Layer 3
 app.use("/api/v1/scoring", scoringRoutes);
 app.use("/api/v1/ai-providers", aiProviderRoutes);
+app.use("/api/v1/chip-filters", chipFilterRoutes);
 
 // Layer 4
 app.use("/api/v1/templates", templateRoutes);

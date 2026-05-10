@@ -1,74 +1,115 @@
 import { Router } from "express";
 import { z } from "zod";
 import { authMiddleware } from "../../middleware/auth.js";
+import { workspaceAuth } from "../../middleware/workspace-auth.js";
 import { AppError } from "../../middleware/error-handler.js";
-import { getScoringConfig, updateScoringConfig, recalculateScores, getScoringStats } from "./service.js";
+import {
+  getAgentScoringCriteria,
+  updateScoringCriterion,
+  createScoringCriterion,
+  deleteScoringCriterion,
+  reorderScoringCriteria,
+  recalculateAgentScores,
+  getScoringStats,
+} from "./service.js";
 
 const router = Router();
 
 // ─── Schemas ───
 
-const weightsSchema = z.object({
-  aiRelevance: z.number().min(0).max(1).optional(),
-  keywordMatch: z.number().min(0).max(1).optional(),
-  freshness: z.number().min(0).max(1).optional(),
-  sourceTrust: z.number().min(0).max(1).optional(),
+const criterionSchema = z.object({
+  criterionType: z.enum(["ai_relevance", "keyword_match", "freshness", "source_trust", "custom"]),
+  label: z.string().min(1).max(100),
+  weight: z.number().min(0).max(1),
+  threshold: z.number().min(0).max(1).optional(),
+  isActive: z.boolean().default(true),
+  config: z.record(z.unknown()).optional(),
 });
 
-const recalculateSchema = z.object({
-  agentId: z.string().uuid().optional(),
-  articleId: z.string().uuid().optional(),
+const updateCriterionSchema = z.object({
+  label: z.string().min(1).max(100).optional(),
+  weight: z.number().min(0).max(1).optional(),
+  threshold: z.number().min(0).max(1).optional(),
+  isActive: z.boolean().optional(),
+  config: z.record(z.unknown()).optional(),
+});
+
+const reorderSchema = z.object({
+  orderedIds: z.array(z.string().uuid()),
 });
 
 // ─── Routes ───
 
-// Get current scoring config
-router.get("/config", authMiddleware, async (req, res, next) => {
+// Get scoring criteria for an agent
+router.get("/agents/:agentId/criteria", authMiddleware, workspaceAuth, async (req, res, next) => {
   try {
-    const workspaceId = req.query.workspaceId as string;
-    if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
-
-    const config = await getScoringConfig(workspaceId);
-    res.json({ success: true, data: config });
+    const workspaceId = req.workspaceId!;
+    const criteria = await getAgentScoringCriteria(req.params.agentId, workspaceId);
+    res.json({ success: true, data: criteria });
   } catch (err) {
     next(err);
   }
 });
 
-// Update scoring weights
-router.post("/config", authMiddleware, async (req, res, next) => {
+// Create a scoring criterion
+router.post("/agents/:agentId/criteria", authMiddleware, workspaceAuth, async (req, res, next) => {
   try {
-    const workspaceId = req.query.workspaceId as string;
-    if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
-
-    const input = weightsSchema.parse(req.body);
-    const config = await updateScoringConfig(workspaceId, input);
-    res.json({ success: true, data: config });
+    const workspaceId = req.workspaceId!;
+    const input = criterionSchema.parse(req.body);
+    const criterion = await createScoringCriterion(req.params.agentId, workspaceId, input);
+    res.status(201).json({ success: true, data: criterion });
   } catch (err) {
     next(err);
   }
 });
 
-// Recalculate scores
-router.post("/recalculate", authMiddleware, async (req, res, next) => {
+// Update a scoring criterion (weight slider, label, active toggle)
+router.patch("/criteria/:criterionId", authMiddleware, workspaceAuth, async (req, res, next) => {
   try {
-    const workspaceId = req.query.workspaceId as string;
-    if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
+    const input = updateCriterionSchema.parse(req.body);
+    const criterion = await updateScoringCriterion(req.params.criterionId, input);
+    res.json({ success: true, data: criterion });
+  } catch (err) {
+    next(err);
+  }
+});
 
-    const input = recalculateSchema.parse(req.body);
-    const result = await recalculateScores(workspaceId, input);
+// Delete a scoring criterion
+router.delete("/criteria/:criterionId", authMiddleware, workspaceAuth, async (req, res, next) => {
+  try {
+    await deleteScoringCriterion(req.params.criterionId);
+    res.json({ success: true, data: { deleted: true } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Reorder scoring criteria
+router.post("/agents/:agentId/criteria/reorder", authMiddleware, workspaceAuth, async (req, res, next) => {
+  try {
+    const input = reorderSchema.parse(req.body);
+    const criteria = await reorderScoringCriteria(req.params.agentId, input.orderedIds);
+    res.json({ success: true, data: criteria });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Recalculate scores for an agent
+router.post("/agents/:agentId/recalculate", authMiddleware, workspaceAuth, async (req, res, next) => {
+  try {
+    const workspaceId = req.workspaceId!;
+    const result = await recalculateAgentScores(req.params.agentId, workspaceId);
     res.json({ success: true, data: result });
   } catch (err) {
     next(err);
   }
 });
 
-// Get scoring statistics
-router.get("/stats", authMiddleware, async (req, res, next) => {
+// Get scoring statistics for workspace
+router.get("/stats", authMiddleware, workspaceAuth, async (req, res, next) => {
   try {
-    const workspaceId = req.query.workspaceId as string;
-    if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
-
+    const workspaceId = req.workspaceId!;
     const stats = await getScoringStats(workspaceId);
     res.json({ success: true, data: stats });
   } catch (err) {

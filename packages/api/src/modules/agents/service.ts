@@ -1,16 +1,107 @@
 import { eq, and, desc, sql } from "drizzle-orm";
 import { db } from "../../db/index.js";
-import { agents, sources, agentSources, articles, operationLogs } from "../../db/schema.js";
+import { agents, sources, agentSources, articles, operationLogs, scoringCriteria, chipFilters, subjectAreas } from "../../db/schema.js";
 import { AppError } from "../../middleware/error-handler.js";
 import type { PaginatedResult, Cursor } from "../../lib/pagination.js";
 import { encodeCursor, decodeCursor } from "../../lib/pagination.js";
 import type { Agent, NewAgent } from "../../db/types.js";
 
+// ─── Default scoring weights (must sum to 1.0) ───
+
+export const DEFAULT_SCORING_WEIGHTS = {
+  aiRelevance: 0.35,
+  keywordMatch: 0.25,
+  freshness: 0.20,
+  sourceTrust: 0.20,
+};
+
+// ─── Default config for a new agent ───
+
+export const DEFAULT_AGENT_CONFIG = {
+  targetAudience: "",
+  tone: "профессиональный",
+  systemPrompt: "",
+  userPrompt: "",
+  tags: [] as string[],
+  scoringWeights: DEFAULT_SCORING_WEIGHTS,
+  chipFilters: [] as unknown[],
+  fetchSchedule: "",
+};
+
 // ─── CRUD ───
 
 export async function createAgent(data: NewAgent) {
-  const [agent] = await db.insert(agents).values(data).returning();
-  return agent;
+  // If subjectArea is set, populate defaults from subject_areas
+  let config = (data.config as Record<string, unknown>) ?? {};
+  
+  if (data.subjectArea) {
+    const area = await db.query.subjectAreas.findFirst({
+      where: eq(subjectAreas.id, data.subjectArea),
+    });
+    if (area) {
+      const defaults = area.defaultsJson as Record<string, unknown> ?? {};
+      config = {
+        ...DEFAULT_AGENT_CONFIG,
+        ...defaults,
+        ...(data.config as Record<string, unknown> ?? {}), // user overrides take precedence
+      };
+    }
+  } else {
+    config = {
+      ...DEFAULT_AGENT_CONFIG,
+      ...config,
+    };
+  }
+
+  const [agent] = await db.insert(agents).values({
+    ...data,
+    config,
+  }).returning();
+
+  // Create default scoring criteria for this agent
+  if (agent) {
+    const criteriaRows = [
+      { criterionType: "ai_relevance", label: "AI-релевантность", weight: "0.3500", position: 0 },
+      { criterionType: "keyword_match", label: "Совпадение ключевых слов", weight: "0.2500", position: 1 },
+      { criterionType: "freshness", label: "Свежесть", weight: "0.2000", position: 2 },
+      { criterionType: "source_trust", label: "Доверие к источнику", weight: "0.2000", position: 3 },
+    ];
+
+    for (const c of criteriaRows) {
+      await db.insert(scoringCriteria).values({
+        agentId: agent.id,
+        criterionType: c.criterionType,
+        label: c.label,
+        weight: c.weight,
+        position: c.position,
+        isActive: true,
+        config: {},
+      });
+    }
+
+    // Create chip filters from config if provided
+    const configChipFilters = (config as Record<string, unknown>)?.chipFilters;
+    if (Array.isArray(configChipFilters)) {
+      for (let i = 0; i < configChipFilters.length; i++) {
+        const cf = configChipFilters[i] as Record<string, unknown>;
+        await db.insert(chipFilters).values({
+          agentId: agent.id,
+          key: (cf.key as string) || `filter_${i}`,
+          label: (cf.label as string) || `Filter ${i}`,
+          description: (cf.description as string) || null,
+          pattern: (cf.pattern as string) || null,
+          operator: (cf.operator as string) || "contains",
+          scoreModifier: (cf.scoreModifier as number ?? 0).toString(),
+          color: (cf.color as string) || "default",
+          icon: (cf.icon as string) || null,
+          isActive: (cf.isActive as boolean) ?? true,
+          position: i,
+        });
+      }
+    }
+  }
+
+  return getAgentById(agent.id, agent.workspaceId);
 }
 
 export async function getAgentById(id: string, workspaceId: string) {
@@ -20,7 +111,25 @@ export async function getAgentById(id: string, workspaceId: string) {
   if (!agent) {
     throw new AppError(404, "Agent not found", "AGENT_NOT_FOUND");
   }
-  return agent;
+
+  // Enrich with scoring criteria and chip filters
+  const criteria = await db
+    .select()
+    .from(scoringCriteria)
+    .where(eq(scoringCriteria.agentId, id))
+    .orderBy(scoringCriteria.position);
+
+  const chips = await db
+    .select()
+    .from(chipFilters)
+    .where(eq(chipFilters.agentId, id))
+    .orderBy(chipFilters.position);
+
+  return {
+    ...agent,
+    scoringCriteria: criteria,
+    chipFilters: chips,
+  };
 }
 
 export async function listAgents(
@@ -74,21 +183,103 @@ export async function listAgents(
 export async function updateAgent(
   id: string,
   workspaceId: string,
-  data: Partial<Pick<Agent, "name" | "description" | "icon" | "color" | "position">>
+  data: {
+    name?: string;
+    description?: string;
+    icon?: string;
+    color?: string;
+    position?: number;
+    subjectArea?: string;
+    config?: Record<string, unknown>;
+  }
 ) {
-  await getAgentById(id, workspaceId);
+  const existing = await db.query.agents.findFirst({
+    where: and(eq(agents.id, id), eq(agents.workspaceId, workspaceId)),
+  });
+  if (!existing) {
+    throw new AppError(404, "Agent not found", "AGENT_NOT_FOUND");
+  }
+
+  // Merge config
+  const existingConfig = (existing.config as Record<string, unknown>) ?? {};
+  const newConfig = data.config ? { ...existingConfig, ...data.config } : existingConfig;
+
+  // If scoring weights changed in config, sync to scoringCriteria table
+  if (data.config?.scoringWeights) {
+    const weights = data.config.scoringWeights as Record<string, number>;
+    for (const [key, value] of Object.entries(weights)) {
+      const criterionType = key === "aiRelevance" ? "ai_relevance"
+        : key === "keywordMatch" ? "keyword_match"
+        : key === "freshness" ? "freshness"
+        : key === "sourceTrust" ? "source_trust"
+        : null;
+      if (criterionType) {
+        await db
+          .update(scoringCriteria)
+          .set({ weight: value.toFixed(4), updatedAt: new Date() })
+          .where(
+            and(
+              eq(scoringCriteria.agentId, id),
+              eq(scoringCriteria.criterionType, criterionType)
+            )
+          );
+      }
+    }
+  }
+
+  // If chip filters changed in config, replace them
+  if (data.config?.chipFilters && Array.isArray(data.config.chipFilters)) {
+    // Delete existing
+    await db.delete(chipFilters).where(eq(chipFilters.agentId, id));
+    // Insert new
+    for (let i = 0; i < (data.config.chipFilters as Record<string, unknown>[]).length; i++) {
+      const cf = (data.config.chipFilters as Record<string, unknown>[])[i];
+      await db.insert(chipFilters).values({
+        agentId: id,
+        key: (cf.key as string) || `filter_${i}`,
+        label: (cf.label as string) || `Filter ${i}`,
+        description: (cf.description as string) || null,
+        pattern: (cf.pattern as string) || null,
+        operator: (cf.operator as string) || "contains",
+        scoreModifier: (cf.scoreModifier as number ?? 0).toString(),
+        color: (cf.color as string) || "default",
+        icon: (cf.icon as string) || null,
+        isActive: (cf.isActive as boolean) ?? true,
+        position: i,
+      });
+    }
+    // Remove chipFilters from config to avoid duplication
+    delete newConfig.chipFilters;
+  }
+
+  // If tags changed, just update config (tags stored in config JSONB)
+  // Tags are managed through config.tags
 
   const [updated] = await db
     .update(agents)
-    .set({ ...data, updatedAt: new Date() })
+    .set({
+      name: data.name,
+      description: data.description,
+      icon: data.icon,
+      color: data.color,
+      position: data.position,
+      subjectArea: data.subjectArea,
+      config: newConfig,
+      updatedAt: new Date(),
+    })
     .where(and(eq(agents.id, id), eq(agents.workspaceId, workspaceId)))
     .returning();
 
-  return updated;
+  return getAgentById(updated.id, workspaceId);
 }
 
 export async function deleteAgent(id: string, workspaceId: string) {
-  await getAgentById(id, workspaceId);
+  const existing = await db.query.agents.findFirst({
+    where: and(eq(agents.id, id), eq(agents.workspaceId, workspaceId)),
+  });
+  if (!existing) {
+    throw new AppError(404, "Agent not found", "AGENT_NOT_FOUND");
+  }
   await db.delete(agents).where(and(eq(agents.id, id), eq(agents.workspaceId, workspaceId)));
   return { deleted: true };
 }
@@ -96,7 +287,12 @@ export async function deleteAgent(id: string, workspaceId: string) {
 // ─── Stats ───
 
 export async function getAgentStats(id: string, workspaceId: string) {
-  await getAgentById(id, workspaceId);
+  const agent = await db.query.agents.findFirst({
+    where: and(eq(agents.id, id), eq(agents.workspaceId, workspaceId)),
+  });
+  if (!agent) {
+    throw new AppError(404, "Agent not found", "AGENT_NOT_FOUND");
+  }
 
   const sourceCountResult = await db
     .select({ count: sql<number>`count(*)` })
@@ -148,7 +344,12 @@ export async function getAgentStats(id: string, workspaceId: string) {
 // ─── Source linking ───
 
 export async function linkSource(agentId: string, sourceId: string, workspaceId: string) {
-  await getAgentById(agentId, workspaceId);
+  const agent = await db.query.agents.findFirst({
+    where: and(eq(agents.id, agentId), eq(agents.workspaceId, workspaceId)),
+  });
+  if (!agent) {
+    throw new AppError(404, "Agent not found", "AGENT_NOT_FOUND");
+  }
 
   const source = await db.query.sources.findFirst({
     where: and(eq(sources.id, sourceId), eq(sources.workspaceId, workspaceId)),
@@ -167,7 +368,12 @@ export async function linkSource(agentId: string, sourceId: string, workspaceId:
 }
 
 export async function unlinkSource(agentId: string, sourceId: string, workspaceId: string) {
-  await getAgentById(agentId, workspaceId);
+  const agent = await db.query.agents.findFirst({
+    where: and(eq(agents.id, agentId), eq(agents.workspaceId, workspaceId)),
+  });
+  if (!agent) {
+    throw new AppError(404, "Agent not found", "AGENT_NOT_FOUND");
+  }
 
   await db
     .delete(agentSources)
@@ -182,7 +388,12 @@ export async function unlinkSource(agentId: string, sourceId: string, workspaceI
 }
 
 export async function getAgentSources(agentId: string, workspaceId: string) {
-  await getAgentById(agentId, workspaceId);
+  const agent = await db.query.agents.findFirst({
+    where: and(eq(agents.id, agentId), eq(agents.workspaceId, workspaceId)),
+  });
+  if (!agent) {
+    throw new AppError(404, "Agent not found", "AGENT_NOT_FOUND");
+  }
 
   const rows = await db
     .select({
@@ -198,7 +409,12 @@ export async function getAgentSources(agentId: string, workspaceId: string) {
 // ─── Collect trigger ───
 
 export async function triggerCollection(agentId: string, workspaceId: string, userId: string) {
-  const agent = await getAgentById(agentId, workspaceId);
+  const agent = await db.query.agents.findFirst({
+    where: and(eq(agents.id, agentId), eq(agents.workspaceId, workspaceId)),
+  });
+  if (!agent) {
+    throw new AppError(404, "Agent not found", "AGENT_NOT_FOUND");
+  }
 
   const linkedSources = await getAgentSources(agentId, workspaceId);
   const activeSources = linkedSources.filter((source) => source.isActive);
@@ -222,12 +438,35 @@ export async function triggerCollection(agentId: string, workspaceId: string, us
         sourceCount: linkedSources.length,
         activeSourceCount: activeSources.length,
         sources: activeSources.map((source) => ({ id: source.id, name: source.name, type: source.type })),
-        note: "Фоновая очередь сбора будет подключена следующим слоем ремонта",
       },
       startedAt: new Date(),
       finishedAt: activeSources.length > 0 ? null : new Date(),
     })
     .returning();
+
+  // Queue actual BullMQ jobs for each active source
+  if (activeSources.length > 0) {
+    try {
+      const { getFetchSourceQueue } = await import("../../lib/queues.js");
+      const fetchQueue = getFetchSourceQueue();
+      
+      for (const source of activeSources) {
+        await fetchQueue.add("fetch-source", {
+          sourceId: source.id,
+          agentId,
+          workspaceId,
+          userId,
+          operationLogId: log.id,
+        }, {
+          attempts: 3,
+          backoff: { type: "exponential", delay: 5000 },
+        });
+      }
+    } catch (err) {
+      // If queue is not available (e.g. in dev), log but don't fail
+      console.warn("[agents] BullMQ queue not available, collection logged but not queued:", (err as Error).message);
+    }
+  }
 
   return {
     operationId: log.id,

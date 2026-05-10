@@ -1,163 +1,204 @@
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, sql, desc } from "drizzle-orm";
 import { db } from "../../db/index.js";
-import { articles, articleScores } from "../../db/schema.js";
+import { agents, articles, articleScores, scoringCriteria } from "../../db/schema.js";
 import { AppError } from "../../middleware/error-handler.js";
 
-// ─── Default weights (must sum to 1.0) ───
+// ─── Scoring Criteria CRUD ───
 
-export interface ScoringWeights {
-  aiRelevance: number;
-  keywordMatch: number;
-  freshness: number;
-  sourceTrust: number;
-}
-
-export const DEFAULT_WEIGHTS: ScoringWeights = {
-  aiRelevance: 0.35,
-  keywordMatch: 0.25,
-  freshness: 0.20,
-  sourceTrust: 0.20,
-};
-
-function validateWeights(weights: Partial<ScoringWeights>): ScoringWeights {
-  const full = { ...DEFAULT_WEIGHTS, ...weights };
-  const sum = full.aiRelevance + full.keywordMatch + full.freshness + full.sourceTrust;
-  const epsilon = 0.001;
-  if (Math.abs(sum - 1.0) > epsilon) {
-    throw new AppError(400, `Weights must sum to 1.0, got ${sum.toFixed(3)}`, "INVALID_WEIGHTS");
+export async function getAgentScoringCriteria(agentId: string, workspaceId: string) {
+  // Verify agent belongs to workspace
+  const agent = await db.query.agents.findFirst({
+    where: and(eq(agents.id, agentId), eq(agents.workspaceId, workspaceId)),
+  });
+  if (!agent) {
+    throw new AppError(404, "Agent not found", "AGENT_NOT_FOUND");
   }
-  return full;
+
+  return db
+    .select()
+    .from(scoringCriteria)
+    .where(eq(scoringCriteria.agentId, agentId))
+    .orderBy(scoringCriteria.position);
 }
 
-// ─── Config persistence (stored in workspace-level JSON for simplicity) ───
-// In production this would be a dedicated table. For now we use a simple in-memory
-// cache with workspace-specific keys.
-
-const weightCache = new Map<string, ScoringWeights>();
-
-export async function getScoringConfig(workspaceId: string): Promise<ScoringWeights & { workspaceId: string }> {
-  const cached = weightCache.get(workspaceId);
-  if (cached) {
-    return { ...cached, workspaceId };
+export async function createScoringCriterion(
+  agentId: string,
+  workspaceId: string,
+  data: {
+    criterionType: string;
+    label: string;
+    weight: number;
+    threshold?: number;
+    isActive?: boolean;
+    config?: Record<string, unknown>;
   }
-  return { ...DEFAULT_WEIGHTS, workspaceId };
-}
-
-export async function updateScoringConfig(
-  workspaceId: string,
-  weights: Partial<ScoringWeights>
-): Promise<ScoringWeights & { workspaceId: string }> {
-  const validated = validateWeights(weights);
-  weightCache.set(workspaceId, validated);
-  return { ...validated, workspaceId };
-}
-
-// ─── Recalculate scores ───
-
-export async function recalculateScores(
-  workspaceId: string,
-  params: { agentId?: string; articleId?: string }
 ) {
-  const weights = await getScoringConfig(workspaceId);
-
-  // Build article filter
-  const conditions = [eq(articles.workspaceId, workspaceId)];
-  if (params.agentId) {
-    conditions.push(eq(articles.agentId, params.agentId));
-  }
-  if (params.articleId) {
-    conditions.push(eq(articles.id, params.articleId));
+  // Verify agent belongs to workspace
+  const agent = await db.query.agents.findFirst({
+    where: and(eq(agents.id, agentId), eq(agents.workspaceId, workspaceId)),
+  });
+  if (!agent) {
+    throw new AppError(404, "Agent not found", "AGENT_NOT_FOUND");
   }
 
-  // Only re-score articles that have been analyzed
-  conditions.push(eq(articles.status, "analyzed"));
+  // Get next position
+  const existing = await db
+    .select({ maxPos: sql<number>`COALESCE(MAX(${scoringCriteria.position}), -1)` })
+    .from(scoringCriteria)
+    .where(eq(scoringCriteria.agentId, agentId));
 
+  const nextPos = (existing[0]?.maxPos ?? -1) + 1;
+
+  const [criterion] = await db
+    .insert(scoringCriteria)
+    .values({
+      agentId,
+      criterionType: data.criterionType,
+      label: data.label,
+      weight: data.weight.toFixed(4),
+      threshold: data.threshold?.toFixed(4),
+      isActive: data.isActive ?? true,
+      config: data.config ?? {},
+      position: nextPos,
+    })
+    .returning();
+
+  return criterion;
+}
+
+export async function updateScoringCriterion(
+  criterionId: string,
+  data: {
+    label?: string;
+    weight?: number;
+    threshold?: number;
+    isActive?: boolean;
+    config?: Record<string, unknown>;
+  }
+) {
+  const existing = await db.query.scoringCriteria.findFirst({
+    where: eq(scoringCriteria.id, criterionId),
+  });
+  if (!existing) {
+    throw new AppError(404, "Scoring criterion not found", "CRITERION_NOT_FOUND");
+  }
+
+  const [updated] = await db
+    .update(scoringCriteria)
+    .set({
+      ...(data.label !== undefined && { label: data.label }),
+      ...(data.weight !== undefined && { weight: data.weight.toFixed(4) }),
+      ...(data.threshold !== undefined && { threshold: data.threshold.toFixed(4) }),
+      ...(data.isActive !== undefined && { isActive: data.isActive }),
+      ...(data.config !== undefined && { config: data.config }),
+      updatedAt: new Date(),
+    })
+    .where(eq(scoringCriteria.id, criterionId))
+    .returning();
+
+  return updated;
+}
+
+export async function deleteScoringCriterion(criterionId: string) {
+  const existing = await db.query.scoringCriteria.findFirst({
+    where: eq(scoringCriteria.id, criterionId),
+  });
+  if (!existing) {
+    throw new AppError(404, "Scoring criterion not found", "CRITERION_NOT_FOUND");
+  }
+
+  await db.delete(scoringCriteria).where(eq(scoringCriteria.id, criterionId));
+  return { deleted: true };
+}
+
+export async function reorderScoringCriteria(agentId: string, orderedIds: string[]) {
+  for (let i = 0; i < orderedIds.length; i++) {
+    await db
+      .update(scoringCriteria)
+      .set({ position: i, updatedAt: new Date() })
+      .where(
+        and(
+          eq(scoringCriteria.id, orderedIds[i]),
+          eq(scoringCriteria.agentId, agentId)
+        )
+      );
+  }
+
+  return db
+    .select()
+    .from(scoringCriteria)
+    .where(eq(scoringCriteria.agentId, agentId))
+    .orderBy(scoringCriteria.position);
+}
+
+// ─── Recalculate scores for a specific agent ───
+
+export async function recalculateAgentScores(agentId: string, workspaceId: string) {
+  // Get agent's scoring criteria
+  const criteria = await db
+    .select()
+    .from(scoringCriteria)
+    .where(and(eq(scoringCriteria.agentId, agentId), eq(scoringCriteria.isActive, true)))
+    .orderBy(scoringCriteria.position);
+
+  if (criteria.length === 0) {
+    throw new AppError(400, "No active scoring criteria for this agent", "NO_CRITERIA");
+  }
+
+  // Build weights map
+  const weights: Record<string, number> = {};
+  for (const c of criteria) {
+    weights[c.criterionType] = Number(c.weight);
+  }
+
+  // Get articles to score
   const articlesToScore = await db
     .select({ id: articles.id })
     .from(articles)
-    .where(and(...conditions))
-    .limit(1000);
+    .where(
+      and(
+        eq(articles.agentId, agentId),
+        eq(articles.workspaceId, workspaceId),
+        sql`${articles.status} IN ('analyzed', 'translated', 'new')`
+      )
+    )
+    .limit(500);
 
-  const scoredAt = new Date();
-  let updatedCount = 0;
+  // Queue scoring jobs instead of doing Math.random()
+  let queuedCount = 0;
+  try {
+    const { getScoreArticleQueue } = await import("../../lib/queues.js");
+    const scoreQueue = getScoreArticleQueue();
 
-  for (const article of articlesToScore) {
-    // In real implementation, each component would be computed by separate logic.
-    // Here we simulate the scoring pipeline.
-    const aiRelevance = Math.random() * 0.4 + 0.6; // 0.6-1.0
-    const keywordMatch = Math.random() * 0.5 + 0.5; // 0.5-1.0
-    const freshness = Math.random() * 0.3 + 0.7; // 0.7-1.0
-    const sourceTrust = Math.random() * 0.4 + 0.6; // 0.6-1.0
-
-    const overallScore = Math.round(
-      (aiRelevance + keywordMatch + freshness + sourceTrust) / 4 * 1000
-    ) / 1000;
-
-    const weightedScore = Math.round(
-      (aiRelevance * weights.aiRelevance +
-        keywordMatch * weights.keywordMatch +
-        freshness * weights.freshness +
-        sourceTrust * weights.sourceTrust) *
-        1000
-    ) / 1000;
-
-    // Upsert score record
-    const existingScore = await db.query.articleScores.findFirst({
-      where: eq(articleScores.articleId, article.id),
-    });
-
-    if (existingScore) {
-      await db
-        .update(articleScores)
-        .set({
-          aiRelevance: aiRelevance.toFixed(2),
-          keywordMatch: keywordMatch.toFixed(2),
-          freshness: freshness.toFixed(2),
-          sourceTrust: sourceTrust.toFixed(2),
-          overallScore: overallScore.toFixed(3),
-          weightedScore: weightedScore.toFixed(3),
-          weightsSnapshot: weights as Record<string, unknown>,
-          scoredAt,
-        })
-        .where(eq(articleScores.id, existingScore.id));
-    } else {
-      await db.insert(articleScores).values({
+    for (const article of articlesToScore) {
+      await scoreQueue.add("score-article", {
         articleId: article.id,
-        aiRelevance: aiRelevance.toFixed(2),
-        keywordMatch: keywordMatch.toFixed(2),
-        freshness: freshness.toFixed(2),
-        sourceTrust: sourceTrust.toFixed(2),
-        overallScore: overallScore.toFixed(3),
-        weightedScore: weightedScore.toFixed(3),
-        weightsSnapshot: weights as Record<string, unknown>,
-        scoredAt,
+        agentId,
+        workspaceId,
+        weights,
+        criteriaIds: criteria.map((c) => c.id),
+      }, {
+        attempts: 3,
+        backoff: { type: "exponential", delay: 3000 },
       });
+      queuedCount++;
     }
-
-    // Update article score field
-    await db
-      .update(articles)
-      .set({
-        score: weightedScore.toFixed(3),
-        status: "scored",
-        updatedAt: scoredAt,
-      })
-      .where(eq(articles.id, article.id));
-
-    updatedCount++;
+  } catch (err) {
+    console.warn("[scoring] BullMQ queue not available, scoring queued but not processed:", (err as Error).message);
   }
 
   return {
-    recalculated: updatedCount,
+    agentId,
+    criteriaCount: criteria.length,
+    articlesQueued: queuedCount,
     weights,
-    triggeredAt: scoredAt.toISOString(),
+    triggeredAt: new Date().toISOString(),
   };
 }
 
 // ─── Scoring stats ───
 
 export async function getScoringStats(workspaceId: string) {
-  // Count articles by score range
   const scoreRanges = [
     { label: "unscored", min: 0, max: 0 },
     { label: "0.0-0.3", min: 0.001, max: 0.3 },

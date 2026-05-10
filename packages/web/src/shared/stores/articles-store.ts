@@ -65,8 +65,15 @@ export const useArticlesStore = create<ArticlesState & ArticlesActions>((set, ge
   },
 
   toggleFavorite: async (id) => {
+    // Optimistic toggle: check current state to decide add vs remove
+    const currentArticle = get().currentArticle;
+    const isCurrentlyFavorite = currentArticle?.id === id ? currentArticle.is_favorite : false;
     try {
-      await articlesApi.favorite(id);
+      if (isCurrentlyFavorite) {
+        await articlesApi.unfavorite(id);
+      } else {
+        await articlesApi.favorite(id);
+      }
       set((state) => ({
         currentArticle:
           state.currentArticle?.id === id

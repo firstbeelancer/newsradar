@@ -281,26 +281,57 @@ export async function apiDelete<T>(path: string, options?: { workspace?: boolean
 }
 
 // SSE subscription helper
+// EventSource can't send Authorization headers, so we use fetch+ReadableStream
 export function subscribeToSSE<T>(path: string, onMessage: (data: T) => void, onError?: (error: Event) => void): () => void {
   const url = `${API_BASE}${withWorkspace(path)}`;
-  const eventSource = new EventSource(url, { withCredentials: true });
+  const token = useAuthStore.getState().access_token;
+  let aborted = false;
 
-  eventSource.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data) as T;
-      onMessage(data);
-    } catch {
-      onMessage(event.data as unknown as T);
-    }
-  };
+  // Use fetch with ReadableStream instead of EventSource to support Bearer auth
+  fetch(url, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'text/event-stream',
+    },
+  })
+    .then(async (response) => {
+      if (!response.ok || !response.body) {
+        onError?.(new Event(`HTTP ${response.status}`));
+        return;
+      }
 
-  eventSource.onerror = (error) => {
-    onError?.(error);
-    eventSource.close();
-  };
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (!aborted) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const dataStr = line.slice(6).trim();
+            if (!dataStr) continue;
+            try {
+              const data = JSON.parse(dataStr) as T;
+              onMessage(data);
+            } catch {
+              onMessage(dataStr as unknown as T);
+            }
+          }
+        }
+      }
+    })
+    .catch((err) => {
+      if (!aborted) onError?.(err);
+    });
 
   return () => {
-    eventSource.close();
+    aborted = true;
   };
 }
 
@@ -319,6 +350,33 @@ export interface CursorPaginatedResponse<T> {
 
 // ─── Agent Types ─────────────────────────────────────────────────────────────
 
+export interface ScoringCriterion {
+  id: string;
+  agentId: string;
+  criterionType: 'ai_relevance' | 'keyword_match' | 'freshness' | 'source_trust' | 'custom';
+  label: string;
+  weight: number;
+  threshold?: number | null;
+  isActive: boolean;
+  position: number;
+  config: Record<string, unknown>;
+}
+
+export interface ChipFilter {
+  id: string;
+  agentId: string;
+  key: string;
+  label: string;
+  description?: string | null;
+  pattern?: string | null;
+  operator: 'contains' | 'not_contains' | 'equals' | 'starts_with' | 'regex' | 'in' | 'gt' | 'lt' | 'gte' | 'lte';
+  scoreModifier: number;
+  color: string;
+  icon?: string | null;
+  isActive: boolean;
+  position: number;
+}
+
 export interface Agent {
   id: string;
   name: string;
@@ -328,6 +386,24 @@ export interface Agent {
   position: number;
   is_active: boolean;
   article_count?: number;
+  subjectArea?: string | null;
+  config: {
+    targetAudience?: string;
+    tone?: string;
+    systemPrompt?: string;
+    userPrompt?: string;
+    tags?: string[];
+    scoringWeights?: {
+      aiRelevance: number;
+      keywordMatch: number;
+      freshness: number;
+      sourceTrust: number;
+    };
+    fetchSchedule?: string;
+    assetPackId?: string;
+  };
+  scoringCriteria?: ScoringCriterion[];
+  chipFilters?: ChipFilter[];
   created_at: string;
   updated_at: string;
 }
@@ -338,7 +414,22 @@ export interface CreateAgentDto {
   icon?: string;
   color?: string;
   position?: number;
-  is_active?: boolean;
+  subjectArea?: string;
+  config?: {
+    targetAudience?: string;
+    tone?: string;
+    systemPrompt?: string;
+    userPrompt?: string;
+    tags?: string[];
+    scoringWeights?: {
+      aiRelevance: number;
+      keywordMatch: number;
+      freshness: number;
+      sourceTrust: number;
+    };
+    chipFilters?: Partial<ChipFilter>[];
+    fetchSchedule?: string;
+  };
 }
 
 export interface UpdateAgentDto {
@@ -347,7 +438,8 @@ export interface UpdateAgentDto {
   icon?: string;
   color?: string;
   position?: number;
-  is_active?: boolean;
+  subjectArea?: string;
+  config?: Agent['config'];
 }
 
 export interface AgentStats {
@@ -599,15 +691,40 @@ export const agentsApi = {
     apiGet<BackendCursorResponse<BackendAgent>>(`/agents?limit=${limit}${cursor ? `&cursor=${cursor}` : ''}`).then((payload) =>
       normalizeCursorResponse(payload, normalizeAgent)
     ),
-  get: (id: string) => apiGet<BackendAgent>(`/agents/${id}`).then(normalizeAgent),
-  create: (data: CreateAgentDto) => apiPost<BackendAgent, CreateAgentDto>('/agents', data).then(normalizeAgent),
-  update: (id: string, data: UpdateAgentDto) => apiPut<BackendAgent, UpdateAgentDto>(`/agents/${id}`, data).then(normalizeAgent),
+  get: (id: string) => apiGet<Agent>(`/agents/${id}`),
+  create: (data: CreateAgentDto) => apiPost<Agent, CreateAgentDto>('/agents', data),
+  update: (id: string, data: UpdateAgentDto) => apiPut<Agent, UpdateAgentDto>(`/agents/${id}`, data),
   delete: (id: string) => apiDelete<void>(`/agents/${id}`),
   stats: (id: string) => apiGet<AgentStats>(`/agents/${id}/stats`),
   collect: (id: string) => apiPost<{ operationId?: string; op_id?: string }>(`/agents/${id}/collect`, {}).then((payload) => ({
     op_id: payload.op_id ?? payload.operationId ?? '',
   })),
   sources: (id: string) => apiGet<Source[]>(`/agents/${id}/sources`),
+};
+
+// Scoring Criteria
+export const scoringCriteriaApi = {
+  list: (agentId: string) => apiGet<ScoringCriterion[]>(`/scoring/agents/${agentId}/criteria`),
+  create: (agentId: string, data: Omit<ScoringCriterion, 'id' | 'agentId' | 'position' | 'config'> & { config?: Record<string, unknown> }) =>
+    apiPost<ScoringCriterion>(`/scoring/agents/${agentId}/criteria`, data),
+  update: (criterionId: string, data: Partial<ScoringCriterion>) =>
+    apiPatch<ScoringCriterion>(`/scoring/criteria/${criterionId}`, data),
+  delete: (criterionId: string) => apiDelete<void>(`/scoring/criteria/${criterionId}`),
+  reorder: (agentId: string, orderedIds: string[]) =>
+    apiPost<ScoringCriterion[]>(`/scoring/agents/${agentId}/criteria/reorder`, { orderedIds }),
+  recalculate: (agentId: string) => apiPost<{ articlesQueued: number }>(`/scoring/agents/${agentId}/recalculate`, {}),
+};
+
+// Chip Filters
+export const chipFiltersApi = {
+  list: (agentId: string) => apiGet<ChipFilter[]>(`/chip-filters/agents/${agentId}`),
+  create: (agentId: string, data: Omit<ChipFilter, 'id' | 'agentId' | 'position'>) =>
+    apiPost<ChipFilter>(`/chip-filters/agents/${agentId}`, data),
+  update: (filterId: string, data: Partial<ChipFilter>) =>
+    apiPatch<ChipFilter>(`/chip-filters/${filterId}`, data),
+  delete: (filterId: string) => apiDelete<void>(`/chip-filters/${filterId}`),
+  reorder: (agentId: string, orderedIds: string[]) =>
+    apiPost<ChipFilter[]>(`/chip-filters/agents/${agentId}/reorder`, { orderedIds }),
 };
 
 // Sources
@@ -642,12 +759,13 @@ export const articlesApi = {
     params.set('q', q);
     params.set('limit', String(limit));
     if (cursor) params.set('cursor', cursor);
-    return apiGet<BackendCursorResponse<BackendArticle>>(`/articles/search?${params.toString()}`).then((payload) =>
+    return apiGet<BackendCursorResponse<BackendArticle>>(`/search/articles?${params.toString()}`).then((payload) =>
       normalizeCursorResponse(payload, normalizeArticle)
     );
   },
   get: (id: string) => apiGet<BackendArticle>(`/articles/${id}`).then(normalizeArticle),
   favorite: (id: string) => apiPost<BackendArticle, Record<string, never>>(`/articles/${id}/favorite`, {}).then(normalizeArticle),
+  unfavorite: (id: string) => apiDelete<BackendArticle>(`/articles/${id}/favorite`).then(normalizeArticle),
 };
 
 // Templates
@@ -708,11 +826,10 @@ export const generationApi = {
     apiPut<BackendGeneratedPost, { content: string }>(`/generation/posts/${id}`, { content }).then(normalizeGeneratedPost),
 };
 
-// Scoring
+// Scoring (workspace-level defaults)
 export const scoringApi = {
-  getConfig: () => apiGet<ScoringConfig>('/scoring/config'),
-  updateConfig: (data: ScoringConfig) => apiPost<ScoringConfig, ScoringConfig>('/scoring/config', data),
-  recalculate: () => apiPost<void>('/scoring/recalculate', {}),
+  getStats: () => apiGet<ScoringConfig & { distribution?: Record<string, number>; totalArticles?: number }>('/scoring/stats'),
+  recalculate: (agentId?: string) => apiPost<{ articlesQueued: number }>('/scoring/recalculate', agentId ? { agentId } : {}),
 };
 
 // ─── Subscription API ────────────────────────────────────────
