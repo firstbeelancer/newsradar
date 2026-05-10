@@ -33,7 +33,7 @@ const colorMap: Record<string, string> = {
 };
 
 export function AgentDetailPage() {
-  const { id } = useParams({ from: '/agents/$id' });
+  const { id } = useParams({ strict: false }) as { id: string };
   const navigate = useNavigate();
   const { addToast } = useToast();
   const {

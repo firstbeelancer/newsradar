@@ -1,0 +1,324 @@
+import { eq, and, desc, sql } from "drizzle-orm";
+import { db } from "../../db/index.js";
+import { generatedPosts, articles, contentTemplates, aiProviders } from "../../db/schema.js";
+import { AppError } from "../../middleware/error-handler.js";
+import { encodeCursor, decodeCursor } from "../../lib/pagination.js";
+// In-memory store for stream operations (use Redis in production)
+const streamStore = new Map();
+// ─── Content generation ───
+export async function generatePost(input, _userId) {
+    const operationId = crypto.randomUUID();
+    const { workspaceId, templateId, articleIds, customPrompt, type, agentId } = input;
+    // Resolve template
+    let template;
+    if (templateId) {
+        template = await db.query.contentTemplates.findFirst({
+            where: and(eq(contentTemplates.id, templateId), eq(contentTemplates.workspaceId, workspaceId)),
+        });
+    }
+    if (!template) {
+        // Find default template for the type
+        template = await db.query.contentTemplates.findFirst({
+            where: and(eq(contentTemplates.workspaceId, workspaceId), eq(contentTemplates.type, type === "manual" ? "short" : type === "digest" ? "digest" : "detailed"), eq(contentTemplates.isDefault, true)),
+        });
+    }
+    // Fetch articles to include
+    let selectedArticles = [];
+    if (articleIds && articleIds.length > 0) {
+        selectedArticles = await db
+            .select()
+            .from(articles)
+            .where(and(eq(articles.workspaceId, workspaceId), sql `${articles.id} = ANY(${articleIds})`));
+    }
+    else if (agentId) {
+        // Get top-scored recent articles for the agent
+        selectedArticles = await db
+            .select()
+            .from(articles)
+            .where(and(eq(articles.workspaceId, workspaceId), eq(articles.agentId, agentId)))
+            .orderBy(desc(articles.score), desc(articles.createdAt))
+            .limit(10);
+    }
+    // Build prompt
+    const articleTexts = selectedArticles.map((a) => {
+        return `Title: ${a.title}\n${a.description ? `Description: ${a.description}\n` : ""}${a.aiSummary ? `Summary: ${a.aiSummary}\n` : ""}`;
+    }).join("\n---\n");
+    const systemPrompt = template?.systemPrompt ?? "You are a professional news editor. Create engaging content based on the provided articles.";
+    const userPrompt = customPrompt
+        ?? template?.userPrompt?.replace(/\{\{content\}\}/g, articleTexts)
+        ?? `Based on the following articles, create a ${type} post:\n\n${articleTexts}`;
+    // Find active AI provider
+    const provider = await db.query.aiProviders.findFirst({
+        where: and(eq(aiProviders.workspaceId, workspaceId), eq(aiProviders.isActive, true)),
+    });
+    // Initialize stream operation
+    streamStore.set(operationId, {
+        id: operationId,
+        status: "pending",
+        content: "",
+        chunks: [],
+    });
+    // Start async generation (in production this would be a BullMQ job)
+    startGeneration(operationId, systemPrompt, userPrompt, provider, {
+        workspaceId,
+        agentId,
+        templateId: template?.id ?? null,
+        articles: selectedArticles,
+        type,
+    });
+    return { operationId, status: "queued" };
+}
+// ─── Async generation worker ───
+async function startGeneration(operationId, systemPrompt, userPrompt, provider, context) {
+    const op = streamStore.get(operationId);
+    if (!op)
+        return;
+    op.status = "generating";
+    streamStore.set(operationId, op);
+    try {
+        let content;
+        if (!provider || !provider.apiKeyEncrypted) {
+            // Fallback: simulate generation with a delay
+            await simulateGeneration(operationId);
+            const finalOp = streamStore.get(operationId);
+            content = finalOp.content;
+        }
+        else {
+            // Real AI generation
+            content = await callAiProvider(provider, systemPrompt, userPrompt, operationId);
+        }
+        // Save generated post
+        const [post] = await db
+            .insert(generatedPosts)
+            .values({
+            workspaceId: context.workspaceId,
+            agentId: context.agentId ?? null,
+            templateId: context.templateId,
+            type: context.type,
+            title: context.articles[0]?.title ?? "Generated post",
+            content,
+            articleCount: context.articles.length,
+            articlesSnapshot: context.articles.map((a) => ({
+                id: a.id,
+                title: a.title,
+                link: a.link,
+                score: a.score,
+            })),
+            promptSnapshot: userPrompt,
+            modelSnapshot: provider?.model ?? "fallback-simulated",
+        })
+            .returning();
+        const finalOp = streamStore.get(operationId);
+        finalOp.status = "completed";
+        finalOp.content = content;
+        streamStore.set(operationId, finalOp);
+    }
+    catch (err) {
+        const errorOp = streamStore.get(operationId);
+        errorOp.status = "error";
+        errorOp.error = err instanceof Error ? err.message : "Generation failed";
+        streamStore.set(operationId, errorOp);
+    }
+}
+async function simulateGeneration(operationId) {
+    const sentences = [
+        "Analyzing source materials...",
+        "Extracting key insights...",
+        "Structuring narrative...",
+        "Refining language...",
+        "Finalizing output...",
+    ];
+    let content = "";
+    for (const sentence of sentences) {
+        await new Promise((r) => setTimeout(r, 600));
+        const op = streamStore.get(operationId);
+        if (!op)
+            break;
+        content += `[${sentence}]\n`;
+        op.chunks.push(`[${sentence}]`);
+        op.content = content;
+        streamStore.set(operationId, op);
+    }
+    const finalText = "Here is the generated content based on the analyzed articles.\n\nKey takeaways have been synthesized from multiple sources to provide a comprehensive overview of the topic.\n\nThis is a simulated generation — in production, this will be replaced with actual AI-generated content from your configured provider.";
+    const op = streamStore.get(operationId);
+    if (op) {
+        op.content = finalText;
+        op.chunks.push(finalText);
+        streamStore.set(operationId, op);
+    }
+}
+async function callAiProvider(provider, systemPrompt, userPrompt, operationId) {
+    const { decrypt } = await import("../../lib/encryption.js");
+    const apiKey = decrypt(provider.apiKeyEncrypted);
+    const baseUrl = provider.baseUrl ?? getDefaultBaseUrl(provider.provider);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 120000);
+    try {
+        if (provider.provider === "openai" || provider.provider === "openrouter") {
+            const response = await fetch(`${baseUrl}/chat/completions`, {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${apiKey}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    model: provider.model,
+                    messages: [
+                        { role: "system", content: systemPrompt },
+                        { role: "user", content: userPrompt },
+                    ],
+                    temperature: 0.7,
+                    max_tokens: 4000,
+                }),
+                signal: controller.signal,
+            });
+            if (!response.ok) {
+                const error = await response.text();
+                throw new Error(`AI provider error ${response.status}: ${error.slice(0, 500)}`);
+            }
+            const data = (await response.json());
+            const content = data.choices?.[0]?.message?.content ?? "";
+            // Push a chunk to the stream store
+            const op = streamStore.get(operationId);
+            if (op) {
+                op.chunks.push(content.slice(0, 200));
+                op.content = content;
+                streamStore.set(operationId, op);
+            }
+            return content;
+        }
+        if (provider.provider === "anthropic") {
+            const response = await fetch(`${baseUrl}/messages`, {
+                method: "POST",
+                headers: {
+                    "x-api-key": apiKey,
+                    "anthropic-version": "2023-06-01",
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    model: provider.model,
+                    max_tokens: 4000,
+                    system: systemPrompt,
+                    messages: [{ role: "user", content: userPrompt }],
+                }),
+                signal: controller.signal,
+            });
+            if (!response.ok) {
+                const error = await response.text();
+                throw new Error(`Anthropic error ${response.status}: ${error.slice(0, 500)}`);
+            }
+            const data = (await response.json());
+            const content = data.content?.[0]?.text ?? "";
+            const op = streamStore.get(operationId);
+            if (op) {
+                op.chunks.push(content.slice(0, 200));
+                op.content = content;
+                streamStore.set(operationId, op);
+            }
+            return content;
+        }
+        // Fallback for other providers
+        await simulateGeneration(operationId);
+        return streamStore.get(operationId)?.content ?? "";
+    }
+    finally {
+        clearTimeout(timeout);
+    }
+}
+function getDefaultBaseUrl(provider) {
+    switch (provider) {
+        case "openai":
+            return "https://api.openai.com/v1";
+        case "anthropic":
+            return "https://api.anthropic.com/v1";
+        case "openrouter":
+            return "https://openrouter.ai/api/v1";
+        case "google":
+            return "https://generativelanguage.googleapis.com/v1";
+        default:
+            return "https://api.openai.com/v1";
+    }
+}
+// ─── Stream operations ───
+export function getStreamOperation(operationId) {
+    return streamStore.get(operationId);
+}
+export function cleanupStreamOperation(operationId) {
+    streamStore.delete(operationId);
+}
+// ─── Generated posts CRUD ───
+export async function listGeneratedPosts(workspaceId, params) {
+    const conditions = [eq(generatedPosts.workspaceId, workspaceId)];
+    if (params.agentId) {
+        conditions.push(eq(generatedPosts.agentId, params.agentId));
+    }
+    if (params.type) {
+        conditions.push(eq(generatedPosts.type, params.type));
+    }
+    let query = db
+        .select()
+        .from(generatedPosts)
+        .where(and(...conditions))
+        .orderBy(desc(generatedPosts.createdAt))
+        .limit(params.limit + 1);
+    if (params.cursor) {
+        const decoded = decodeCursor(params.cursor);
+        if (decoded?.sortValue) {
+            query = db
+                .select()
+                .from(generatedPosts)
+                .where(and(...conditions, sql `${generatedPosts.createdAt} < ${new Date(decoded.sortValue)}`))
+                .orderBy(desc(generatedPosts.createdAt))
+                .limit(params.limit + 1);
+        }
+    }
+    const rows = await query;
+    const hasMore = rows.length > params.limit;
+    const data = hasMore ? rows.slice(0, -1) : rows;
+    const lastItem = data[data.length - 1];
+    const nextCursor = hasMore && lastItem
+        ? encodeCursor({
+            id: lastItem.id,
+            sortValue: lastItem.createdAt.toISOString(),
+        })
+        : null;
+    return { data, nextCursor, hasMore };
+}
+export async function getGeneratedPost(id, workspaceId) {
+    const post = await db.query.generatedPosts.findFirst({
+        where: and(eq(generatedPosts.id, id), eq(generatedPosts.workspaceId, workspaceId)),
+    });
+    if (!post) {
+        throw new AppError(404, "Generated post not found", "POST_NOT_FOUND");
+    }
+    return post;
+}
+export async function updateGeneratedPost(id, workspaceId, data) {
+    await getGeneratedPost(id, workspaceId);
+    const [updated] = await db
+        .update(generatedPosts)
+        .set({
+        ...data,
+        isEdited: true,
+        updatedAt: new Date(),
+    })
+        .where(and(eq(generatedPosts.id, id), eq(generatedPosts.workspaceId, workspaceId)))
+        .returning();
+    return updated;
+}
+export async function deleteGeneratedPost(id, workspaceId) {
+    await getGeneratedPost(id, workspaceId);
+    await db
+        .delete(generatedPosts)
+        .where(and(eq(generatedPosts.id, id), eq(generatedPosts.workspaceId, workspaceId)));
+    return { deleted: true };
+}
+export async function markAsCopied(id, workspaceId) {
+    const [updated] = await db
+        .update(generatedPosts)
+        .set({ isCopied: true, updatedAt: new Date() })
+        .where(and(eq(generatedPosts.id, id), eq(generatedPosts.workspaceId, workspaceId)))
+        .returning();
+    return updated;
+}
+//# sourceMappingURL=service.js.map

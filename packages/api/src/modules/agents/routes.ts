@@ -25,6 +25,7 @@ const createSchema = z.object({
   description: z.string().optional(),
   icon: z.string().max(50).optional(),
   color: z.string().max(7).optional(),
+  subjectArea: z.string().max(50).optional(),
   position: z.coerce.number().int().optional(),
 });
 
@@ -33,6 +34,7 @@ const updateSchema = z.object({
   description: z.string().optional(),
   icon: z.string().max(50).optional(),
   color: z.string().max(7).optional(),
+  subjectArea: z.string().max(50).optional(),
   position: z.coerce.number().int().optional(),
 });
 

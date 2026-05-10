@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Newsradar app icon">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="78%">
+      <stop offset="0%" stop-color="#0047d9"/>
+      <stop offset="42%" stop-color="#0029ad"/>
+      <stop offset="74%" stop-color="#001b78"/>
+      <stop offset="100%" stop-color="#000b36"/>
+    </radialGradient>
+    <linearGradient id="cyan" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#00f6ff"/>
+      <stop offset="52%" stop-color="#00d7ff"/>
+      <stop offset="100%" stop-color="#0086ff"/>
+    </linearGradient>
+    <linearGradient id="beam" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#00f6ff" stop-opacity="0.95"/>
+      <stop offset="60%" stop-color="#00d7ff" stop-opacity="0.78"/>
+      <stop offset="100%" stop-color="#00d7ff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0  0 0 0 0 0.85  0 0 0 0 1  0 0 0 0.9 0"/>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="softShadow" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#00072f" flood-opacity="0.65"/>
+      <feDropShadow dx="0" dy="-2" stdDeviation="6" flood-color="#00eaff" flood-opacity="0.25"/>
+    </filter>
+    <clipPath id="round"><rect width="512" height="512" rx="116"/></clipPath>
+  </defs>
+  <g clip-path="url(#round)">
+    <rect width="512" height="512" fill="url(#bg)"/>
+    <circle cx="256" cy="256" r="212" fill="none" stroke="#00eaff" stroke-width="12" opacity="0.94" filter="url(#glow)"/>
+    <circle cx="256" cy="256" r="173" fill="none" stroke="#5cf4ff" stroke-width="2.4" opacity="0.7"/>
+    <circle cx="256" cy="256" r="126" fill="none" stroke="#64f6ff" stroke-width="2.2" opacity="0.56"/>
+    <circle cx="256" cy="256" r="82" fill="none" stroke="#76f8ff" stroke-width="2" opacity="0.45"/>
+    <path d="M256 256 L386 126 A184 184 0 0 1 441 236 Z" fill="url(#beam)" opacity="0.95" filter="url(#glow)"/>
+    <path d="M256 71 V439 M71 256 H441" stroke="#6ef6ff" stroke-width="2.2" opacity="0.7"/>
+    <path d="M256 71v18 M256 423v18 M71 256h18 M423 256h18" stroke="#00eaff" stroke-width="8" stroke-linecap="round" opacity="0.92"/>
+    <circle cx="256" cy="256" r="23" fill="#0047d9" stroke="#00f6ff" stroke-width="8" filter="url(#glow)"/>
+    <circle cx="170" cy="168" r="12" fill="#00f6ff" opacity="0.9" filter="url(#glow)"/>
+    <circle cx="405" cy="213" r="10" fill="#00f6ff" opacity="0.9" filter="url(#glow)"/>
+    <circle cx="98" cy="334" r="9" fill="#00f6ff" opacity="0.9" filter="url(#glow)"/>
+    <g filter="url(#softShadow)">
+      <rect x="118" y="296" width="274" height="137" rx="14" fill="#00238d" stroke="#00eaff" stroke-width="3.5"/>
+      <rect x="141" y="317" width="74" height="74" rx="7" fill="url(#cyan)" filter="url(#glow)"/>
+      <rect x="235" y="328" width="128" height="10" rx="5" fill="url(#cyan)" opacity="0.9"/>
+      <rect x="235" y="354" width="126" height="9" rx="5" fill="url(#cyan)" opacity="0.82"/>
+      <rect x="235" y="379" width="115" height="9" rx="5" fill="url(#cyan)" opacity="0.74"/>
+      <rect x="142" y="405" width="178" height="8" rx="5" fill="url(#cyan)" opacity="0.68"/>
+      <rect x="166" y="429" width="104" height="8" rx="5" fill="url(#cyan)" opacity="0.54"/>
+      <rect x="391" y="337" width="28" height="90" rx="13" fill="#0030a6" stroke="#00eaff" stroke-width="3"/>
+    </g>
+  </g>
+</svg>

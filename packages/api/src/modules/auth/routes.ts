@@ -1,3 +1,7 @@
+import bcrypt from "bcryptjs";
+import { eq } from "drizzle-orm";
+import { users } from "../../db/schema.js";
+import { db } from "../../db/index.js";
 import { Router, type Response } from "express";
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
@@ -210,5 +214,93 @@ router.get(
     }
   }
 );
+
+
+// --- Profile & Password ---
+
+router.patch("/profile", authMiddleware, async (req, res, next) => {
+  try {
+    const userId = req.user!.sub;
+    const { name, email } = req.body as { name?: string; email?: string };
+
+    const updates: Record<string, string> = {};
+    if (name?.trim()) updates.name = name.trim();
+    if (email?.trim()) updates.email = email.trim();
+
+    if (Object.keys(updates).length === 0) {
+      throw new AppError(400, "No fields to update", "VALIDATION_ERROR");
+    }
+
+    const updateData: Record<string, unknown> = {
+      ...updates,
+      updatedAt: new Date(),
+    };
+
+    const [updatedUser] = await db
+      .update(users)
+      .set(updateData)
+      .where(eq(users.id, userId))
+      .returning({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+      });
+
+    if (!updatedUser) {
+      throw new AppError(404, "User not found", "USER_NOT_FOUND");
+    }
+
+    res.json({ success: true, data: updatedUser });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch("/password", authMiddleware, async (req, res, next) => {
+  try {
+    const userId = req.user!.sub;
+    const { currentPassword, newPassword } = req.body as { currentPassword: string; newPassword: string };
+
+    if (!currentPassword || !newPassword) {
+      throw new AppError(400, "Current and new password are required", "VALIDATION_ERROR");
+    }
+
+    if (newPassword.length < 6) {
+      throw new AppError(400, "New password must be at least 6 characters", "VALIDATION_ERROR");
+    }
+
+    const [user] = await db
+      .select({
+        id: users.id,
+        passwordHash: users.passwordHash,
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (!user) {
+      throw new AppError(404, "User not found", "USER_NOT_FOUND");
+    }
+
+    if (!user.passwordHash) {
+      throw new AppError(400, "Cannot change password for OAuth accounts", "OAUTH_ACCOUNT");
+    }
+
+    const isValid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isValid) {
+      throw new AppError(400, "Current password is incorrect", "INVALID_PASSWORD");
+    }
+
+    const newHash = await bcrypt.hash(newPassword, 12);
+    await db
+      .update(users)
+      .set({ passwordHash: newHash, updatedAt: new Date() })
+      .where(eq(users.id, userId));
+
+    res.json({ success: true, data: { updated: true } });
+  } catch (err) {
+    next(err);
+  }
+});
 
 export default router;

@@ -1,0 +1,1 @@
+{"name":"Newsradar","short_name":"Newsradar","description":"Newsradar — сбор, скоринг и генерация новостей через AI-агентов","start_url":"/","display":"standalone","background_color":"#f5f8ff","theme_color":"#0047d9","lang":"en","scope":"/","icons":[{"src":"/icons/newsradar-app-icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]}

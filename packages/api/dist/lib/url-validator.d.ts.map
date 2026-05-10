@@ -1,0 +1,1 @@
+{"version":3,"file":"url-validator.d.ts","sourceRoot":"","sources":["../../src/lib/url-validator.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,CAAC,EAAE,MAAM,KAAK,CAAC;AA6BxB,wBAAgB,WAAW,CAAC,KAAK,EAAE,MAAM,GAAG;IAAE,KAAK,EAAE,OAAO,CAAC;IAAC,MAAM,CAAC,EAAE,MAAM,CAAA;CAAE,CA2B9E;AAED,eAAO,MAAM,SAAS,2CAKlB,CAAC"}

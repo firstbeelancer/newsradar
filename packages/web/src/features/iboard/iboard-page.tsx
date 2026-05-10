@@ -57,9 +57,9 @@ export function IBoardPage() {
             <p className="mt-1 max-w-sm text-sm text-muted-foreground">
               Аналитический дашборд доступен только для Pro. Сейчас экран стабилизирован и не должен падать.
             </p>
-            <Button asChild className="mt-4" size="sm">
-              <Link to="/subscription">Открыть текущий план</Link>
-            </Button>
+            <Link to="/subscription" className="mt-4 inline-flex h-8 items-center justify-center rounded-md bg-accent px-3 text-xs font-medium text-white shadow-sm hover:bg-accent-hover transition-colors">
+              Открыть текущий план
+            </Link>
           </CardContent>
         </Card>
       ) : (

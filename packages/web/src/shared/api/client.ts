@@ -326,6 +326,7 @@ export interface Agent {
   icon: string;
   color: string;
   position: number;
+  subject_area?: string;
   is_active: boolean;
   article_count?: number;
   created_at: string;
@@ -337,6 +338,7 @@ export interface CreateAgentDto {
   description?: string;
   icon?: string;
   color?: string;
+  subject_area?: string;
   position?: number;
   is_active?: boolean;
 }
@@ -346,6 +348,7 @@ export interface UpdateAgentDto {
   description?: string;
   icon?: string;
   color?: string;
+  subject_area?: string;
   position?: number;
   is_active?: boolean;
 }

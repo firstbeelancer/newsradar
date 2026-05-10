@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@shared/ui/button';
+import { cn } from '@shared/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@shared/ui/card';
 import { Skeleton } from '@shared/ui/skeleton';
 import { useSettingsStore } from '@shared/stores/settings-store';

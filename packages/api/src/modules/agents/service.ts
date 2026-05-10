@@ -74,7 +74,7 @@ export async function listAgents(
 export async function updateAgent(
   id: string,
   workspaceId: string,
-  data: Partial<Pick<Agent, "name" | "description" | "icon" | "color" | "position">>
+  data: Partial<Pick<Agent, "name" | "description" | "icon" | "color" | "subjectArea" | "position">>
 ) {
   await getAgentById(id, workspaceId);
 

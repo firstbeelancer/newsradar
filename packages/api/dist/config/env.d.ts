@@ -1,0 +1,66 @@
+import { z } from "zod";
+declare const envSchema: z.ZodObject<{
+    NODE_ENV: z.ZodDefault<z.ZodEnum<["development", "production", "test"]>>;
+    DOMAIN: z.ZodDefault<z.ZodString>;
+    PORT: z.ZodDefault<z.ZodString>;
+    DATABASE_URL: z.ZodString;
+    REDIS_URL: z.ZodString;
+    JWT_SECRET: z.ZodString;
+    ENCRYPTION_KEY: z.ZodString;
+    GOOGLE_CLIENT_ID: z.ZodOptional<z.ZodString>;
+    GOOGLE_CLIENT_SECRET: z.ZodOptional<z.ZodString>;
+    YANDEX_CLIENT_ID: z.ZodOptional<z.ZodString>;
+    YANDEX_CLIENT_SECRET: z.ZodOptional<z.ZodString>;
+    YOOKASSA_SHOP_ID: z.ZodOptional<z.ZodString>;
+    YOOKASSA_SECRET_KEY: z.ZodOptional<z.ZodString>;
+    YOOKASSA_RETURN_URL: z.ZodDefault<z.ZodString>;
+}, "strip", z.ZodTypeAny, {
+    NODE_ENV: "development" | "production" | "test";
+    DOMAIN: string;
+    PORT: string;
+    DATABASE_URL: string;
+    REDIS_URL: string;
+    JWT_SECRET: string;
+    ENCRYPTION_KEY: string;
+    YOOKASSA_RETURN_URL: string;
+    GOOGLE_CLIENT_ID?: string | undefined;
+    GOOGLE_CLIENT_SECRET?: string | undefined;
+    YANDEX_CLIENT_ID?: string | undefined;
+    YANDEX_CLIENT_SECRET?: string | undefined;
+    YOOKASSA_SHOP_ID?: string | undefined;
+    YOOKASSA_SECRET_KEY?: string | undefined;
+}, {
+    DATABASE_URL: string;
+    REDIS_URL: string;
+    JWT_SECRET: string;
+    ENCRYPTION_KEY: string;
+    NODE_ENV?: "development" | "production" | "test" | undefined;
+    DOMAIN?: string | undefined;
+    PORT?: string | undefined;
+    GOOGLE_CLIENT_ID?: string | undefined;
+    GOOGLE_CLIENT_SECRET?: string | undefined;
+    YANDEX_CLIENT_ID?: string | undefined;
+    YANDEX_CLIENT_SECRET?: string | undefined;
+    YOOKASSA_SHOP_ID?: string | undefined;
+    YOOKASSA_SECRET_KEY?: string | undefined;
+    YOOKASSA_RETURN_URL?: string | undefined;
+}>;
+export declare const env: {
+    NODE_ENV: "development" | "production" | "test";
+    DOMAIN: string;
+    PORT: string;
+    DATABASE_URL: string;
+    REDIS_URL: string;
+    JWT_SECRET: string;
+    ENCRYPTION_KEY: string;
+    YOOKASSA_RETURN_URL: string;
+    GOOGLE_CLIENT_ID?: string | undefined;
+    GOOGLE_CLIENT_SECRET?: string | undefined;
+    YANDEX_CLIENT_ID?: string | undefined;
+    YANDEX_CLIENT_SECRET?: string | undefined;
+    YOOKASSA_SHOP_ID?: string | undefined;
+    YOOKASSA_SECRET_KEY?: string | undefined;
+};
+export type Env = z.infer<typeof envSchema>;
+export {};
+//# sourceMappingURL=env.d.ts.map
