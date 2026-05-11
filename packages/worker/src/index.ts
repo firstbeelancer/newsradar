@@ -132,6 +132,12 @@ async function main(): Promise<void> {
   logger.info("Registering workers...");
   registerWorkers(logger);
 
+  // 5. Resume any queues that were paused during a previous graceful shutdown.
+  // BullMQ's q.pause() persists the paused state in Redis, so after a restart
+  // the worker must explicitly resume them, otherwise no jobs are consumed.
+  logger.info("Resuming paused queues...");
+  await Promise.all(allQueues.map((q) => q.resume()));
+
   logger.info(
     { queues: allQueues.map((q) => q.name) },
     "Newsradar worker ready — %d queues registered",
