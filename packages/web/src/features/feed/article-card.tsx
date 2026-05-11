@@ -66,6 +66,17 @@ export function ArticleCard({ article, onToggleFavorite, isSelected, onSelect, s
                 </Badge>
               )}
             </div>
+
+            {/* Chip badges */}
+            {article.chips && article.chips.length > 0 && (
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {article.chips.map((chip) => (
+                  <Badge key={chip} variant="outline" className="text-[9px] px-1.5 py-0 h-4">
+                    {chip}
+                  </Badge>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col gap-1 shrink-0">

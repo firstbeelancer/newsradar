@@ -8,6 +8,7 @@ export interface FeedFiltersState {
   agentId: string;
   status: string;
   favoritesOnly: boolean;
+  chips: string[];
 }
 
 interface FeedFiltersProps {
@@ -19,7 +20,24 @@ interface FeedFiltersProps {
 const ALL_AGENTS_VALUE = '__all_agents__';
 const ALL_STATUSES_VALUE = '__all_statuses__';
 
+const CHIP_OPTIONS = [
+  { key: 'exclusive', label: 'Эксклюзив' },
+  { key: 'actionable', label: 'Actionable' },
+  { key: 'trending', label: 'Трендинг' },
+  { key: 'controversy', label: 'Контроверсия' },
+  { key: 'verified', label: 'Проверено' },
+] as const;
+
 export function FeedFilters({ agents, filters, onChange }: FeedFiltersProps) {
+  const toggleChip = (chip: string) => {
+    onChange((prev) => ({
+      ...prev,
+      chips: prev.chips.includes(chip)
+        ? prev.chips.filter((c) => c !== chip)
+        : [...prev.chips, chip],
+    }));
+  };
+
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Select
@@ -54,6 +72,7 @@ export function FeedFilters({ agents, filters, onChange }: FeedFiltersProps) {
           <SelectItem value={ALL_STATUSES_VALUE}>Все статусы</SelectItem>
           <SelectItem value="new">Новые</SelectItem>
           <SelectItem value="read">Прочитанные</SelectItem>
+          <SelectItem value="scored">Оценённые</SelectItem>
           <SelectItem value="archived">Архив</SelectItem>
         </SelectContent>
       </Select>
@@ -70,6 +89,29 @@ export function FeedFilters({ agents, filters, onChange }: FeedFiltersProps) {
         <Bookmark className={cn('h-3.5 w-3.5', filters.favoritesOnly && 'fill-current')} />
         Избранное
       </Button>
+
+      {/* Chip filter buttons */}
+      {CHIP_OPTIONS.map((chip) => {
+        const isActive = filters.chips.includes(chip.key);
+        return (
+          <Button
+            key={chip.key}
+            variant="outline"
+            size="sm"
+            className={cn(
+              'h-8 text-xs gap-1.5 rounded-full',
+              isActive && 'border-accent bg-accent-light text-accent hover:bg-accent-light/80'
+            )}
+            onClick={() => toggleChip(chip.key)}
+          >
+            <div className={cn(
+              'h-1.5 w-1.5 rounded-full transition-colors',
+              isActive ? 'bg-accent' : 'bg-muted-foreground/40'
+            )} />
+            {chip.label}
+          </Button>
+        );
+      })}
     </div>
   );
 }

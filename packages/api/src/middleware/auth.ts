@@ -18,12 +18,23 @@ declare global {
 }
 
 export function authMiddleware(req: Request, _res: Response, next: NextFunction): void {
+  let token: string | undefined;
+
+  // 1. Try Authorization header (standard REST)
   const header = req.headers.authorization;
-  if (!header?.startsWith("Bearer ")) {
+  if (header?.startsWith("Bearer ")) {
+    token = header.slice(7);
+  }
+
+  // 2. Fallback to query param (SSE — EventSource can't set headers)
+  if (!token && req.query.token && typeof req.query.token === "string") {
+    token = req.query.token;
+  }
+
+  if (!token) {
     return next(new AppError(401, "Missing or invalid Authorization header", "UNAUTHORIZED"));
   }
 
-  const token = header.slice(7);
   try {
     const payload = verifyAccessToken(token);
     req.user = payload;

@@ -49,7 +49,9 @@ function resolveProvider(
         : provider === "google"
           ? "https://generativelanguage.googleapis.com/v1"
           : env.PLATFORM_AI_BASE_URL);
-  const apiKey = opts?.apiKey ?? env.PLATFORM_AI_API_KEY ?? "";
+  const rawApiKey = opts?.apiKey ?? env.PLATFORM_AI_API_KEY ?? "";
+  // Treat placeholder keys as missing — they cause 401 errors silently
+  const apiKey = rawApiKey && !rawApiKey.startsWith("placeholder") ? rawApiKey : "";
 
   return { provider, baseUrl, apiKey };
 }

@@ -115,6 +115,26 @@ export async function listArticles(
   const hasMore = rows.length > filters.limit;
   const data = hasMore ? rows.slice(0, -1) : rows;
 
+  // Enrich articles with chips from article_scores table
+  if (data.length > 0) {
+    const articleIds = data.map((a) => a.id);
+    const scoreRows = await db
+      .select({ articleId: articleScores.articleId, chips: articleScores.chips })
+      .from(articleScores)
+      .where(sql`${articleScores.articleId} IN (${sql.join(articleIds.map((id) => sql`${id}`), sql`, `)})`);
+
+    const chipsMap = new Map<string, string[]>();
+    for (const row of scoreRows) {
+      if (row.chips && Array.isArray(row.chips)) {
+        chipsMap.set(row.articleId, row.chips as string[]);
+      }
+    }
+
+    for (const article of data) {
+      (article as Record<string, unknown>).chips = chipsMap.get(article.id) ?? [];
+    }
+  }
+
   const lastItem = data[data.length - 1];
   const nextCursor: string | null =
     hasMore && lastItem

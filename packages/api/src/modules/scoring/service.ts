@@ -122,12 +122,18 @@ export async function recalculateScores(
     conditions.push(eq(articles.id, params.articleId));
   }
 
-  // Score articles that have been fetched/translated/analyzed (not just "analyzed")
-  // Include statuses that indicate the article is ready for scoring
+  // Score articles that have been fetched/translated/analyzed
+  // Include all non-deduped statuses that indicate the article is ready for scoring
+  // This fixes articles stuck at "translated" or "fetched" that never got scored
   const articlesToScore = await db
-    .select({ id: articles.id })
+    .select({ id: articles.id, status: articles.status })
     .from(articles)
-    .where(and(...conditions))
+    .where(
+      and(
+        ...conditions,
+        sql`${articles.status} NOT IN ('deduped', 'archived')`
+      )
+    )
     .limit(1000);
 
   let enqueuedCount = 0;

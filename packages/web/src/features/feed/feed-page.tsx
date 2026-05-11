@@ -49,6 +49,7 @@ export function FeedPage() {
     agentId: agentIdFromRoute ?? '',
     status: '',
     favoritesOnly: false,
+    chips: [],
   });
 
   useEffect(() => {
@@ -65,6 +66,7 @@ export function FeedPage() {
     agent_id: filters.agentId || undefined,
     status: filters.status || undefined,
     favorites_only: filters.favoritesOnly || undefined,
+    chips: filters.chips.length > 0 ? filters.chips : undefined,
   };
 
   const {

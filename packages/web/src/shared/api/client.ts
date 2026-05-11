@@ -78,6 +78,7 @@ interface BackendArticle {
   agent_id?: string;
   agentName?: string | null;
   agent_name?: string | null;
+  chips?: string[] | null;
   metadata?: Record<string, unknown>;
 }
 
@@ -150,6 +151,7 @@ export function normalizeArticle(raw: BackendArticle): Article {
     score: typeof raw.score === 'number' ? raw.score : Number(raw.score ?? 0),
     is_favorite: raw.is_favorite ?? raw.isFavorite ?? false,
     status: (raw.status as Article['status']) ?? 'new',
+    chips: raw.chips ?? undefined,
     metadata: raw.metadata,
   };
 }
@@ -282,7 +284,13 @@ export async function apiDelete<T>(path: string, options?: { workspace?: boolean
 
 // SSE subscription helper
 export function subscribeToSSE<T>(path: string, onMessage: (data: T) => void, onError?: (error: Event) => void): () => void {
-  const url = `${API_BASE}${withWorkspace(path)}`;
+  // EventSource doesn't support custom headers, so pass JWT as query param
+  const token = useAuthStore.getState().access_token;
+  let url = `${API_BASE}${withWorkspace(path)}`;
+  if (token) {
+    const separator = url.includes('?') ? '&' : '?';
+    url = `${url}${separator}token=${encodeURIComponent(token)}`;
+  }
   const eventSource = new EventSource(url, { withCredentials: true });
 
   eventSource.onmessage = (event) => {
@@ -421,6 +429,7 @@ export interface Article {
   score: number;
   is_favorite: boolean;
   status: 'new' | 'read' | 'archived' | 'fetched' | 'translated' | 'analyzed' | 'scored' | 'deduped' | 'published';
+  chips?: string[];
   metadata?: Record<string, unknown>;
 }
 
@@ -430,6 +439,7 @@ export interface ArticleFilters {
   date_from?: string;
   date_to?: string;
   favorites_only?: boolean;
+  chips?: string[];
 }
 
 // ─── Template Types ──────────────────────────────────────────────────────────
@@ -636,6 +646,7 @@ export const articlesApi = {
     if (filters?.date_from) params.set('dateFrom', filters.date_from);
     if (filters?.date_to) params.set('dateTo', filters.date_to);
     if (filters?.favorites_only !== undefined) params.set('isFavorite', String(filters.favorites_only));
+    if (filters?.chips && filters.chips.length > 0) params.set('chips', filters.chips.join(','));
     return apiGet<BackendCursorResponse<BackendArticle>>(`/articles?${params.toString()}`).then((payload) =>
       normalizeCursorResponse(payload, normalizeArticle)
     );
