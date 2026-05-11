@@ -24,6 +24,7 @@ const listQuerySchema = z.object({
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
   isFavorite: z.enum(["true", "false"]).optional(),
+  chips: z.string().optional(), // Comma-separated: "exclusive,trending"
 });
 
 // ─── Routes ───
@@ -42,6 +43,7 @@ router.get("/", authMiddleware, async (req, res, next) => {
       dateFrom: filters.dateFrom,
       dateTo: filters.dateTo,
       isFavorite: filters.isFavorite === "true" ? true : filters.isFavorite === "false" ? false : undefined,
+      chips: filters.chips ? filters.chips.split(",").map((c) => c.trim()).filter(Boolean) : undefined,
       limit,
       cursor: cursor ?? null,
     });

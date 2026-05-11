@@ -2,10 +2,10 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import { generatedPosts, articles, contentTemplates, aiProviders } from "../../db/schema.js";
 import { AppError } from "../../middleware/error-handler.js";
-import { encrypt } from "../../lib/encryption.js";
 import type { PaginatedResult, Cursor } from "../../lib/pagination.js";
 import { encodeCursor, decodeCursor } from "../../lib/pagination.js";
 import type { GeneratedPost, NewGeneratedPost } from "../../db/types.js";
+import { generatePostQueue, generateDigestQueue, redis } from "../../lib/queue.js";
 
 // ─── Generation types ───
 
@@ -26,7 +26,7 @@ export interface StreamOperation {
   chunks: string[];
 }
 
-// In-memory store for stream operations (use Redis in production)
+// In-memory store for stream operations (supplemented by Redis pub/sub)
 const streamStore = new Map<string, StreamOperation>();
 
 // ─── Content generation ───
@@ -57,41 +57,19 @@ export async function generatePost(
   }
 
   // Fetch articles to include
-  let selectedArticles: typeof articles.$inferSelect[] = [];
+  let selectedArticleIds: string[] = [];
   if (articleIds && articleIds.length > 0) {
-    selectedArticles = await db
-      .select()
-      .from(articles)
-      .where(
-        and(
-          eq(articles.workspaceId, workspaceId),
-          sql`${articles.id} = ANY(${articleIds})`
-        )
-      );
+    selectedArticleIds = articleIds;
   } else if (agentId) {
     // Get top-scored recent articles for the agent
-    selectedArticles = await db
-      .select()
+    const topArticles = await db
+      .select({ id: articles.id })
       .from(articles)
       .where(and(eq(articles.workspaceId, workspaceId), eq(articles.agentId, agentId)))
       .orderBy(desc(articles.score), desc(articles.createdAt))
       .limit(10);
+    selectedArticleIds = topArticles.map((a) => a.id);
   }
-
-  // Build prompt
-  const articleTexts = selectedArticles.map((a) => {
-    return `Title: ${a.title}\n${a.description ? `Description: ${a.description}\n` : ""}${a.aiSummary ? `Summary: ${a.aiSummary}\n` : ""}`;
-  }).join("\n---\n");
-
-  const systemPrompt = template?.systemPrompt ?? "You are a professional news editor. Create engaging content based on the provided articles.";
-  const userPrompt = customPrompt
-    ?? template?.userPrompt?.replace(/\{\{content\}\}/g, articleTexts)
-    ?? `Based on the following articles, create a ${type} post:\n\n${articleTexts}`;
-
-  // Find active AI provider
-  const provider = await db.query.aiProviders.findFirst({
-    where: and(eq(aiProviders.workspaceId, workspaceId), eq(aiProviders.isActive, true)),
-  });
 
   // Initialize stream operation
   streamStore.set(operationId, {
@@ -101,83 +79,204 @@ export async function generatePost(
     chunks: [],
   });
 
-  // Start async generation (in production this would be a BullMQ job)
-  startGeneration(operationId, systemPrompt, userPrompt, provider, {
-    workspaceId,
-    agentId,
-    templateId: template?.id ?? null,
-    articles: selectedArticles,
-    type,
+  // Subscribe to Redis pub/sub for this operation to update stream store
+  const channel = `newsradar:generation:${operationId}`;
+  const subscriber = redis.duplicate();
+  subscriber.on("message", (_ch: string, message: string) => {
+    try {
+      const data = JSON.parse(message);
+      const op = streamStore.get(operationId);
+      if (!op) return;
+
+      if (data.status === "pending") {
+        op.status = "pending";
+      } else if (data.status === "generating") {
+        op.status = "generating";
+        if (data.chunk) {
+          op.chunks.push(data.chunk);
+          op.content += data.chunk;
+        }
+      } else if (data.status === "completed") {
+        op.status = "completed";
+        op.content = data.content ?? op.content;
+      } else if (data.status === "error") {
+        op.status = "error";
+        op.error = data.error ?? "Generation failed";
+      }
+      streamStore.set(operationId, op);
+
+      // Clean up subscriber when done
+      if (data.status === "completed" || data.status === "error") {
+        subscriber.unsubscribe(channel);
+        subscriber.quit();
+        // Auto-cleanup stream store after 30 seconds
+        setTimeout(() => streamStore.delete(operationId), 30_000);
+      }
+    } catch {
+      // Ignore malformed messages
+    }
   });
+  subscriber.subscribe(channel);
+
+  // Enqueue BullMQ job for the worker to process
+  try {
+    const resolvedTemplateId = template?.id;
+    const resolvedAgentId = agentId ?? null;
+
+    if (type === "digest") {
+      await generateDigestQueue.add(
+        "generate-digest",
+        {
+          agentId: resolvedAgentId!,
+          templateId: resolvedTemplateId,
+          operationId,
+          workspaceId,
+          period: "day",
+        },
+        {
+          jobId: `digest:${operationId}`,
+          attempts: 2,
+        }
+      );
+    } else {
+      // Manual post or deepsearch
+      await generatePostQueue.add(
+        "generate-post",
+        {
+          templateId: resolvedTemplateId ?? "",
+          articleIds: selectedArticleIds,
+          operationId,
+          workspaceId,
+          agentId: resolvedAgentId ?? undefined,
+          customPrompt: type === "deepsearch" ? customPrompt : undefined,
+        },
+        {
+          jobId: `gen:${operationId}`,
+          attempts: 2,
+        }
+      );
+    }
+  } catch (queueErr) {
+    // If queue fails, fall back to inline generation
+    console.error("[generatePost] Queue enqueue failed, falling back to inline:", queueErr instanceof Error ? queueErr.message : String(queueErr));
+
+    // Fallback: simulate generation
+    const op = streamStore.get(operationId)!;
+    op.status = "generating";
+    streamStore.set(operationId, op);
+
+    // Use inline AI provider if available
+    const provider = await db.query.aiProviders.findFirst({
+      where: and(eq(aiProviders.workspaceId, workspaceId), eq(aiProviders.isActive, true)),
+    });
+
+    if (provider?.apiKeyEncrypted) {
+      // Inline AI generation (non-streaming fallback)
+      try {
+        const content = await callAiProviderInline(provider, input, template);
+        op.status = "completed";
+        op.content = content;
+
+        // Save generated post
+        await db.insert(generatedPosts).values({
+          workspaceId,
+          agentId: agentId ?? null,
+          templateId: template?.id ?? null,
+          type,
+          title: "Generated post",
+          content,
+          articleCount: selectedArticleIds.length,
+          articlesSnapshot: [],
+          promptSnapshot: customPrompt ?? template?.userPrompt ?? "",
+          modelSnapshot: provider.model,
+        });
+      } catch (aiErr) {
+        op.status = "error";
+        op.error = aiErr instanceof Error ? aiErr.message : "AI generation failed";
+      }
+    } else {
+      // No provider available — simulate
+      await simulateGeneration(operationId);
+    }
+
+    streamStore.set(operationId, op);
+
+    // Auto-cleanup
+    setTimeout(() => streamStore.delete(operationId), 30_000);
+  }
 
   return { operationId, status: "queued" };
 }
 
-// ─── Async generation worker ───
+// ─── Inline AI provider fallback (non-streaming) ───
 
-async function startGeneration(
-  operationId: string,
-  systemPrompt: string,
-  userPrompt: string,
-  provider: typeof aiProviders.$inferSelect | undefined,
-  context: {
-    workspaceId: string;
-    agentId?: string;
-    templateId: string | null;
-    articles: typeof articles.$inferSelect[];
-    type: string;
+async function callAiProviderInline(
+  provider: typeof aiProviders.$inferSelect,
+  input: GeneratePostInput,
+  template: typeof contentTemplates.$inferSelect | undefined
+): Promise<string> {
+  const { decrypt } = await import("../../lib/encryption.js");
+  const apiKey = decrypt(provider.apiKeyEncrypted!);
+  const baseUrl = provider.baseUrl ?? getDefaultBaseUrl(provider.provider);
+
+  // Build article texts
+  let articleTexts = "";
+  if (input.articleIds && input.articleIds.length > 0) {
+    const arts = await db
+      .select()
+      .from(articles)
+      .where(and(eq(articles.workspaceId, input.workspaceId), sql`${articles.id} = ANY(${input.articleIds})`));
+    articleTexts = arts.map((a) => `Title: ${a.title}\n${a.description ? `Description: ${a.description}\n` : ""}`).join("\n---\n");
   }
-): Promise<void> {
-  const op = streamStore.get(operationId);
-  if (!op) return;
 
-  op.status = "generating";
-  streamStore.set(operationId, op);
+  const systemPrompt = template?.systemPrompt ?? "You are a professional news editor. Create engaging content based on the provided articles.";
+  const userPrompt = input.customPrompt
+    ?? template?.userPrompt?.replace(/\{\{content\}\}/g, articleTexts)
+    ?? `Based on the following articles, create a ${input.type} post:\n\n${articleTexts}`;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 120000);
 
   try {
-    let content: string;
+    if (provider.provider === "openai" || provider.provider === "openrouter") {
+      const response = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: provider.model,
+          messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
+          temperature: 0.7,
+          max_tokens: 4000,
+        }),
+        signal: controller.signal,
+      });
 
-    if (!provider || !provider.apiKeyEncrypted) {
-      // Fallback: simulate generation with a delay
-      await simulateGeneration(operationId);
-      const finalOp = streamStore.get(operationId)!;
-      content = finalOp.content;
-    } else {
-      // Real AI generation
-      content = await callAiProvider(provider, systemPrompt, userPrompt, operationId);
+      if (!response.ok) throw new Error(`AI error ${response.status}`);
+      const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
+      return data.choices?.[0]?.message?.content ?? "";
     }
 
-    // Save generated post
-    const [post] = await db
-      .insert(generatedPosts)
-      .values({
-        workspaceId: context.workspaceId,
-        agentId: context.agentId ?? null,
-        templateId: context.templateId,
-        type: context.type as "manual" | "digest" | "deepsearch",
-        title: context.articles[0]?.title ?? "Generated post",
-        content,
-        articleCount: context.articles.length,
-        articlesSnapshot: context.articles.map((a) => ({
-          id: a.id,
-          title: a.title,
-          link: a.link,
-          score: a.score,
-        })),
-        promptSnapshot: userPrompt,
-        modelSnapshot: provider?.model ?? "fallback-simulated",
-      })
-      .returning();
+    if (provider.provider === "anthropic") {
+      const response = await fetch(`${baseUrl}/messages`, {
+        method: "POST",
+        headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: provider.model,
+          max_tokens: 4000,
+          system: systemPrompt,
+          messages: [{ role: "user", content: userPrompt }],
+        }),
+        signal: controller.signal,
+      });
 
-    const finalOp = streamStore.get(operationId)!;
-    finalOp.status = "completed";
-    finalOp.content = content;
-    streamStore.set(operationId, finalOp);
-  } catch (err) {
-    const errorOp = streamStore.get(operationId)!;
-    errorOp.status = "error";
-    errorOp.error = err instanceof Error ? err.message : "Generation failed";
-    streamStore.set(operationId, errorOp);
+      if (!response.ok) throw new Error(`Anthropic error ${response.status}`);
+      const data = (await response.json()) as { content?: Array<{ text?: string }> };
+      return data.content?.[0]?.text ?? "";
+    }
+
+    return "AI provider not supported for inline generation. Please use the worker.";
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -202,7 +301,7 @@ async function simulateGeneration(operationId: string): Promise<void> {
   }
 
   const finalText =
-    "Here is the generated content based on the analyzed articles.\n\nKey takeaways have been synthesized from multiple sources to provide a comprehensive overview of the topic.\n\nThis is a simulated generation — in production, this will be replaced with actual AI-generated content from your configured provider.";
+    "Here is the generated content based on the analyzed articles.\n\nKey takeaways have been synthesized from multiple sources to provide a comprehensive overview of the topic.\n\nThis is a simulated generation — configure an AI provider in Settings to get real AI-generated content.";
 
   const op = streamStore.get(operationId);
   if (op) {
@@ -212,119 +311,13 @@ async function simulateGeneration(operationId: string): Promise<void> {
   }
 }
 
-async function callAiProvider(
-  provider: typeof aiProviders.$inferSelect,
-  systemPrompt: string,
-  userPrompt: string,
-  operationId: string
-): Promise<string> {
-  const { decrypt } = await import("../../lib/encryption.js");
-  const apiKey = decrypt(provider.apiKeyEncrypted!);
-  const baseUrl = provider.baseUrl ?? getDefaultBaseUrl(provider.provider);
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 120000);
-
-  try {
-    if (provider.provider === "openai" || provider.provider === "openrouter") {
-      const response = await fetch(`${baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: provider.model,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          temperature: 0.7,
-          max_tokens: 4000,
-        }),
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`AI provider error ${response.status}: ${error.slice(0, 500)}`);
-      }
-
-      const data = (await response.json()) as {
-        choices?: Array<{ message?: { content?: string } }>;
-      };
-
-      const content = data.choices?.[0]?.message?.content ?? "";
-
-      // Push a chunk to the stream store
-      const op = streamStore.get(operationId);
-      if (op) {
-        op.chunks.push(content.slice(0, 200));
-        op.content = content;
-        streamStore.set(operationId, op);
-      }
-
-      return content;
-    }
-
-    if (provider.provider === "anthropic") {
-      const response = await fetch(`${baseUrl}/messages`, {
-        method: "POST",
-        headers: {
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: provider.model,
-          max_tokens: 4000,
-          system: systemPrompt,
-          messages: [{ role: "user", content: userPrompt }],
-        }),
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Anthropic error ${response.status}: ${error.slice(0, 500)}`);
-      }
-
-      const data = (await response.json()) as {
-        content?: Array<{ text?: string }>;
-      };
-
-      const content = data.content?.[0]?.text ?? "";
-
-      const op = streamStore.get(operationId);
-      if (op) {
-        op.chunks.push(content.slice(0, 200));
-        op.content = content;
-        streamStore.set(operationId, op);
-      }
-
-      return content;
-    }
-
-    // Fallback for other providers
-    await simulateGeneration(operationId);
-    return streamStore.get(operationId)?.content ?? "";
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 function getDefaultBaseUrl(provider: string): string {
   switch (provider) {
-    case "openai":
-      return "https://api.openai.com/v1";
-    case "anthropic":
-      return "https://api.anthropic.com/v1";
-    case "openrouter":
-      return "https://openrouter.ai/api/v1";
-    case "google":
-      return "https://generativelanguage.googleapis.com/v1";
-    default:
-      return "https://api.openai.com/v1";
+    case "openai": return "https://api.openai.com/v1";
+    case "anthropic": return "https://api.anthropic.com/v1";
+    case "openrouter": return "https://openrouter.ai/api/v1";
+    case "google": return "https://generativelanguage.googleapis.com/v1";
+    default: return "https://api.openai.com/v1";
   }
 }
 

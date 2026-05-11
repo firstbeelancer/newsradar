@@ -1,7 +1,8 @@
 import { and, count, desc, eq } from "drizzle-orm";
 import { db } from "../../db/index.js";
-import { agents, articles, operationLogs, workspaces } from "../../db/schema.js";
+import { agents, articles, operationLogs, workspaces, agentSources, sources } from "../../db/schema.js";
 import { AppError } from "../../middleware/error-handler.js";
+import { fetchSourceQueue } from "../../lib/queue.js";
 
 async function assertWorkspaceOwner(params: { userId: string; workspaceId: string }) {
   const workspace = await db.query.workspaces.findFirst({
@@ -117,6 +118,34 @@ export async function collectAllAgents(params: { userId: string; workspaceId: st
     .where(eq(agents.workspaceId, params.workspaceId))
     .orderBy(agents.position, desc(agents.createdAt));
 
+  if (activeAgents.length === 0) {
+    const [log] = await db
+      .insert(operationLogs)
+      .values({
+        userId: params.userId,
+        workspaceId: params.workspaceId,
+        operationType: "collect_all",
+        entityType: "workspace",
+        entityId: params.workspaceId,
+        status: "success",
+        message: "Нет агентов для запуска сбора",
+        metadata: { agentCount: 0, agents: [] },
+        startedAt: new Date(),
+        finishedAt: new Date(),
+      })
+      .returning();
+
+    return {
+      operationId: log.id,
+      op_id: log.id,
+      status: log.status,
+      message: log.message,
+      agentCount: 0,
+      agent_count: 0,
+    };
+  }
+
+  // Create operation log in "running" state
   const [log] = await db
     .insert(operationLogs)
     .values({
@@ -125,27 +154,84 @@ export async function collectAllAgents(params: { userId: string; workspaceId: st
       operationType: "collect_all",
       entityType: "workspace",
       entityId: params.workspaceId,
-      status: activeAgents.length > 0 ? "running" : "success",
-      message:
-        activeAgents.length > 0
-          ? `Сбор новостей запущен для ${activeAgents.length} агентов`
-          : "Нет агентов для запуска сбора",
+      status: "running",
+      message: `Сбор новостей запущен для ${activeAgents.length} агентов`,
       metadata: {
         agentCount: activeAgents.length,
-        agents: activeAgents.map((agent) => ({ id: agent.id, name: agent.name })),
-        note: "Фоновая очередь сбора будет подключена следующим слоем ремонта",
+        agents: activeAgents.map((a) => ({ id: a.id, name: a.name })),
       },
       startedAt: new Date(),
-      finishedAt: activeAgents.length > 0 ? null : new Date(),
     })
     .returning();
+
+  // Actually enqueue fetch jobs for each agent's active sources
+  let totalEnqueued = 0;
+  const errors: string[] = [];
+
+  for (const agent of activeAgents) {
+    try {
+      // Get active sources for this agent
+      const linkedSources = await db
+        .select({ sourceId: agentSources.sourceId })
+        .from(agentSources)
+        .where(eq(agentSources.agentId, agent.id));
+
+      for (const link of linkedSources) {
+        const sourceRow = await db
+          .select({ id: sources.id, name: sources.name, type: sources.type, isActive: sources.isActive })
+          .from(sources)
+          .where(eq(sources.id, link.sourceId))
+          .limit(1);
+
+        const source = sourceRow[0];
+        if (!source || !source.isActive) continue;
+
+        await fetchSourceQueue.add(
+          "fetch-source",
+          {
+            sourceId: source.id,
+            agentId: agent.id,
+            workspaceId: params.workspaceId,
+            operationId: log.id,
+            userId: params.userId,
+          },
+          {
+            jobId: `fetch:${source.id}:${Date.now()}`,
+            delay: Math.random() * 500, // Stagger to avoid thundering herd
+          }
+        );
+        totalEnqueued++;
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      errors.push(`Agent ${agent.name}: ${msg}`);
+    }
+  }
+
+  // Update operation log with results
+  await db
+    .update(operationLogs)
+    .set({
+      metadata: {
+        agentCount: activeAgents.length,
+        agents: activeAgents.map((a) => ({ id: a.id, name: a.name })),
+        enqueuedJobs: totalEnqueued,
+        errors: errors.length > 0 ? errors : undefined,
+      },
+      finishedAt: errors.length === 0 ? new Date() : null,
+      status: errors.length === 0 ? "success" : errors.length < activeAgents.length ? "partial" : "failed",
+    })
+    .where(eq(operationLogs.id, log.id));
 
   return {
     operationId: log.id,
     op_id: log.id,
-    status: log.status,
-    message: log.message,
+    status: totalEnqueued > 0 ? "running" : "failed",
+    message: totalEnqueued > 0
+      ? `Сбор запущен: ${totalEnqueued} задач в очереди для ${activeAgents.length} агентов`
+      : "Не удалось поставить задачи в очередь",
     agentCount: activeAgents.length,
     agent_count: activeAgents.length,
+    enqueuedJobs: totalEnqueued,
   };
 }

@@ -5,6 +5,9 @@
  * Runs 4 scoring criteria (ai_relevance, keyword_match, freshness,
  * source_trust), computes weighted score, writes article_scores,
  * updates article.score and status='scored', determines chips.
+ *
+ * Reads workspace-specific weights from workspace_scoring_config table.
+ * Falls back to agent.config.scoring_weights, then DEFAULT_WEIGHTS.
  * ------------------------------------------------------------------
  */
 
@@ -14,6 +17,7 @@ import {
   articleScores,
   agents,
   sources,
+  workspaceScoringConfig,
 } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import {
@@ -31,29 +35,76 @@ export interface ScoreArticleJob {
 }
 
 /**
- * Load workspace-specific scoring weights.
- * Falls back to defaults if no custom config exists.
+ * Load workspace-specific scoring weights from DB.
+ * Falls back to DEFAULT_WEIGHTS if no custom config exists.
  */
 async function getWorkspaceWeights(workspaceId: string): Promise<ScoringWeights> {
-  // TODO: Load from workspace_config table when implemented
-  // For now, use defaults
-  void workspaceId;
+  try {
+    const row = await db
+      .select()
+      .from(workspaceScoringConfig)
+      .where(eq(workspaceScoringConfig.workspaceId, workspaceId))
+      .limit(1);
+
+    if (row[0]) {
+      return {
+        aiRelevance: Number(row[0].aiRelevance),
+        keywordMatch: Number(row[0].keywordMatch),
+        freshness: Number(row[0].freshness),
+        sourceTrust: Number(row[0].sourceTrust),
+      };
+    }
+  } catch {
+    // Table may not exist yet during migration — fall back to defaults
+  }
   return DEFAULT_WEIGHTS;
 }
 
 /**
- * Resolve agent topic for keyword matching.
+ * Load agent-level scoring weights from agent.config JSONB.
+ * Takes precedence over workspace-level if present.
  */
-async function resolveAgentTopic(agentId: string): Promise<string | undefined> {
+function getAgentWeights(agentConfig: Record<string, unknown> | null): ScoringWeights | null {
+  if (!agentConfig?.scoring_weights) return null;
+  const sw = agentConfig.scoring_weights as Record<string, unknown>;
+  if (typeof sw.aiRelevance === "number" || typeof sw.ai_relevance === "number") {
+    return {
+      aiRelevance: (sw.aiRelevance ?? sw.ai_relevance ?? 0.35) as number,
+      keywordMatch: (sw.keywordMatch ?? sw.keyword_match ?? 0.25) as number,
+      freshness: (sw.freshness ?? 0.20) as number,
+      sourceTrust: (sw.sourceTrust ?? sw.source_trust ?? 0.20) as number,
+    };
+  }
+  return null;
+}
+
+/**
+ * Resolve agent topic and config for keyword matching.
+ */
+async function resolveAgentInfo(agentId: string): Promise<{
+  topic: string | undefined;
+  config: Record<string, unknown> | null;
+}> {
   const result = await db
-    .select({ name: agents.name, description: agents.description })
+    .select({
+      name: agents.name,
+      description: agents.description,
+      subjectArea: agents.subjectArea,
+      config: agents.config,
+    })
     .from(agents)
     .where(eq(agents.id, agentId))
     .limit(1);
 
   const agent = result[0];
-  if (!agent) return undefined;
-  return `${agent.name} ${agent.description ?? ""}`.trim();
+  if (!agent) return { topic: undefined, config: null };
+
+  // Build topic from name + description + subjectArea
+  const parts = [agent.name, agent.description ?? "", agent.subjectArea ?? ""].filter(Boolean);
+  return {
+    topic: parts.join(" ").trim(),
+    config: (agent.config as Record<string, unknown>) ?? null,
+  };
 }
 
 /**
@@ -87,22 +138,28 @@ export async function processScoreArticle(
     throw new Error(`Article not found: ${articleId}`);
   }
 
-  // Load scoring configuration
-  const [weights, agentTopic] = await Promise.all([
+  // Load scoring configuration — 3-level resolution:
+  // 1. Agent-level weights (from agent.config.scoring_weights) — most specific
+  // 2. Workspace-level weights (from workspace_scoring_config table)
+  // 3. DEFAULT_WEIGHTS — fallback
+  const [workspaceWeights, agentInfo] = await Promise.all([
     getWorkspaceWeights(article.workspaceId),
-    resolveAgentTopic(article.agentId),
+    resolveAgentInfo(article.agentId),
   ]);
 
-  const keywords = agentTopic ? extractKeywords(agentTopic) : [];
+  const agentWeights = agentInfo.config ? getAgentWeights(agentInfo.config) : null;
+  const weights = agentWeights ?? workspaceWeights;
+
+  const keywords = agentInfo.topic ? extractKeywords(agentInfo.topic) : [];
 
   logger.debug(
-    { articleId, keywords: keywords.length, weights },
+    { articleId, keywords: keywords.length, weights, source: agentWeights ? "agent" : "workspace" },
     "Scoring configuration loaded"
   );
 
   // Run scoring
   const scoreResult = await scoreArticle(articleId, {
-    agentTopic,
+    agentTopic: agentInfo.topic,
     keywords,
     weights,
   });

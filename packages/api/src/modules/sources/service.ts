@@ -1,10 +1,11 @@
 import { eq, and, desc, sql } from "drizzle-orm";
 import { db } from "../../db/index.js";
-import { sources, articles, agentSources } from "../../db/schema.js";
+import { sources, articles, agentSources, operationLogs } from "../../db/schema.js";
 import { AppError } from "../../middleware/error-handler.js";
 import type { PaginatedResult, Cursor } from "../../lib/pagination.js";
 import { encodeCursor, decodeCursor } from "../../lib/pagination.js";
 import type { Source, NewSource } from "../../db/types.js";
+import { fetchSourceQueue } from "../../lib/queue.js";
 
 // ─── CRUD ───
 
@@ -161,27 +162,71 @@ export async function testSource(id: string, workspaceId: string) {
 
 // ─── Manual fetch trigger ───
 
-export async function triggerFetch(id: string, workspaceId: string) {
+export async function triggerFetch(id: string, workspaceId: string, userId: string) {
   const source = await getSourceById(id, workspaceId);
 
   if (!source.isActive) {
     throw new AppError(400, "Cannot fetch from inactive source", "SOURCE_INACTIVE");
   }
 
-  // Update fetch state
-  await db
-    .update(sources)
-    .set({
-      fetchCount: sql`${sources.fetchCount} + 1`,
-      lastFetchAt: new Date(),
-      fetchStatus: "success",
-      updatedAt: new Date(),
-    })
-    .where(eq(sources.id, id));
+  // Find agent linked to this source
+  const agentLink = await db
+    .select({ agentId: agentSources.agentId })
+    .from(agentSources)
+    .where(eq(agentSources.sourceId, id))
+    .limit(1);
 
-  const operationId = crypto.randomUUID();
+  // Create operation log
+  const [log] = await db
+    .insert(operationLogs)
+    .values({
+      userId,
+      workspaceId,
+      operationType: "fetch_source",
+      entityType: "source",
+      entityId: id,
+      status: "running",
+      message: `Ручной сбор источника «${source.name}»`,
+      metadata: {
+        sourceId: id,
+        sourceName: source.name,
+        sourceType: source.type,
+        agentId: agentLink[0]?.agentId ?? null,
+      },
+      startedAt: new Date(),
+    })
+    .returning();
+
+  // Actually enqueue a BullMQ job for the worker to process
+  try {
+    await fetchSourceQueue.add(
+      "fetch-source",
+      {
+        sourceId: id,
+        operationId: log.id,
+      },
+      {
+        jobId: `fetch:${id}:${Date.now()}`,
+        attempts: 3,
+        backoff: { type: "exponential", delay: 2_000 },
+      }
+    );
+  } catch (queueErr) {
+    // If queue fails, mark operation as failed
+    await db
+      .update(operationLogs)
+      .set({
+        status: "failed",
+        message: `Ошибка постановки в очередь: ${queueErr instanceof Error ? queueErr.message : String(queueErr)}`,
+        finishedAt: new Date(),
+      })
+      .where(eq(operationLogs.id, log.id));
+
+    throw new AppError(500, "Failed to queue fetch job", "QUEUE_ERROR");
+  }
+
   return {
-    operationId,
+    operationId: log.id,
     sourceId: id,
     status: "queued",
     message: "Manual fetch queued",

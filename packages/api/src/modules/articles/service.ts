@@ -16,6 +16,7 @@ export interface ArticleFilters {
   dateFrom?: string;
   dateTo?: string;
   isFavorite?: boolean;
+  chips?: string[];  // Filter by chip labels: exclusive, actionable, trending, controversy, verified
   limit: number;
   cursor?: string | null;
 }
@@ -70,6 +71,21 @@ export async function listArticles(
     conditions.push(
       sql`to_tsvector('russian', ${articles.title} || ' ' || COALESCE(${articles.description}, '')) @@ to_tsquery('russian', ${tsQuery})`
     );
+  }
+
+  // Chip filter: join with article_scores and check chips JSONB array
+  if (filters.chips && filters.chips.length > 0) {
+    // For each requested chip, check if it exists in the article_scores.chips array
+    // Use: article_scores.chips @> '["chip_name"]'::jsonb
+    const chipConditions = filters.chips.map((chip) =>
+      sql`EXISTS (
+        SELECT 1 FROM ${articleScores}
+        WHERE ${articleScores.articleId} = ${articles.id}
+        AND ${articleScores.chips} @> ${JSON.stringify([chip])}::jsonb
+      )`
+    );
+    // All requested chips must be present (AND logic)
+    conditions.push(...chipConditions);
   }
 
   let query = db

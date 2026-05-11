@@ -26,6 +26,7 @@ export interface GeneratePostJob {
   operationId: string;
   workspaceId: string;
   agentId?: string;
+  customPrompt?: string;
 }
 
 /**
@@ -77,24 +78,30 @@ export async function processGeneratePost(
   job: Job<GeneratePostJob>,
   logger: Logger
 ): Promise<{ postId: string; content: string }> {
-  const { templateId, articleIds, operationId, workspaceId, agentId } = job.data;
+  const { templateId, articleIds, operationId, workspaceId, agentId, customPrompt } = job.data;
 
   logger.info({ operationId, templateId, articleCount: articleIds.length }, "Generating post");
 
   await publishProgress(operationId, { status: "pending" });
 
-  // Load template
-  const templateResult = await db
-    .select()
-    .from(contentTemplates)
-    .where(and(eq(contentTemplates.id, templateId), eq(contentTemplates.workspaceId, workspaceId)))
-    .limit(1);
-
-  const template = templateResult[0];
-  if (!template) {
-    const error = `Template not found: ${templateId}`;
-    await publishProgress(operationId, { status: "error", error });
-    throw new Error(error);
+  // Load template (optional — can use customPrompt without a template)
+  let template: typeof contentTemplates.$inferSelect | undefined;
+  if (templateId) {
+    const templateResult = await db
+      .select()
+      .from(contentTemplates)
+      .where(and(eq(contentTemplates.id, templateId), eq(contentTemplates.workspaceId, workspaceId)))
+      .limit(1);
+    template = templateResult[0];
+  }
+  // If no template found and no customPrompt, look for a default
+  if (!template && !customPrompt) {
+    const defaultResult = await db
+      .select()
+      .from(contentTemplates)
+      .where(and(eq(contentTemplates.workspaceId, workspaceId), eq(contentTemplates.isDefault, true)))
+      .limit(1);
+    template = defaultResult[0];
   }
 
   // Load articles
@@ -109,12 +116,6 @@ export async function processGeneratePost(
     )
     .orderBy(sql`${articles.score} DESC`);
 
-  if (selectedArticles.length === 0) {
-    const error = "No articles found for generation";
-    await publishProgress(operationId, { status: "error", error });
-    throw new Error(error);
-  }
-
   // Build article texts
   const articleTexts = selectedArticles.map((a) => {
     let text = `Title: ${a.title}`;
@@ -123,7 +124,26 @@ export async function processGeneratePost(
     return text;
   });
 
-  const { systemPrompt, userPrompt } = buildPrompt(template, articleTexts);
+  let systemPrompt: string;
+  let userPrompt: string;
+
+  if (customPrompt) {
+    // Use custom prompt (e.g., for deepsearch)
+    systemPrompt = "You are a professional news analyst. Create detailed, well-structured content in Russian based on the provided articles.";
+    const content = articleTexts.join("\n\n---\n\n");
+    userPrompt = customPrompt.replace(/\{\{content\}\}/g, content);
+    if (!userPrompt.includes(content)) {
+      userPrompt += `\n\nSource articles:\n${content}`;
+    }
+  } else if (template) {
+    const built = buildPrompt(template, articleTexts);
+    systemPrompt = built.systemPrompt;
+    userPrompt = built.userPrompt;
+  } else {
+    // No template, no custom prompt — use defaults
+    systemPrompt = "You are a professional news editor. Create engaging content based on the provided articles.";
+    userPrompt = `Based on the following articles, create a post:\n\n${articleTexts.join("\n\n---\n\n")}`;
+  }
 
   await publishProgress(operationId, { status: "generating" });
 

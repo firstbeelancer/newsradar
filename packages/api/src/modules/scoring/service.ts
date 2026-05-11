@@ -1,7 +1,8 @@
 import { eq, and, desc, sql } from "drizzle-orm";
 import { db } from "../../db/index.js";
-import { articles, articleScores } from "../../db/schema.js";
+import { articles, articleScores, workspaceScoringConfig } from "../../db/schema.js";
 import { AppError } from "../../middleware/error-handler.js";
+import { scoreArticleQueue } from "../../lib/queue.js";
 
 // ─── Default weights (must sum to 1.0) ───
 
@@ -10,6 +11,14 @@ export interface ScoringWeights {
   keywordMatch: number;
   freshness: number;
   sourceTrust: number;
+}
+
+export interface ChipFilterConfig {
+  exclusive?: boolean;
+  actionable?: boolean;
+  trending?: boolean;
+  controversy?: boolean;
+  verified?: boolean;
 }
 
 export const DEFAULT_WEIGHTS: ScoringWeights = {
@@ -22,37 +31,81 @@ export const DEFAULT_WEIGHTS: ScoringWeights = {
 function validateWeights(weights: Partial<ScoringWeights>): ScoringWeights {
   const full = { ...DEFAULT_WEIGHTS, ...weights };
   const sum = full.aiRelevance + full.keywordMatch + full.freshness + full.sourceTrust;
-  const epsilon = 0.001;
+  const epsilon = 0.05;
   if (Math.abs(sum - 1.0) > epsilon) {
-    throw new AppError(400, `Weights must sum to 1.0, got ${sum.toFixed(3)}`, "INVALID_WEIGHTS");
+    throw new AppError(400, `Weights must sum to ~1.0, got ${sum.toFixed(3)}`, "INVALID_WEIGHTS");
   }
   return full;
 }
 
-// ─── Config persistence (stored in workspace-level JSON for simplicity) ───
-// In production this would be a dedicated table. For now we use a simple in-memory
-// cache with workspace-specific keys.
+// ─── Config persistence (stored in workspace_scoring_config table) ───
 
-const weightCache = new Map<string, ScoringWeights>();
+export async function getScoringConfig(
+  workspaceId: string
+): Promise<ScoringWeights & ChipFilterConfig & { workspaceId: string }> {
+  const row = await db
+    .select()
+    .from(workspaceScoringConfig)
+    .where(eq(workspaceScoringConfig.workspaceId, workspaceId))
+    .limit(1);
 
-export async function getScoringConfig(workspaceId: string): Promise<ScoringWeights & { workspaceId: string }> {
-  const cached = weightCache.get(workspaceId);
-  if (cached) {
-    return { ...cached, workspaceId };
+  if (row[0]) {
+    const r = row[0];
+    const chipFilters = (r.chipFilters ?? {}) as ChipFilterConfig;
+    return {
+      aiRelevance: Number(r.aiRelevance),
+      keywordMatch: Number(r.keywordMatch),
+      freshness: Number(r.freshness),
+      sourceTrust: Number(r.sourceTrust),
+      ...chipFilters,
+      workspaceId,
+    };
   }
+
   return { ...DEFAULT_WEIGHTS, workspaceId };
 }
 
 export async function updateScoringConfig(
   workspaceId: string,
-  weights: Partial<ScoringWeights>
-): Promise<ScoringWeights & { workspaceId: string }> {
+  weights: Partial<ScoringWeights>,
+  chipFilters?: ChipFilterConfig
+): Promise<ScoringWeights & ChipFilterConfig & { workspaceId: string }> {
   const validated = validateWeights(weights);
-  weightCache.set(workspaceId, validated);
-  return { ...validated, workspaceId };
+
+  // Upsert: check if row exists
+  const existing = await db
+    .select({ id: workspaceScoringConfig.id })
+    .from(workspaceScoringConfig)
+    .where(eq(workspaceScoringConfig.workspaceId, workspaceId))
+    .limit(1);
+
+  if (existing[0]) {
+    await db
+      .update(workspaceScoringConfig)
+      .set({
+        aiRelevance: validated.aiRelevance.toFixed(4),
+        keywordMatch: validated.keywordMatch.toFixed(4),
+        freshness: validated.freshness.toFixed(4),
+        sourceTrust: validated.sourceTrust.toFixed(4),
+        chipFilters: chipFilters ?? {},
+        updatedAt: new Date(),
+      })
+      .where(eq(workspaceScoringConfig.id, existing[0].id));
+  } else {
+    await db.insert(workspaceScoringConfig).values({
+      workspaceId,
+      aiRelevance: validated.aiRelevance.toFixed(4),
+      keywordMatch: validated.keywordMatch.toFixed(4),
+      freshness: validated.freshness.toFixed(4),
+      sourceTrust: validated.sourceTrust.toFixed(4),
+      chipFilters: chipFilters ?? {},
+    });
+  }
+
+  return { ...validated, ...(chipFilters ?? {}), workspaceId };
 }
 
-// ─── Recalculate scores ───
+// ─── Recalculate scores via BullMQ worker ───
 
 export async function recalculateScores(
   workspaceId: string,
@@ -69,88 +122,41 @@ export async function recalculateScores(
     conditions.push(eq(articles.id, params.articleId));
   }
 
-  // Only re-score articles that have been analyzed
-  conditions.push(eq(articles.status, "analyzed"));
-
+  // Score articles that have been fetched/translated/analyzed (not just "analyzed")
+  // Include statuses that indicate the article is ready for scoring
   const articlesToScore = await db
     .select({ id: articles.id })
     .from(articles)
     .where(and(...conditions))
     .limit(1000);
 
-  const scoredAt = new Date();
-  let updatedCount = 0;
+  let enqueuedCount = 0;
+  const errors: string[] = [];
 
   for (const article of articlesToScore) {
-    // In real implementation, each component would be computed by separate logic.
-    // Here we simulate the scoring pipeline.
-    const aiRelevance = Math.random() * 0.4 + 0.6; // 0.6-1.0
-    const keywordMatch = Math.random() * 0.5 + 0.5; // 0.5-1.0
-    const freshness = Math.random() * 0.3 + 0.7; // 0.7-1.0
-    const sourceTrust = Math.random() * 0.4 + 0.6; // 0.6-1.0
-
-    const overallScore = Math.round(
-      (aiRelevance + keywordMatch + freshness + sourceTrust) / 4 * 1000
-    ) / 1000;
-
-    const weightedScore = Math.round(
-      (aiRelevance * weights.aiRelevance +
-        keywordMatch * weights.keywordMatch +
-        freshness * weights.freshness +
-        sourceTrust * weights.sourceTrust) *
-        1000
-    ) / 1000;
-
-    // Upsert score record
-    const existingScore = await db.query.articleScores.findFirst({
-      where: eq(articleScores.articleId, article.id),
-    });
-
-    if (existingScore) {
-      await db
-        .update(articleScores)
-        .set({
-          aiRelevance: aiRelevance.toFixed(2),
-          keywordMatch: keywordMatch.toFixed(2),
-          freshness: freshness.toFixed(2),
-          sourceTrust: sourceTrust.toFixed(2),
-          overallScore: overallScore.toFixed(3),
-          weightedScore: weightedScore.toFixed(3),
-          weightsSnapshot: weights as Record<string, unknown>,
-          scoredAt,
-        })
-        .where(eq(articleScores.id, existingScore.id));
-    } else {
-      await db.insert(articleScores).values({
-        articleId: article.id,
-        aiRelevance: aiRelevance.toFixed(2),
-        keywordMatch: keywordMatch.toFixed(2),
-        freshness: freshness.toFixed(2),
-        sourceTrust: sourceTrust.toFixed(2),
-        overallScore: overallScore.toFixed(3),
-        weightedScore: weightedScore.toFixed(3),
-        weightsSnapshot: weights as Record<string, unknown>,
-        scoredAt,
-      });
+    try {
+      await scoreArticleQueue.add(
+        "score-article",
+        { articleId: article.id },
+        {
+          jobId: `score:${article.id}:${Date.now()}`,
+          attempts: 2,
+          backoff: { type: "exponential", delay: 1000 },
+        }
+      );
+      enqueuedCount++;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      errors.push(`${article.id}: ${msg}`);
     }
-
-    // Update article score field
-    await db
-      .update(articles)
-      .set({
-        score: weightedScore.toFixed(3),
-        status: "scored",
-        updatedAt: scoredAt,
-      })
-      .where(eq(articles.id, article.id));
-
-    updatedCount++;
   }
 
   return {
-    recalculated: updatedCount,
+    enqueued: enqueuedCount,
+    total: articlesToScore.length,
+    errors: errors.length > 0 ? errors : undefined,
     weights,
-    triggeredAt: scoredAt.toISOString(),
+    triggeredAt: new Date().toISOString(),
   };
 }
 

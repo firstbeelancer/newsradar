@@ -120,6 +120,8 @@ export const agents = pgTable(
     workspaceId: uuid("workspace_id")
       .references(() => workspaces.id, { onDelete: "cascade" })
       .notNull(),
+    subjectArea: varchar("subject_area", { length: 50 }),
+    config: jsonb("config").default({}).notNull(),
     position: integer("position").default(0).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -127,6 +129,7 @@ export const agents = pgTable(
   (table) => [
     index("agents_workspace_id_idx").on(table.workspaceId),
     index("agents_position_idx").on(table.position),
+    index("agents_subject_area_idx").on(table.subjectArea),
   ]
 );
 
@@ -232,6 +235,26 @@ export const articles = pgTable(
 // ─────────────────────────────────────────────────────────────
 // Layer 3 — AI + Scoring
 // ─────────────────────────────────────────────────────────────
+
+export const workspaceScoringConfig = pgTable(
+  "workspace_scoring_config",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .references(() => workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    aiRelevance: decimal("ai_relevance", { precision: 5, scale: 4 }).default("0.3500").notNull(),
+    keywordMatch: decimal("keyword_match", { precision: 5, scale: 4 }).default("0.2500").notNull(),
+    freshness: decimal("freshness", { precision: 5, scale: 4 }).default("0.2000").notNull(),
+    sourceTrust: decimal("source_trust", { precision: 5, scale: 4 }).default("0.2000").notNull(),
+    chipFilters: jsonb("chip_filters").default("{}").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("workspace_scoring_config_workspace_id_idx").on(table.workspaceId),
+  ]
+);
 
 export const articleScores = pgTable(
   "article_scores",

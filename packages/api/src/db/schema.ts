@@ -321,6 +321,26 @@ export const articleScores = pgTable(
   ]
 );
 
+export const workspaceScoringConfig = pgTable(
+  "workspace_scoring_config",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .references(() => workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    aiRelevance: decimal("ai_relevance", { precision: 5, scale: 4 }).default("0.3500").notNull(),
+    keywordMatch: decimal("keyword_match", { precision: 5, scale: 4 }).default("0.2500").notNull(),
+    freshness: decimal("freshness", { precision: 5, scale: 4 }).default("0.2000").notNull(),
+    sourceTrust: decimal("source_trust", { precision: 5, scale: 4 }).default("0.2000").notNull(),
+    chipFilters: jsonb("chip_filters").default("{}").notNull(), // { exclusive: bool, actionable: bool, trending: bool, controversy: bool, verified: bool }
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("workspace_scoring_config_workspace_id_idx").on(table.workspaceId),
+  ]
+);
+
 export const scoringCriteria = pgTable(
   "scoring_criteria",
   {
