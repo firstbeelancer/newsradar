@@ -129,7 +129,8 @@ router.post("/:id/fetch", authMiddleware, async (req, res, next) => {
     const workspaceId = req.query.workspaceId as string;
     if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
 
-    const userId = (req as any).user?.userId as string;
+    const user = (req as any).user;
+    const userId = user?.sub ?? user?.userId as string;
     const result = await triggerFetch(req.params.id, workspaceId, userId);
     res.json({ success: true, data: result });
   } catch (err) {
