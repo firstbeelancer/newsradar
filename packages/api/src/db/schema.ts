@@ -306,6 +306,12 @@ export const articleScores = pgTable(
     keywordMatch: decimal("keyword_match", { precision: 3, scale: 2 }),
     freshness: decimal("freshness", { precision: 3, scale: 2 }),
     sourceTrust: decimal("source_trust", { precision: 3, scale: 2 }),
+    // AI sub-criteria (0-100 scale, stored as decimal)
+    relevance: decimal("relevance", { precision: 5, scale: 2 }),
+    novelty: decimal("novelty", { precision: 5, scale: 2 }),
+    hype: decimal("hype", { precision: 5, scale: 2 }),
+    practical: decimal("practical", { precision: 5, scale: 2 }),
+    local: decimal("local", { precision: 5, scale: 2 }),
     overallScore: decimal("overall_score", { precision: 5, scale: 3 }).default("0.000").notNull(),
     weightedScore: decimal("weighted_score", { precision: 5, scale: 3 }).default("0.000").notNull(),
     weightsSnapshot: jsonb("weights_snapshot"),
@@ -328,11 +334,19 @@ export const workspaceScoringConfig = pgTable(
     workspaceId: uuid("workspace_id")
       .references(() => workspaces.id, { onDelete: "cascade" })
       .notNull(),
+    // Legacy 4-criteria weights (kept for backward compatibility)
     aiRelevance: decimal("ai_relevance", { precision: 5, scale: 4 }).default("0.3500").notNull(),
     keywordMatch: decimal("keyword_match", { precision: 5, scale: 4 }).default("0.2500").notNull(),
     freshness: decimal("freshness", { precision: 5, scale: 4 }).default("0.2000").notNull(),
     sourceTrust: decimal("source_trust", { precision: 5, scale: 4 }).default("0.2000").notNull(),
-    chipFilters: jsonb("chip_filters").default("{}").notNull(), // { exclusive: bool, actionable: bool, trending: bool, controversy: bool, verified: bool }
+    // Meta weights for hybrid formula: ai_score, keyword_score, freshness_score, source_trust_score
+    aiWeight: decimal("ai_weight", { precision: 5, scale: 4 }).default("0.5500").notNull(),
+    keywordWeight: decimal("keyword_weight", { precision: 5, scale: 4 }).default("0.2000").notNull(),
+    freshnessWeight: decimal("freshness_weight", { precision: 5, scale: 4 }).default("0.1500").notNull(),
+    sourceTrustWeight: decimal("source_trust_weight", { precision: 5, scale: 4 }).default("0.1000").notNull(),
+    // AI sub-criteria weights: { relevance: 30, novelty: 25, hype: 15, practical: 20, local: 10 }
+    scoringWeights: jsonb("scoring_weights").default("{}").notNull(),
+    chipFilters: jsonb("chip_filters").default("{}").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },

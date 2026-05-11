@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { sourcesApi, type Source, type CreateSourceDto, type UpdateSourceDto, type SourceTestResult } from '@shared/api/client';
+import { sourcesApi, agentsApi, type Source, type CreateSourceDto, type UpdateSourceDto, type SourceTestResult } from '@shared/api/client';
 
 interface SourcesState {
   sources: Source[];
@@ -53,12 +53,12 @@ export const useSourcesStore = create<SourcesState & SourcesActions>((set) => ({
   fetchSourcesByAgent: async (agentId) => {
     set({ isLoading: true, error: null });
     try {
-      const sources = await sourcesApi.list();
-      const filtered = sources.filter((s) => s.agent_id === agentId);
-      set({ sources: filtered, isLoading: false });
+      // Use the dedicated agent-sources endpoint instead of filtering all sources
+      const sources = await agentsApi.sources(agentId);
+      set({ sources, isLoading: false });
     } catch (err) {
       set({
-        error: err instanceof Error ? err.message : 'Ошибка загрузки источников',
+        error: err instanceof Error ? err.message : 'Ошибка загрузки источников агента',
         isLoading: false,
       });
     }

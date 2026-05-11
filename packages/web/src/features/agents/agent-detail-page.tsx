@@ -168,7 +168,7 @@ export function AgentDetailPage() {
                 <Newspaper className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{stats?.total_articles ?? 0}</p>
+                <p className="text-2xl font-bold">{stats?.total_articles ?? stats?.articleCount ?? 0}</p>
                 <p className="text-xs text-muted-foreground">Новостей</p>
               </div>
             </div>
@@ -181,7 +181,7 @@ export function AgentDetailPage() {
                 <Link2 className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{stats?.total_sources ?? 0}</p>
+                <p className="text-2xl font-bold">{stats?.total_sources ?? stats?.sourceCount ?? 0}</p>
                 <p className="text-xs text-muted-foreground">Источников</p>
               </div>
             </div>
@@ -307,11 +307,11 @@ export function AgentDetailPage() {
                 <div className="space-y-3">
                   <div className="flex justify-between py-2 border-b border-border">
                     <span className="text-sm text-muted-foreground">Всего новостей</span>
-                    <span className="text-sm font-medium">{stats.total_articles}</span>
+                    <span className="text-sm font-medium">{stats.total_articles ?? stats.articleCount}</span>
                   </div>
                   <div className="flex justify-between py-2 border-b border-border">
                     <span className="text-sm text-muted-foreground">Всего источников</span>
-                    <span className="text-sm font-medium">{stats.total_sources}</span>
+                    <span className="text-sm font-medium">{stats.total_sources ?? stats.sourceCount}</span>
                   </div>
                   <div className="flex justify-between py-2 border-b border-border">
                     <span className="text-sm text-muted-foreground">Среднее в день</span>

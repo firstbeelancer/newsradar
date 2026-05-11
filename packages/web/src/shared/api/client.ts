@@ -505,16 +505,46 @@ export interface GeneratedPost {
 
 // ─── Scoring Types ───────────────────────────────────────────────────────────
 
+export interface AIScoringWeights {
+  relevance: number; // 0-100
+  novelty: number;   // 0-100
+  hype: number;      // 0-100
+  practical: number; // 0-100
+  local: number;     // 0-100
+}
+
 export interface ScoringConfig {
+  // Legacy 4-criteria weights (0-1 scale)
   ai_relevance: number;
   keyword_match: number;
   freshness: number;
   source_trust: number;
+  // Meta weights for hybrid formula (0-1 scale, sum to 1.0)
+  ai_weight: number;        // default 0.55
+  keyword_weight: number;   // default 0.20
+  freshness_weight: number; // default 0.15
+  source_trust_weight: number; // default 0.10
+  // AI sub-criteria weights (0-100, sum to 100)
+  scoring_weights: AIScoringWeights;
+  // Chip filter toggles
   exclusive?: boolean;
   actionable?: boolean;
   trending?: boolean;
   controversy?: boolean;
   verified?: boolean;
+}
+
+// ─── Chip Filter Types ──────────────────────────────────────────────────────
+
+export interface ChipFilter {
+  id: string;
+  key: string;
+  label: string;
+  description?: string;
+  score_modifier: number;
+  color: string;
+  icon?: string;
+  is_active: boolean;
 }
 
 // ─── Subscription Types ──────────────────────────────────────────────────────
@@ -727,6 +757,11 @@ export const scoringApi = {
   getConfig: () => apiGet<ScoringConfig>('/scoring/config'),
   updateConfig: (data: ScoringConfig) => apiPost<ScoringConfig, ScoringConfig>('/scoring/config', data),
   recalculate: () => apiPost<void>('/scoring/recalculate', {}),
+};
+
+// Chip Filters
+export const chipFiltersApi = {
+  list: (agentId: string) => apiGet<ChipFilter[]>(`/agents/${agentId}/chips`),
 };
 
 // ─── Subscription API ────────────────────────────────────────

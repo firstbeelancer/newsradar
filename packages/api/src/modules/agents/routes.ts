@@ -3,6 +3,9 @@ import { z } from "zod";
 import { authMiddleware } from "../../middleware/auth.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { paginationQuerySchema } from "../../lib/pagination.js";
+import { eq } from "drizzle-orm";
+import { db } from "../../db/index.js";
+import { chipFilters, agents } from "../../db/schema.js";
 import {
   createAgent,
   getAgentById,
@@ -180,6 +183,29 @@ router.delete("/:id/sources/:sourceId", authMiddleware, async (req, res, next) =
 
     await unlinkSource(req.params.id, req.params.sourceId, workspaceId);
     res.json({ success: true, data: { unlinked: true } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Agent Chip Filters ───
+
+// List chip filters for an agent
+router.get("/:id/chips", authMiddleware, async (req, res, next) => {
+  try {
+    const workspaceId = req.query.workspaceId as string;
+    if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
+
+    // Verify agent belongs to workspace
+    await getAgentById(req.params.id, workspaceId);
+
+    const chips = await db
+      .select()
+      .from(chipFilters)
+      .where(eq(chipFilters.agentId, req.params.id))
+      .orderBy(chipFilters.position);
+
+    res.json({ success: true, data: chips });
   } catch (err) {
     next(err);
   }

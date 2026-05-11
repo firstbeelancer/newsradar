@@ -191,7 +191,15 @@ export function FeedPage() {
       {error && (
         <Card className="border-danger/30 bg-danger-light">
           <CardContent className="p-4 text-sm text-danger text-center">
-            Ошибка загрузки: {error.message}
+            <p>Ошибка загрузки: {error.message}</p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2"
+              onClick={() => fetchNextPage()}
+            >
+              Повторить
+            </Button>
           </CardContent>
         </Card>
       )}

@@ -1,8 +1,10 @@
 import { Button } from '@shared/ui/button';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@shared/ui/select';
-import type { Agent } from '@shared/api/client';
+import type { Agent, ChipFilter } from '@shared/api/client';
 import { Bookmark } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
+import { useEffect, useState } from 'react';
+import { chipFiltersApi } from '@shared/api/client';
 
 export interface FeedFiltersState {
   agentId: string;
@@ -20,15 +22,38 @@ interface FeedFiltersProps {
 const ALL_AGENTS_VALUE = '__all_agents__';
 const ALL_STATUSES_VALUE = '__all_statuses__';
 
-const CHIP_OPTIONS = [
-  { key: 'exclusive', label: 'Эксклюзив' },
-  { key: 'actionable', label: 'Actionable' },
-  { key: 'trending', label: 'Трендинг' },
-  { key: 'controversy', label: 'Контроверсия' },
-  { key: 'verified', label: 'Проверено' },
+// Universal chips for general feed (no agent selected)
+const UNIVERSAL_CHIPS = [
+  { key: 'high_priority', label: 'Высокий приоритет' },
+  { key: 'medium_priority', label: 'Средний приоритет' },
+  { key: 'low_priority', label: 'Низкий приоритет' },
+  { key: 'russian_context', label: 'Русский контекст' },
+  { key: 'fresh_news', label: 'Свежая новость' },
 ] as const;
 
 export function FeedFilters({ agents, filters, onChange }: FeedFiltersProps) {
+  const [agentChips, setAgentChips] = useState<ChipFilter[]>([]);
+  const [chipsLoading, setChipsLoading] = useState(false);
+
+  // Load chip filters when agent changes
+  useEffect(() => {
+    if (filters.agentId) {
+      setChipsLoading(true);
+      chipFiltersApi.list(filters.agentId)
+        .then((chips) => {
+          setAgentChips(chips);
+        })
+        .catch(() => {
+          setAgentChips([]);
+        })
+        .finally(() => {
+          setChipsLoading(false);
+        });
+    } else {
+      setAgentChips([]);
+    }
+  }, [filters.agentId]);
+
   const toggleChip = (chip: string) => {
     onChange((prev) => ({
       ...prev,
@@ -38,12 +63,17 @@ export function FeedFilters({ agents, filters, onChange }: FeedFiltersProps) {
     }));
   };
 
+  // Determine which chips to show
+  const displayChips = filters.agentId && agentChips.length > 0
+    ? agentChips.filter(c => c.is_active).map(c => ({ key: c.key, label: c.label, color: c.color }))
+    : UNIVERSAL_CHIPS.map(c => ({ key: c.key, label: c.label, color: 'default' }));
+
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Select
         value={filters.agentId || ALL_AGENTS_VALUE}
         onValueChange={(value) => {
-          onChange((prev) => ({ ...prev, agentId: value === ALL_AGENTS_VALUE ? '' : value }));
+          onChange((prev) => ({ ...prev, agentId: value === ALL_AGENTS_VALUE ? '' : value, chips: [] }));
         }}
       >
         <SelectTrigger className="w-[160px] h-8 text-xs">
@@ -90,8 +120,8 @@ export function FeedFilters({ agents, filters, onChange }: FeedFiltersProps) {
         Избранное
       </Button>
 
-      {/* Chip filter buttons */}
-      {CHIP_OPTIONS.map((chip) => {
+      {/* Dynamic chip filter buttons */}
+      {displayChips.map((chip) => {
         const isActive = filters.chips.includes(chip.key);
         return (
           <Button

@@ -1,6 +1,6 @@
 import { eq, and, desc, sql } from "drizzle-orm";
 import { db } from "../../db/index.js";
-import { agents, sources, agentSources, articles, operationLogs } from "../../db/schema.js";
+import { agents, sources, agentSources, articles, operationLogs, subjectAreas, chipFilters } from "../../db/schema.js";
 import { AppError } from "../../middleware/error-handler.js";
 import type { PaginatedResult, Cursor } from "../../lib/pagination.js";
 import { encodeCursor, decodeCursor } from "../../lib/pagination.js";
@@ -9,8 +9,132 @@ import { fetchSourceQueue } from "../../lib/queue.js";
 
 // ─── CRUD ───
 
-export async function createAgent(data: NewAgent) {
-  const [agent] = await db.insert(agents).values(data).returning();
+export async function createAgent(data: NewAgent & { workspaceId: string }) {
+  const { workspaceId, subjectArea, ...agentData } = data;
+
+  // If subjectArea is provided, load its defaults
+  let config: Record<string, unknown> = (agentData as any).config ?? {};
+
+  if (subjectArea) {
+    try {
+      const areaRows = await db
+        .select()
+        .from(subjectAreas)
+        .where(eq(subjectAreas.id, subjectArea))
+        .limit(1);
+
+      const area = areaRows[0];
+      if (area) {
+        const defaults = area.defaultsJson as Record<string, unknown> ?? {};
+
+        // Copy scoring_weights from subject area into agent.config
+        if (defaults.scoring_weights) {
+          config = {
+            ...config,
+            scoring_weights: defaults.scoring_weights,
+          };
+        }
+
+        // Create the agent first
+        const [agent] = await db.insert(agents).values({
+          ...agentData,
+          workspaceId,
+          subjectArea,
+          config,
+        }).returning();
+
+        // Create default sources from subject area and link them
+        if (defaults.default_sources && Array.isArray(defaults.default_sources)) {
+          const sourceDefs = defaults.default_sources as Array<{
+            type: string;
+            name: string;
+            url: string;
+          }>;
+
+          for (const srcDef of sourceDefs) {
+            try {
+              // Create source in the workspace
+              const [source] = await db.insert(sources).values({
+                type: srcDef.type || 'rss',
+                name: srcDef.name,
+                url: srcDef.url,
+                workspaceId,
+                isActive: true,
+              }).returning();
+
+              // Link source to agent
+              await db.insert(agentSources).values({
+                agentId: agent.id,
+                sourceId: source.id,
+              }).onConflictDoNothing({ target: [agentSources.agentId, agentSources.sourceId] });
+            } catch (err) {
+              // Source may already exist, try to find and link it
+              try {
+                const existing = await db
+                  .select({ id: sources.id })
+                  .from(sources)
+                  .where(and(eq(sources.url, srcDef.url), eq(sources.workspaceId, workspaceId)))
+                  .limit(1);
+
+                if (existing[0]) {
+                  await db.insert(agentSources).values({
+                    agentId: agent.id,
+                    sourceId: existing[0].id,
+                  }).onConflictDoNothing({ target: [agentSources.agentId, agentSources.sourceId] });
+                }
+              } catch {
+                // Skip this source on error
+              }
+            }
+          }
+        }
+
+        // Create chip filters from subject area defaults
+        if (defaults.chip_filters && Array.isArray(defaults.chip_filters)) {
+          const chipDefs = defaults.chip_filters as Array<{
+            key: string;
+            label: string;
+            score_modifier?: number;
+            color?: string;
+            pattern?: string;
+          }>;
+
+          for (let i = 0; i < chipDefs.length; i++) {
+            const chipDef = chipDefs[i];
+            try {
+              await db.insert(chipFilters).values({
+                agentId: agent.id,
+                key: chipDef.key,
+                label: chipDef.label,
+                scoreModifier: String(chipDef.score_modifier ?? 0),
+                color: chipDef.color ?? 'default',
+                pattern: chipDef.pattern ?? chipDef.key,
+                operator: 'contains',
+                position: i,
+                isActive: true,
+              });
+            } catch {
+              // Skip on error (may already exist)
+            }
+          }
+        }
+
+        return agent;
+      }
+    } catch (err) {
+      // Subject area may not exist, continue without defaults
+      console.error('[createAgent] Error loading subject area defaults:', err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  // No subject area or failed to load defaults — create agent normally
+  const [agent] = await db.insert(agents).values({
+    ...agentData,
+    workspaceId,
+    subjectArea,
+    config,
+  }).returning();
+
   return agent;
 }
 
@@ -136,6 +260,8 @@ export async function getAgentStats(id: string, workspaceId: string) {
     sourceCount: Number(sourceCountResult[0]?.count ?? 0),
     articleCount: Number(articleCountResult[0]?.count ?? 0),
     todayCount: Number(todayCountResult[0]?.count ?? 0),
+    total_sources: Number(sourceCountResult[0]?.count ?? 0),
+    total_articles: Number(articleCountResult[0]?.count ?? 0),
     statusBreakdown: statusCounts.reduce(
       (acc, row) => {
         acc[row.status] = Number(row.count);
@@ -205,7 +331,6 @@ export async function triggerCollection(agentId: string, workspaceId: string, us
   const activeSources = linkedSources.filter((source) => source.isActive);
 
   if (activeSources.length === 0) {
-    // No active sources — log and return immediately
     const [log] = await db
       .insert(operationLogs)
       .values({
@@ -237,7 +362,6 @@ export async function triggerCollection(agentId: string, workspaceId: string, us
     };
   }
 
-  // Create operation log in "running" state
   const [log] = await db
     .insert(operationLogs)
     .values({
@@ -259,7 +383,6 @@ export async function triggerCollection(agentId: string, workspaceId: string, us
     })
     .returning();
 
-  // Enqueue a fetch-source BullMQ job for each active source
   const jobPromises = activeSources.map((source) =>
     fetchSourceQueue.add(
       "fetch-source",
@@ -275,7 +398,6 @@ export async function triggerCollection(agentId: string, workspaceId: string, us
       },
       {
         jobId: `fetch:${source.id}:${Date.now()}`,
-        // Stagger jobs slightly to avoid thundering herd
         delay: Math.random() * 500,
       }
     )
@@ -285,7 +407,6 @@ export async function triggerCollection(agentId: string, workspaceId: string, us
     const jobs = await Promise.all(jobPromises);
     const jobIds = jobs.map((j) => j.id ?? "unknown");
 
-    // Update the operation log with enqueued job IDs
     await db
       .update(operationLogs)
       .set({
@@ -299,8 +420,6 @@ export async function triggerCollection(agentId: string, workspaceId: string, us
       })
       .where(eq(operationLogs.id, log.id));
   } catch (queueErr) {
-    // If enqueue fails, mark the operation as failed but don't throw
-    // — the operation log still records the attempt
     console.error(
       "[triggerCollection] Failed to enqueue fetch-source jobs:",
       queueErr instanceof Error ? queueErr.message : String(queueErr)

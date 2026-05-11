@@ -179,6 +179,12 @@ const settingsLayoutRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/settings',
   component: SettingsLayout,
+  beforeLoad: ({ location }) => {
+    // Redirect /settings to /settings/profile if no sub-route specified
+    if (location.pathname === '/settings') {
+      throw redirect({ to: '/settings/profile' });
+    }
+  },
 });
 
 const settingsProfileRoute = createRoute({

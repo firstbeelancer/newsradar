@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { scoringApi, templatesApi, type ScoringConfig, type Template, type CreateTemplateDto } from '@shared/api/client';
+import { scoringApi, templatesApi, type ScoringConfig, type AIScoringWeights, type Template, type CreateTemplateDto } from '@shared/api/client';
 
 interface SettingsState {
   // Scoring
@@ -31,6 +31,14 @@ interface SettingsActions {
   clearError: () => void;
 }
 
+const DEFAULT_AI_WEIGHTS: AIScoringWeights = {
+  relevance: 30,
+  novelty: 25,
+  hype: 15,
+  practical: 20,
+  local: 10,
+};
+
 const initialState: SettingsState = {
   scoringConfig: null,
   isScoringLoading: false,
@@ -48,11 +56,25 @@ export const useSettingsStore = create<SettingsState & SettingsActions>((set) =>
     set({ isScoringLoading: true, error: null });
     try {
       const config = await scoringApi.getConfig();
+      // Ensure scoring_weights has defaults
+      if (!config.scoring_weights) {
+        config.scoring_weights = DEFAULT_AI_WEIGHTS;
+      }
       set({ scoringConfig: config, isScoringLoading: false });
     } catch (err) {
       // Set default config on error
       set({
-        scoringConfig: { ai_relevance: 0.4, keyword_match: 0.3, freshness: 0.2, source_trust: 0.1 },
+        scoringConfig: {
+          ai_relevance: 0.35,
+          keyword_match: 0.25,
+          freshness: 0.20,
+          source_trust: 0.20,
+          ai_weight: 0.55,
+          keyword_weight: 0.20,
+          freshness_weight: 0.15,
+          source_trust_weight: 0.10,
+          scoring_weights: DEFAULT_AI_WEIGHTS,
+        },
         isScoringLoading: false,
         error: err instanceof Error ? err.message : 'Ошибка загрузки конфигурации скоринга',
       });
@@ -63,6 +85,9 @@ export const useSettingsStore = create<SettingsState & SettingsActions>((set) =>
     set({ isScoringLoading: true, error: null });
     try {
       const updated = await scoringApi.updateConfig(config);
+      if (!updated.scoring_weights) {
+        updated.scoring_weights = DEFAULT_AI_WEIGHTS;
+      }
       set({ scoringConfig: updated, isScoringLoading: false });
     } catch (err) {
       set({
