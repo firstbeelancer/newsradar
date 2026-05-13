@@ -85,6 +85,45 @@
     background: #67d9ff;
   }
 
+  /* Slider with filled track */
+  .slider-filled {
+    -webkit-appearance: none;
+    appearance: none;
+    background: linear-gradient(to right, var(--accent) 0%, var(--accent) var(--slider-pct, 50%), var(--muted) var(--slider-pct, 50%), var(--muted) 100%);
+    border-radius: 0.5rem;
+    height: 0.5rem;
+    outline: none;
+  }
+  .slider-filled::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 1.125rem;
+    height: 1.125rem;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 3px solid white;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    cursor: pointer;
+    transition: transform 0.15s ease;
+  }
+  .slider-filled::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+  }
+  .slider-filled::-moz-range-thumb {
+    width: 1.125rem;
+    height: 1.125rem;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 3px solid white;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    cursor: pointer;
+  }
+  .slider-filled::-moz-range-track {
+    background: linear-gradient(to right, var(--accent) 0%, var(--accent) var(--slider-pct, 50%), var(--muted) var(--slider-pct, 50%), var(--muted) 100%);
+    border-radius: 0.5rem;
+    height: 0.5rem;
+  }
+
   /* PWA safe areas */
   .env-safe-top {
     padding-top: env(safe-area-inset-top);

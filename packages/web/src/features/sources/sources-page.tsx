@@ -94,6 +94,19 @@ export function SourcesPage() {
     setTestDialogOpen(true);
   };
 
+  const handleToggleActive = async (source: Source) => {
+    try {
+      await updateSource(source.id, { is_active: !source.is_active });
+      addToast({ 
+        title: source.is_active ? 'Отключен' : 'Включен', 
+        description: `Источник "${source.name}" ${source.is_active ? 'отключен' : 'включен'}`, 
+        variant: 'success' 
+      });
+    } catch {
+      addToast({ title: 'Ошибка', description: 'Не удалось изменить статус источника', variant: 'danger' });
+    }
+  };
+
   const handleFetch = async (source: Source) => {
     try {
       const { sourcesApi } = await import('@shared/api/client');
@@ -193,6 +206,7 @@ export function SourcesPage() {
               onDelete={handleDeleteClick}
               onTest={handleTest}
               onFetch={handleFetch}
+              onToggleActive={handleToggleActive}
             />
           ))}
           {filteredSources.length === 0 && search && (

@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@shared/ui/dropdown-menu';
-import { Bot, MoreVertical, Pencil, Trash2, Play, CircleDot } from 'lucide-react';
+import { Bot, MoreVertical, Pencil, Trash2, Play, CircleDot, Link2 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import type { Agent } from '@shared/api/client';
 
@@ -79,6 +79,10 @@ export function AgentCard({ agent, onEdit, onDelete, onCollect }: AgentCardProps
               <span className="flex items-center gap-1">
                 <CircleDot className="h-3 w-3" />
                 {agent.article_count ?? 0} новостей
+              </span>
+              <span className="flex items-center gap-1">
+                <Link2 className="h-3 w-3" />
+                {agent.source_count ?? 0} источников
               </span>
             </div>
           </div>

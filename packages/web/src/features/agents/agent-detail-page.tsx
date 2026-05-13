@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from '@tanstack/react-router';
+import { useParams, useNavigate } from '@tanstack/react-router';
 import { Button } from '@shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
@@ -168,7 +168,7 @@ export function AgentDetailPage() {
                 <Newspaper className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{stats?.total_articles ?? 0}</p>
+                <p className="text-2xl font-bold">{stats?.articleCount ?? stats?.total_articles ?? 0}</p>
                 <p className="text-xs text-muted-foreground">Новостей</p>
               </div>
             </div>
@@ -181,7 +181,7 @@ export function AgentDetailPage() {
                 <Link2 className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{stats?.total_sources ?? 0}</p>
+                <p className="text-2xl font-bold">{stats?.sourceCount ?? stats?.total_sources ?? 0}</p>
                 <p className="text-xs text-muted-foreground">Источников</p>
               </div>
             </div>
@@ -194,8 +194,8 @@ export function AgentDetailPage() {
                 <BarChart3 className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{stats?.avg_articles_per_day ?? 0}</p>
-                <p className="text-xs text-muted-foreground">В день</p>
+                <p className="text-2xl font-bold">{stats?.todayCount ?? stats?.avg_articles_per_day ?? 0}</p>
+                <p className="text-xs text-muted-foreground">Сегодня</p>
               </div>
             </div>
           </CardContent>
@@ -280,11 +280,14 @@ export function AgentDetailPage() {
             <CardContent className="flex flex-col items-center py-12">
               <Newspaper className="h-8 w-8 text-muted-foreground mb-3" />
               <p className="text-sm text-muted-foreground mb-4">Просмотр новостей этого агента</p>
-              <Button asChild>
-                <Link to="/feed/$agentId" params={{ agentId: currentAgent.id }}>
-                  <Newspaper className="h-4 w-4 mr-2" />
-                  Открыть ленту
-                </Link>
+              <Button
+                onClick={() => navigate({
+                  to: '/feed/$agentId',
+                  params: { agentId: currentAgent.id },
+                })}
+              >
+                <Newspaper className="h-4 w-4 mr-2" />
+                Открыть ленту
               </Button>
             </CardContent>
           </Card>
@@ -307,15 +310,15 @@ export function AgentDetailPage() {
                 <div className="space-y-3">
                   <div className="flex justify-between py-2 border-b border-border">
                     <span className="text-sm text-muted-foreground">Всего новостей</span>
-                    <span className="text-sm font-medium">{stats.total_articles}</span>
+                    <span className="text-sm font-medium">{stats.articleCount ?? stats.total_articles ?? 0}</span>
                   </div>
                   <div className="flex justify-between py-2 border-b border-border">
                     <span className="text-sm text-muted-foreground">Всего источников</span>
-                    <span className="text-sm font-medium">{stats.total_sources}</span>
+                    <span className="text-sm font-medium">{stats.sourceCount ?? stats.total_sources ?? 0}</span>
                   </div>
                   <div className="flex justify-between py-2 border-b border-border">
-                    <span className="text-sm text-muted-foreground">Среднее в день</span>
-                    <span className="text-sm font-medium">{stats.avg_articles_per_day}</span>
+                    <span className="text-sm text-muted-foreground">Сегодня</span>
+                    <span className="text-sm font-medium">{stats.todayCount ?? stats.avg_articles_per_day ?? 0}</span>
                   </div>
                   <div className="flex justify-between py-2">
                     <span className="text-sm text-muted-foreground">Последний сбор</span>

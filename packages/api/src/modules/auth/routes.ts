@@ -29,7 +29,7 @@ function setAuthCookies(res: Response, accessToken: string, refreshToken: string
   res.cookie("refresh_token", refreshToken, COOKIE_OPTIONS);
   res.cookie("access_token", accessToken, {
     ...COOKIE_OPTIONS,
-    maxAge: 15 * 60 * 1000,
+    maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 }
 

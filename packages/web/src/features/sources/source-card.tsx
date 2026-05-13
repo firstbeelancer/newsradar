@@ -1,6 +1,7 @@
 import { Card, CardContent } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
+import { Switch } from '@shared/ui/switch';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,6 +18,7 @@ interface SourceCardProps {
   onDelete: (source: Source) => void;
   onTest: (source: Source) => void;
   onFetch: (source: Source) => void;
+  onToggleActive: (source: Source) => void;
 }
 
 const typeConfig = {
@@ -24,7 +26,7 @@ const typeConfig = {
   telegram: { icon: Send, label: 'Telegram', className: 'bg-blue-50 text-blue-600' },
 };
 
-export function SourceCard({ source, onEdit, onDelete, onTest, onFetch }: SourceCardProps) {
+export function SourceCard({ source, onEdit, onDelete, onTest, onFetch, onToggleActive }: SourceCardProps) {
   const config = typeConfig[source.type] || typeConfig.rss;
   const Icon = config.icon;
 
@@ -68,13 +70,17 @@ export function SourceCard({ source, onEdit, onDelete, onTest, onFetch }: Source
             )}
           </div>
 
-          <div className="flex items-center gap-1 shrink-0">
-            <Badge
-              variant={source.is_active ? 'success' : 'default'}
-              className="text-[10px]"
-            >
-              {source.is_active ? 'Активен' : 'Отключен'}
-            </Badge>
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1.5">
+              <Switch
+                checked={source.is_active}
+                onCheckedChange={() => onToggleActive(source)}
+                className="data-[state=checked]:bg-success"
+              />
+              <span className="text-[10px] text-muted-foreground">
+                {source.is_active ? 'Вкл' : 'Выкл'}
+              </span>
+            </div>
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@shar
 import { Skeleton } from '@shared/ui/skeleton';
 import { useSettingsStore } from '@shared/stores/settings-store';
 import { useToast } from '@shared/ui/toast';
+import { cn } from '@shared/lib/utils';
 import { BarChart3, RotateCcw, Save, Filter } from 'lucide-react';
 
 const SLIDER_CONFIG = [
@@ -140,7 +141,8 @@ export function ScoringSettings() {
                   step={config.step}
                   value={value}
                   onChange={(e) => handleSliderChange(config.key, parseFloat(e.target.value))}
-                  className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-accent"
+                  className="slider-filled w-full h-2 rounded-lg appearance-none cursor-pointer"
+                  style={{ '--slider-pct': `${((value - config.min) / (config.max - config.min)) * 100}%` } as React.CSSProperties}
                 />
               </div>
             );

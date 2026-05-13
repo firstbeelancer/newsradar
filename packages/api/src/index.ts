@@ -7,6 +7,8 @@ import { corsMiddleware } from "./middleware/cors.js";
 import { requestLogger } from "./middleware/request-log.js";
 import { generalRateLimit } from "./middleware/rate-limit.js";
 import { errorHandler } from "./middleware/error-handler.js";
+import { seedAdminUsers } from "./db/seed-admin.js";
+import { runMigrations } from "./db/migrate.js";
 
 // ─── Route modules ───
 
@@ -108,9 +110,31 @@ app.use((_req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  // eslint-disable-next-line no-console
-  console.log(`[api] Server running on port ${PORT} (${env.NODE_ENV})`);
-});
+// ─── Bootstrap: migrations → seed → listen ───
+
+async function bootstrap() {
+  try {
+    // 1. Run database migrations
+    console.log("[bootstrap] Running database migrations...");
+    await runMigrations();
+    console.log("[bootstrap] Migrations complete");
+
+    // 2. Seed admin users
+    console.log("[bootstrap] Seeding admin users...");
+    await seedAdminUsers();
+    console.log("[bootstrap] Admin user check complete");
+
+    // 3. Start server
+    app.listen(PORT, () => {
+      // eslint-disable-next-line no-console
+      console.log(`[api] Server running on port ${PORT} (${env.NODE_ENV})`);
+    });
+  } catch (err) {
+    console.error("[bootstrap] Fatal error during startup:", err);
+    process.exit(1);
+  }
+}
+
+bootstrap();
 
 export default app;

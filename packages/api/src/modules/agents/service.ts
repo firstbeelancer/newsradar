@@ -135,23 +135,52 @@ export async function getAgentById(id: string, workspaceId: string) {
 export async function listAgents(
   workspaceId: string,
   params: { limit: number; cursor?: string | null }
-): Promise<PaginatedResult<Agent>> {
+): Promise<PaginatedResult<Agent & { articleCount: number; sourceCount: number }>> {
   const conditions = [eq(agents.workspaceId, workspaceId)];
 
-  const baseQuery = db
-    .select()
+  // Get agents with article and source counts via subqueries
+  const agentRows = await db
+    .select({
+      id: agents.id,
+      name: agents.name,
+      description: agents.description,
+      icon: agents.icon,
+      color: agents.color,
+      workspaceId: agents.workspaceId,
+      subjectArea: agents.subjectArea,
+      config: agents.config,
+      position: agents.position,
+      createdAt: agents.createdAt,
+      updatedAt: agents.updatedAt,
+      articleCount: sql<number>`COALESCE((SELECT COUNT(*) FROM articles WHERE articles.agent_id = agents.id AND articles.workspace_id = ${workspaceId}), 0)`,
+      sourceCount: sql<number>`COALESCE((SELECT COUNT(*) FROM agent_sources WHERE agent_sources.agent_id = agents.id), 0)`,
+    })
     .from(agents)
     .where(and(...conditions))
     .orderBy(agents.position, desc(agents.createdAt))
     .limit(params.limit + 1);
 
-  let query = baseQuery;
+  let rows = agentRows;
 
   if (params.cursor) {
     const decoded = decodeCursor(params.cursor);
     if (decoded?.sortValue) {
-      query = db
-        .select()
+      const cursorRows = await db
+        .select({
+          id: agents.id,
+          name: agents.name,
+          description: agents.description,
+          icon: agents.icon,
+          color: agents.color,
+          workspaceId: agents.workspaceId,
+          subjectArea: agents.subjectArea,
+          config: agents.config,
+          position: agents.position,
+          createdAt: agents.createdAt,
+          updatedAt: agents.updatedAt,
+          articleCount: sql<number>`COALESCE((SELECT COUNT(*) FROM articles WHERE articles.agent_id = agents.id AND articles.workspace_id = ${workspaceId}), 0)`,
+          sourceCount: sql<number>`COALESCE((SELECT COUNT(*) FROM agent_sources WHERE agent_sources.agent_id = agents.id), 0)`,
+        })
         .from(agents)
         .where(
           and(
@@ -161,10 +190,10 @@ export async function listAgents(
         )
         .orderBy(agents.position, desc(agents.createdAt))
         .limit(params.limit + 1);
+      rows = cursorRows;
     }
   }
 
-  const rows = await query;
   const hasMore = rows.length > params.limit;
   const data = hasMore ? rows.slice(0, -1) : rows;
 

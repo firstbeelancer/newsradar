@@ -1,0 +1,66 @@
+import { Pool } from "pg";
+import { env } from "../config/env.js";
+import { readFileSync, readdirSync } from "fs";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const MIGRATIONS_DIR = join(__dirname, "migrations");
+
+/**
+ * Runs all pending SQL migrations against the database.
+ * Uses a simple tracking table `__migrations` to track which files have been applied.
+ */
+export async function runMigrations(): Promise<void> {
+  const pool = new Pool({ connectionString: env.DATABASE_URL });
+  const client = await pool.connect();
+
+  try {
+    // Create migrations tracking table if it doesn't exist
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "__migrations" (
+        id SERIAL PRIMARY KEY,
+        filename VARCHAR(255) NOT NULL UNIQUE,
+        applied_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+      );
+    `);
+
+    // Get list of already-applied migrations
+    const { rows: applied } = await client.query(
+      "SELECT filename FROM __migrations ORDER BY id"
+    );
+    const appliedSet = new Set(applied.map((r: { filename: string }) => r.filename));
+
+    // Read migration files from disk
+    const files = readdirSync(MIGRATIONS_DIR)
+      .filter((f) => f.endsWith(".sql"))
+      .sort();
+
+    for (const file of files) {
+      if (appliedSet.has(file)) {
+        console.log(`[migrate] Already applied: ${file}`);
+        continue;
+      }
+
+      console.log(`[migrate] Applying: ${file}`);
+      const sql = readFileSync(join(MIGRATIONS_DIR, file), "utf-8");
+
+      await client.query("BEGIN");
+      try {
+        await client.query(sql);
+        await client.query("INSERT INTO __migrations (filename) VALUES ($1)", [file]);
+        await client.query("COMMIT");
+        console.log(`[migrate] Applied: ${file}`);
+      } catch (err) {
+        await client.query("ROLLBACK");
+        console.error(`[migrate] FAILED: ${file}`, err);
+        throw err;
+      }
+    }
+
+    console.log("[migrate] All migrations applied");
+  } finally {
+    client.release();
+    await pool.end();
+  }
+}

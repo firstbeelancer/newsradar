@@ -1,5 +1,7 @@
-import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@shared/ui/card';
+import { useState, useEffect, useCallback } from 'react';
+import { apiGet, apiPost, apiPut, apiDelete } from '@shared/api/client';
+import { useAuthStore } from '@shared/stores/auth-store';
+import { Card, CardContent } from '@shared/ui/card';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
 import { Badge } from '@shared/ui/badge';
@@ -10,131 +12,470 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@shared/ui/dialog';
-import { Cpu, Plus, Trash2, Check, Key } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@shared/ui/select';
+import { Switch } from '@shared/ui/switch';
+import { Label } from '@shared/ui/label';
+import { Skeleton } from '@shared/ui/skeleton';
+import { useToast } from '@shared/ui/toast';
+import {
+  Cpu,
+  Plus,
+  Trash2,
+  Check,
+  Pencil,
+  Zap,
+  Globe,
+  TestTube2,
+  XCircle,
+} from 'lucide-react';
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+type ProviderSlug = 'openai' | 'anthropic' | 'openrouter' | 'google';
+type ProviderMode = 'platform' | 'byok';
 
 interface AIProvider {
   id: string;
   name: string;
-  keyLabel: string;
-  hasKey: boolean;
+  type: ProviderMode;
+  provider: ProviderSlug;
+  baseUrl?: string;
+  hasKey?: boolean;
+  model: string;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-const DEFAULT_PROVIDERS: AIProvider[] = [
-  { id: 'openai', name: 'OpenAI', keyLabel: 'OpenAI API Key', hasKey: false },
-  { id: 'anthropic', name: 'Anthropic', keyLabel: 'Anthropic API Key', hasKey: false },
-  { id: 'google', name: 'Google AI', keyLabel: 'Google API Key', hasKey: false },
-];
+interface ProviderFormData {
+  name: string;
+  type: ProviderMode;
+  provider: ProviderSlug;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  isActive: boolean;
+}
+
+interface TestResult {
+  success: boolean;
+  message?: string;
+}
+
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const DEFAULT_BASE_URLS: Record<ProviderSlug, string> = {
+  openai: 'https://api.openai.com/v1',
+  anthropic: 'https://api.anthropic.com/v1',
+  openrouter: 'https://openrouter.ai/api/v1',
+  google: 'https://generativelanguage.googleapis.com/v1',
+};
+
+const PROVIDER_LABELS: Record<ProviderSlug, string> = {
+  openai: 'OpenAI',
+  anthropic: 'Anthropic',
+  openrouter: 'OpenRouter',
+  google: 'Google AI',
+};
+
+const EMPTY_FORM: ProviderFormData = {
+  name: '',
+  type: 'byok',
+  provider: 'openrouter',
+  baseUrl: DEFAULT_BASE_URLS.openrouter,
+  apiKey: '',
+  model: '',
+  isActive: true,
+};
+
+// ─── Component ───────────────────────────────────────────────────────────────
 
 export function AIProvidersSettings() {
-  const [providers, setProviders] = useState<AIProvider[]>(DEFAULT_PROVIDERS);
-  const [addDialogOpen, setAddDialogOpen] = useState(false);
-  const [selectedProvider, setSelectedProvider] = useState<AIProvider | null>(null);
-  const [apiKey, setApiKey] = useState('');
+  const [providers, setProviders] = useState<AIProvider[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingProvider, setEditingProvider] = useState<AIProvider | null>(null);
+  const [form, setForm] = useState<ProviderFormData>({ ...EMPTY_FORM });
+  const [saving, setSaving] = useState(false);
+  const [testingId, setTestingId] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<Record<string, TestResult>>({});
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const handleAddKey = (provider: AIProvider) => {
-    setSelectedProvider(provider);
-    setApiKey('');
-    setAddDialogOpen(true);
+  const { addToast } = useToast();
+  const workspaceId = useAuthStore((s) => s.workspace_id);
+
+  // ─── Fetch providers ─────────────────────────────────────────────────────
+
+  const fetchProviders = useCallback(async () => {
+    if (!workspaceId) return;
+    setLoading(true);
+    try {
+      const data = await apiGet<AIProvider[]>('/ai-providers');
+      setProviders(Array.isArray(data) ? data : []);
+    } catch {
+      setProviders([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [workspaceId]);
+
+  useEffect(() => {
+    fetchProviders();
+  }, [fetchProviders]);
+
+  // ─── Dialog helpers ──────────────────────────────────────────────────────
+
+  const openAddDialog = () => {
+    setEditingProvider(null);
+    setForm({ ...EMPTY_FORM });
+    setDialogOpen(true);
   };
 
-  const handleSaveKey = () => {
-    if (!selectedProvider || !apiKey.trim()) return;
-    setProviders((prev) =>
-      prev.map((p) => (p.id === selectedProvider.id ? { ...p, hasKey: true } : p))
-    );
-    setAddDialogOpen(false);
-    setApiKey('');
+  const openEditDialog = (provider: AIProvider) => {
+    setEditingProvider(provider);
+    setForm({
+      name: provider.name,
+      type: provider.type,
+      provider: provider.provider,
+      baseUrl: provider.baseUrl || DEFAULT_BASE_URLS[provider.provider],
+      apiKey: '',
+      model: provider.model,
+      isActive: provider.isActive,
+    });
+    setDialogOpen(true);
   };
 
-  const handleRemoveKey = (providerId: string) => {
-    setProviders((prev) =>
-      prev.map((p) => (p.id === providerId ? { ...p, hasKey: false } : p))
-    );
+  const closeDialog = () => {
+    setDialogOpen(false);
+    setEditingProvider(null);
+    setForm({ ...EMPTY_FORM });
   };
+
+  // ─── Provider type change ────────────────────────────────────────────────
+
+  const handleProviderChange = (slug: ProviderSlug) => {
+    setForm((prev) => ({
+      ...prev,
+      provider: slug,
+      baseUrl: DEFAULT_BASE_URLS[slug],
+      name: prev.name || PROVIDER_LABELS[slug],
+    }));
+  };
+
+  // ─── Save ────────────────────────────────────────────────────────────────
+
+  const handleSave = async () => {
+    if (!form.name.trim() || !form.apiKey.trim() || !form.model.trim()) {
+      addToast({
+        title: 'Заполните обязательные поля',
+        description: 'Название, API-ключ и модель обязательны',
+        variant: 'warning',
+      });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const payload: Record<string, unknown> = {
+        name: form.name.trim(),
+        type: form.type,
+        provider: form.provider,
+        baseUrl: form.baseUrl.trim() || undefined,
+        apiKey: form.apiKey.trim(),
+        model: form.model.trim(),
+        isActive: form.isActive,
+      };
+
+      if (editingProvider) {
+        await apiPut<AIProvider, typeof payload>(
+          `/ai-providers/${editingProvider.id}`,
+          payload
+        );
+        addToast({ title: 'Провайдер обновлён', variant: 'success' });
+      } else {
+        await apiPost<AIProvider, typeof payload>('/ai-providers', payload);
+        addToast({ title: 'Провайдер добавлен', variant: 'success' });
+      }
+
+      closeDialog();
+      fetchProviders();
+    } catch (err) {
+      addToast({
+        title: 'Ошибка',
+        description: err instanceof Error ? err.message : 'Не удалось сохранить',
+        variant: 'danger',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ─── Delete ──────────────────────────────────────────────────────────────
+
+  const handleDelete = async (id: string) => {
+    setDeletingId(id);
+    try {
+      await apiDelete<void>(`/ai-providers/${id}`);
+      addToast({ title: 'Провайдер удалён', variant: 'success' });
+      fetchProviders();
+    } catch (err) {
+      addToast({
+        title: 'Ошибка удаления',
+        description: err instanceof Error ? err.message : '',
+        variant: 'danger',
+      });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  // ─── Test connection ─────────────────────────────────────────────────────
+
+  const handleTest = async (id: string) => {
+    setTestingId(id);
+    setTestResults((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+
+    try {
+      const result = await apiPost<TestResult>(`/ai-providers/${id}/test`, {});
+      setTestResults((prev) => ({
+        ...prev,
+        [id]: { success: result.success, message: result.message },
+      }));
+      addToast({
+        title: result.success ? 'Подключение успешно' : 'Подключение не удалось',
+        description: result.message,
+        variant: result.success ? 'success' : 'danger',
+      });
+    } catch (err) {
+      setTestResults((prev) => ({
+        ...prev,
+        [id]: { success: false, message: err instanceof Error ? err.message : 'Ошибка' },
+      }));
+    } finally {
+      setTestingId(null);
+    }
+  };
+
+  // ─── Toggle active ──────────────────────────────────────────────────────
+
+  const handleToggleActive = async (provider: AIProvider) => {
+    try {
+      await apiPut<AIProvider, Partial<AIProvider>>(`/ai-providers/${provider.id}`, {
+        isActive: !provider.isActive,
+      });
+      fetchProviders();
+    } catch (err) {
+      addToast({
+        title: 'Ошибка',
+        description: err instanceof Error ? err.message : '',
+        variant: 'danger',
+      });
+    }
+  };
+
+  // ─── Render ──────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold">AI провайдеры</h2>
-        <p className="text-sm text-muted-foreground">Настройка ключей API для генерации контента</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">AI провайдеры</h2>
+          <p className="text-sm text-muted-foreground">
+            Управление подключениями к AI-сервисам для генерации контента
+          </p>
+        </div>
+        <Button onClick={openAddDialog} size="sm">
+          <Plus className="h-4 w-4 mr-1" />
+          Добавить
+        </Button>
       </div>
 
-      <div className="space-y-3">
-        {providers.map((provider) => (
-          <Card key={provider.id} className="hover:shadow-md transition-all">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between gap-4">
+      {loading && (
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <Card key={i}>
+              <CardContent className="p-4">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-light text-accent">
-                    <Cpu className="h-5 w-5" />
+                  <Skeleton className="h-10 w-10 rounded-lg" />
+                  <div className="space-y-2 flex-1">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-24" />
                   </div>
-                  <div>
-                    <p className="text-sm font-medium">{provider.name}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      {provider.hasKey ? (
-                        <Badge variant="success" className="text-[10px]">
-                          <Check className="h-3 w-3 mr-1" />
-                          Ключ настроен
-                        </Badge>
-                      ) : (
-                        <Badge variant="default" className="text-[10px]">
-                          Ключ не настроен
-                        </Badge>
-                      )}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {!loading && providers.length === 0 && (
+        <Card>
+          <CardContent className="p-8 text-center">
+            <Cpu className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+            <p className="text-sm font-medium text-muted-foreground">
+              Нет подключённых провайдеров
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Добавьте AI-провайдер для генерации контента
+            </p>
+            <Button onClick={openAddDialog} variant="outline" size="sm" className="mt-4">
+              <Plus className="h-4 w-4 mr-1" />
+              Добавить провайдер
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {!loading && providers.length > 0 && (
+        <div className="space-y-3">
+          {providers.map((provider) => {
+            const testResult = testResults[provider.id];
+            const isTesting = testingId === provider.id;
+            const isDeleting = deletingId === provider.id;
+
+            return (
+              <Card key={provider.id} className="hover:shadow-md transition-all">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-light text-accent">
+                        <Cpu className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium truncate">{provider.name}</p>
+                          <Badge variant={provider.isActive ? 'success' : 'default'} className="text-[10px] shrink-0">
+                            {provider.isActive ? 'Активен' : 'Выключен'}
+                          </Badge>
+                          <Badge variant="default" className="text-[10px] shrink-0">
+                            {PROVIDER_LABELS[provider.provider] || provider.provider}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+                          <Globe className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{provider.model}</span>
+                        </div>
+                        {provider.baseUrl && (
+                          <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+                            <Zap className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{provider.baseUrl}</span>
+                          </div>
+                        )}
+                        {testResult && (
+                          <div className="mt-1 flex items-center gap-1">
+                            {testResult.success ? (
+                              <Check className="h-3 w-3 text-success shrink-0" />
+                            ) : (
+                              <XCircle className="h-3 w-3 text-danger shrink-0" />
+                            )}
+                            <span className={`text-xs ${testResult.success ? 'text-success' : 'text-danger'}`}>
+                              {testResult.message || (testResult.success ? 'OK' : 'Ошибка')}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex items-center gap-1.5">
+                        <Label htmlFor={`active-${provider.id}`} className="text-xs text-muted-foreground cursor-pointer">
+                          Вкл
+                        </Label>
+                        <Switch
+                          id={`active-${provider.id}`}
+                          checked={provider.isActive}
+                          onCheckedChange={() => handleToggleActive(provider)}
+                        />
+                      </div>
+                      <div className="h-6 w-px bg-border" />
+                      <Button variant="ghost" size="sm" onClick={() => handleTest(provider.id)} disabled={isTesting} title="Проверить">
+                        <TestTube2 className={`h-4 w-4 ${isTesting ? 'animate-pulse' : ''}`} />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => openEditDialog(provider)} title="Редактировать">
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleDelete(provider.id)} disabled={isDeleting} title="Удалить">
+                        <Trash2 className="h-4 w-4 text-danger" />
+                      </Button>
                     </div>
                   </div>
-                </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
-                <div className="flex gap-2">
-                  {provider.hasKey ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleRemoveKey(provider.id)}
-                    >
-                      <Trash2 className="h-4 w-4 text-danger" />
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleAddKey(provider)}
-                    >
-                      <Key className="h-4 w-4" />
-                      Добавить ключ
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Add Key Dialog */}
-      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+      {/* Add / Edit Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) closeDialog(); }}>
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Добавить ключ {selectedProvider?.name}</DialogTitle>
+            <DialogTitle>
+              {editingProvider ? 'Редактировать провайдер' : 'Добавить провайдер'}
+            </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <Input
-              label={selectedProvider?.keyLabel || 'API Key'}
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="sk-..."
-            />
-            <p className="text-xs text-muted-foreground">
-              Ключ хранится в зашифрованном виде и используется только для генерации контента.
-            </p>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Провайдер</Label>
+              <Select value={form.provider} onValueChange={(v) => handleProviderChange(v as ProviderSlug)}>
+                <SelectTrigger><SelectValue placeholder="Выберите провайдер" /></SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(PROVIDER_LABELS) as ProviderSlug[]).map((slug) => (
+                    <SelectItem key={slug} value={slug}>{PROVIDER_LABELS[slug]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Тип подключения</Label>
+              <Select value={form.type} onValueChange={(v) => setForm((prev) => ({ ...prev, type: v as ProviderMode }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="platform">Платформенный</SelectItem>
+                  <SelectItem value="byok">Свой ключ (BYOK)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Название</Label>
+              <Input value={form.name} onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))} placeholder="Мой OpenRouter" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Base URL</Label>
+              <Input value={form.baseUrl} onChange={(e) => setForm((prev) => ({ ...prev, baseUrl: e.target.value }))} placeholder={DEFAULT_BASE_URLS[form.provider]} />
+              <p className="text-xs text-muted-foreground">Оставьте по умолчанию или укажите кастомный URL</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>API ключ</Label>
+              <Input type="password" value={form.apiKey} onChange={(e) => setForm((prev) => ({ ...prev, apiKey: e.target.value }))} placeholder="sk-..." />
+              <p className="text-xs text-muted-foreground">Ключ хранится в зашифрованном виде</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Модель</Label>
+              <Input value={form.model} onChange={(e) => setForm((prev) => ({ ...prev, model: e.target.value }))} placeholder="openrouter/owl-alpha" />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div className="space-y-0.5">
+                <Label>Активен</Label>
+                <p className="text-xs text-muted-foreground">Включить провайдер для использования</p>
+              </div>
+              <Switch checked={form.isActive} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, isActive: checked }))} />
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setAddDialogOpen(false)}>
-              Отмена
-            </Button>
-            <Button onClick={handleSaveKey} disabled={!apiKey.trim()}>
-              Сохранить
+            <Button variant="ghost" onClick={closeDialog}>Отмена</Button>
+            <Button onClick={handleSave} disabled={saving || !form.name.trim() || !form.apiKey.trim() || !form.model.trim()}>
+              {saving ? 'Сохранение...' : editingProvider ? 'Сохранить' : 'Добавить'}
             </Button>
           </DialogFooter>
         </DialogContent>

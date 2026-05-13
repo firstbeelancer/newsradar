@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
 import { env } from "../config/env.js";
 
-const ACCESS_TTL = "15m";
+const ACCESS_TTL = "7d";
 
 export interface TokenPayload {
   sub: string;

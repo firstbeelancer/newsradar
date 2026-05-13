@@ -49,6 +49,11 @@ interface BackendAgent {
   article_count?: number;
   sourceCount?: number;
   source_count?: number;
+  subjectArea?: string | null;
+  subject_area?: string | null;
+  config?: Record<string, unknown>;
+  scoringCriteria?: unknown[];
+  chipFilters?: unknown[];
 }
 
 interface BackendArticle {
@@ -125,6 +130,11 @@ export function normalizeAgent(raw: BackendAgent): Agent {
     position: raw.position ?? 0,
     is_active: raw.is_active ?? raw.isActive ?? true,
     article_count: raw.article_count ?? raw.articleCount,
+    source_count: raw.source_count ?? raw.sourceCount,
+    subjectArea: raw.subject_area ?? raw.subjectArea ?? null,
+    config: (raw.config as Agent['config']) ?? {},
+    scoringCriteria: raw.scoringCriteria as Agent['scoringCriteria'] ?? undefined,
+    chipFilters: raw.chipFilters as Agent['chipFilters'] ?? undefined,
     created_at: raw.created_at ?? raw.createdAt ?? new Date(0).toISOString(),
     updated_at: raw.updated_at ?? raw.updatedAt ?? new Date(0).toISOString(),
   };
@@ -386,6 +396,7 @@ export interface Agent {
   position: number;
   is_active: boolean;
   article_count?: number;
+  source_count?: number;
   subjectArea?: string | null;
   config: {
     targetAudience?: string;
