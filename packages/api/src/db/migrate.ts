@@ -1,4 +1,4 @@
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 import { env } from "../config/env.js";
 import { readFileSync, readdirSync } from "fs";
 import { join, dirname } from "path";
@@ -6,6 +6,51 @@ import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = join(__dirname, "migrations");
+
+const MIGRATION_SENTINELS: Record<string, string[]> = {
+  "0000_flashy_epoch.sql": [
+    "agent_sources",
+    "agents",
+    "articles",
+    "content_templates",
+    "sources",
+    "users",
+    "workspaces",
+  ],
+  "0001_add_missing_tables.sql": [
+    "ai_providers",
+    "article_scores",
+    "asset_items",
+    "asset_packs",
+    "chip_filters",
+    "deepsearch_results",
+    "favorite_articles",
+    "fetch_schedules",
+    "notification_rules",
+    "scoring_criteria",
+    "subject_areas",
+  ],
+};
+
+async function migrationIsMaterialized(
+  client: PoolClient,
+  filename: string
+): Promise<boolean> {
+  const sentinelTables = MIGRATION_SENTINELS[filename];
+  if (!sentinelTables) return false;
+
+  const { rows } = await client.query<{ table_name: string }>(
+    `
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name = ANY($1::text[])
+    `,
+    [sentinelTables]
+  );
+
+  return rows.length === sentinelTables.length;
+}
 
 /**
  * Runs all pending SQL migrations against the database.
@@ -39,6 +84,13 @@ export async function runMigrations(): Promise<void> {
     for (const file of files) {
       if (appliedSet.has(file)) {
         console.log(`[migrate] Already applied: ${file}`);
+        continue;
+      }
+
+      if (await migrationIsMaterialized(client, file)) {
+        await client.query("INSERT INTO __migrations (filename) VALUES ($1) ON CONFLICT DO NOTHING", [file]);
+        appliedSet.add(file);
+        console.log(`[migrate] Baseline existing schema: ${file}`);
         continue;
       }
 

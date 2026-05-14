@@ -23,7 +23,9 @@ services:
       retries: 5
       start_period: 30s
     networks:
-      - newsradar
+      newsradar:
+        aliases:
+          - newsradar-db
     # Coolify: internal service, no public port
 
   redis:
@@ -39,7 +41,9 @@ services:
       retries: 5
       start_period: 10s
     networks:
-      - newsradar
+      newsradar:
+        aliases:
+          - newsradar-redis
     # Coolify: internal service, no public port
 
   api:
@@ -50,8 +54,8 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://${DB_USER:-newsradar}:${DB_PASS}@db:5432/${DB_NAME:-newsradar}
-      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql://${DB_USER:-newsradar}:${DB_PASS}@newsradar-db:5432/${DB_NAME:-newsradar}
+      REDIS_URL: redis://newsradar-redis:6379/0
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET required}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY required}
       DOMAIN: ${DOMAIN}
@@ -102,8 +106,8 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://${DB_USER:-newsradar}:${DB_PASS}@db:5432/${DB_NAME:-newsradar}
-      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql://${DB_USER:-newsradar}:${DB_PASS}@newsradar-db:5432/${DB_NAME:-newsradar}
+      REDIS_URL: redis://newsradar-redis:6379/0
       JWT_SECRET: ${JWT_SECRET}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       # AI
