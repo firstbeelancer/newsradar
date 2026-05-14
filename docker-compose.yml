@@ -143,6 +143,8 @@ services:
       dockerfile: packages/web/Dockerfile
     container_name: newsradar-web
     restart: unless-stopped
+    labels:
+      - "traefik.docker.network=coolify"
     ports:
       - "80"
     depends_on:
