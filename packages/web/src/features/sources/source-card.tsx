@@ -31,7 +31,7 @@ export function SourceCard({ source, onEdit, onDelete, onTest, onFetch, onToggle
   const Icon = config.icon;
 
   return (
-    <Card className="group transition-all hover:shadow-md">
+    <Card className="group transition-all hover:shadow-md overflow-hidden">
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
           <div className={cn(
@@ -41,8 +41,8 @@ export function SourceCard({ source, onEdit, onDelete, onTest, onFetch, onToggle
             <Icon className="h-5 w-5" />
           </div>
 
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1 overflow-hidden">
+            <div className="flex items-center gap-2 flex-wrap">
               <p className="truncate text-sm font-medium">{source.name}</p>
               <Badge variant="outline" className="shrink-0 text-[10px]">
                 {config.label}
@@ -50,7 +50,7 @@ export function SourceCard({ source, onEdit, onDelete, onTest, onFetch, onToggle
             </div>
             <p className="mt-0.5 truncate text-xs text-muted-foreground">{source.url}</p>
 
-            <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+            <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
               <span className="flex items-center gap-1">
                 <Download className="h-3 w-3" />
                 {source.fetch_count} сборов
@@ -69,48 +69,48 @@ export function SourceCard({ source, onEdit, onDelete, onTest, onFetch, onToggle
               <p className="mt-1 text-xs text-danger">{source.last_error}</p>
             )}
           </div>
+        </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="flex items-center gap-1.5">
-              <Switch
-                checked={source.is_active}
-                onCheckedChange={() => onToggleActive(source)}
-                className="data-[state=checked]:bg-success"
-              />
-              <span className="text-[10px] text-muted-foreground">
-                {source.is_active ? 'Вкл' : 'Выкл'}
-              </span>
-            </div>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100 transition-opacity">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => onTest(source)}>
-                  <TestTube className="mr-2 h-4 w-4" />
-                  Тест
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onFetch(source)}>
-                  <Download className="mr-2 h-4 w-4" />
-                  Собрать
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onEdit(source)}>
-                  <Pencil className="mr-2 h-4 w-4" />
-                  Редактировать
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => onDelete(source)}
-                  className="text-danger focus:text-danger"
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Удалить
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+        <div className="mt-3 flex items-center justify-between border-t border-border/50 pt-3">
+          <div className="flex items-center gap-1.5">
+            <Switch
+              checked={source.is_active}
+              onCheckedChange={() => onToggleActive(source)}
+              className="data-[state=checked]:bg-success"
+            />
+            <span className="text-[10px] text-muted-foreground">
+              {source.is_active ? 'Вкл' : 'Выкл'}
+            </span>
           </div>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon-sm" className="sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => onTest(source)}>
+                <TestTube className="mr-2 h-4 w-4" />
+                Тест
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onFetch(source)}>
+                <Download className="mr-2 h-4 w-4" />
+                Собрать
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onEdit(source)}>
+                <Pencil className="mr-2 h-4 w-4" />
+                Редактировать
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => onDelete(source)}
+                className="text-danger focus:text-danger"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Удалить
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </CardContent>
     </Card>

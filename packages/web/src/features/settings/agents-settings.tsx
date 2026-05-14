@@ -125,23 +125,25 @@ export function AgentsSettings() {
 
       <div className="space-y-2">
         {agents.map((agent) => (
-          <Card key={agent.id} className="hover:shadow-md transition-all">
+          <Card key={agent.id} className="hover:shadow-md transition-all overflow-hidden">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
                 <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-lg', colorMap[agent.color] || colorMap.default)}>
                   <Bot className="h-5 w-5" />
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">{agent.name}</p>
+                <div className="min-w-0 flex-1 overflow-hidden">
+                  <p className="text-sm font-medium truncate">{agent.name}</p>
                   <p className="text-xs text-muted-foreground line-clamp-1">
                     {agent.description || 'Нет описания'}
                   </p>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <Switch
-                    checked={agent.is_active}
-                    onCheckedChange={() => handleToggleActive(agent)}
-                  />
+              </div>
+              <div className="mt-3 flex items-center justify-between border-t border-border/50 pt-3">
+                <Switch
+                  checked={agent.is_active}
+                  onCheckedChange={() => handleToggleActive(agent)}
+                />
+                <div className="flex items-center gap-1">
                   <Button variant="ghost" size="icon-sm" onClick={() => handleEdit(agent)}>
                     <Pencil className="h-4 w-4" />
                   </Button>

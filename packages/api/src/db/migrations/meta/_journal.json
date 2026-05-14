@@ -15,6 +15,13 @@
       "when": 1778338000000,
       "tag": "0001_add_missing_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1778342000000,
+      "tag": "0002_add_workspace_config",
+      "breakpoints": true
     }
   ]
 }

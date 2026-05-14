@@ -30,6 +30,9 @@ const MIGRATION_SENTINELS: Record<string, string[]> = {
     "scoring_criteria",
     "subject_areas",
   ],
+  "0002_add_workspace_config.sql": [
+    "workspaces_config_check",
+  ],
 };
 
 async function migrationIsMaterialized(

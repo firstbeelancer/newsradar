@@ -924,6 +924,22 @@ export const iboardApi = {
   sourcesHealth: () => apiGet<SourceHealth[]>('/iboard/sources-health'),
 };
 
+// ─── Workspace Config API (custom prompts etc) ──────────────
+
+export interface WorkspaceConfig {
+  prompts?: {
+    search?: string;
+    deepsearch?: string;
+    scoring?: string;
+  };
+  [key: string]: unknown;
+}
+
+export const workspaceApi = {
+  get: () => apiGet<{ id: string; name: string; plan: string; config: WorkspaceConfig }>('/workspaces/me'),
+  updateConfig: (config: WorkspaceConfig) => apiPatch<{ id: string; name: string; plan: string; config: WorkspaceConfig }, { config: WorkspaceConfig }>('/workspaces/me', { config }),
+};
+
 // ─── Notifications API ───────────────────────────────────────
 
 export const notificationsApi = {

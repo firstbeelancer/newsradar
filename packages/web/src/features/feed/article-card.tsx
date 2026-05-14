@@ -26,14 +26,14 @@ export function ArticleCard({ article, onToggleFavorite, isSelected, onSelect, s
   return (
     <Card
       className={cn(
-        'transition-all hover:shadow-md',
+        'transition-all hover:shadow-md overflow-hidden',
         selectable && isSelected && 'ring-2 ring-accent'
       )}
       onClick={() => selectable && onSelect?.(article.id)}
     >
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 overflow-hidden">
             <div className="flex items-start gap-2">
               <Link
                 to="/feed/article/$id"
@@ -54,7 +54,7 @@ export function ArticleCard({ article, onToggleFavorite, isSelected, onSelect, s
               </p>
             )}
 
-            <div className="mt-2 flex items-center gap-3 text-[11px] text-muted-foreground">
+            <div className="mt-2 flex items-center gap-3 text-[11px] text-muted-foreground flex-wrap">
               <span className="font-medium">{article.source_name}</span>
               <span className="flex items-center gap-1">
                 <Calendar className="h-3 w-3" />
@@ -68,7 +68,7 @@ export function ArticleCard({ article, onToggleFavorite, isSelected, onSelect, s
             </div>
           </div>
 
-          <div className="flex flex-col gap-1 shrink-0">
+          <div className="flex flex-row gap-1 shrink-0">
             <Button
               variant="ghost"
               size="icon-sm"

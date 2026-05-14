@@ -154,6 +154,7 @@ export function PostGenerator() {
                 <SelectContent>
                   <SelectItem value="openai">OpenAI</SelectItem>
                   <SelectItem value="anthropic">Anthropic</SelectItem>
+                  <SelectItem value="openrouter">OpenRouter</SelectItem>
                   <SelectItem value="google">Google</SelectItem>
                 </SelectContent>
               </Select>
@@ -171,6 +172,10 @@ export function PostGenerator() {
                   <SelectItem value="claude-3-haiku">Claude 3 Haiku</SelectItem>
                   <SelectItem value="claude-3-sonnet">Claude 3 Sonnet</SelectItem>
                   <SelectItem value="gemini-pro">Gemini Pro</SelectItem>
+                  <SelectItem value="openrouter/owl-alpha">OpenRouter Owl Alpha</SelectItem>
+                  <SelectItem value="openrouter/auto">OpenRouter Auto</SelectItem>
+                  <SelectItem value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet (via OR)</SelectItem>
+                  <SelectItem value="openai/gpt-4o">GPT-4o (via OR)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

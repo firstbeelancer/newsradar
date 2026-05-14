@@ -11,7 +11,8 @@ const createSchema = z.object({
 });
 
 const updateSchema = z.object({
-  name: z.string().min(1).max(255),
+  name: z.string().min(1).max(255).optional(),
+  config: z.record(z.unknown()).optional(),
 });
 
 const updatePlanSchema = z.object({
@@ -43,7 +44,7 @@ router.post("/", authMiddleware, async (req, res, next) => {
 router.patch("/me", authMiddleware, async (req, res, next) => {
   try {
     const input = updateSchema.parse(req.body);
-    const workspace = await updateWorkspace(req.user!.sub, input.name);
+    const workspace = await updateWorkspace(req.user!.sub, input.name, input.config);
     res.json({ success: true, data: workspace });
   } catch (err) {
     next(err);

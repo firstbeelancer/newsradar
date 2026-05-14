@@ -344,15 +344,15 @@ export function AIProvidersSettings() {
             const isDeleting = deletingId === provider.id;
 
             return (
-              <Card key={provider.id} className="hover:shadow-md transition-all">
+              <Card key={provider.id} className="hover:shadow-md transition-all overflow-hidden">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center gap-3 min-w-0 overflow-hidden">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-light text-accent">
                         <Cpu className="h-5 w-5" />
                       </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
+                      <div className="min-w-0 overflow-hidden">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <p className="text-sm font-medium truncate">{provider.name}</p>
                           <Badge variant={provider.isActive ? 'success' : 'default'} className="text-[10px] shrink-0">
                             {provider.isActive ? 'Активен' : 'Выключен'}
@@ -385,19 +385,20 @@ export function AIProvidersSettings() {
                         )}
                       </div>
                     </div>
+                  </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      <div className="flex items-center gap-1.5">
-                        <Label htmlFor={`active-${provider.id}`} className="text-xs text-muted-foreground cursor-pointer">
-                          Вкл
-                        </Label>
-                        <Switch
-                          id={`active-${provider.id}`}
-                          checked={provider.isActive}
-                          onCheckedChange={() => handleToggleActive(provider)}
-                        />
-                      </div>
-                      <div className="h-6 w-px bg-border" />
+                  <div className="mt-3 flex items-center justify-between border-t border-border/50 pt-3">
+                    <div className="flex items-center gap-1.5">
+                      <Label htmlFor={`active-${provider.id}`} className="text-xs text-muted-foreground cursor-pointer">
+                        Вкл
+                      </Label>
+                      <Switch
+                        id={`active-${provider.id}`}
+                        checked={provider.isActive}
+                        onCheckedChange={() => handleToggleActive(provider)}
+                      />
+                    </div>
+                    <div className="flex items-center gap-1">
                       <Button variant="ghost" size="sm" onClick={() => handleTest(provider.id)} disabled={isTesting} title="Проверить">
                         <TestTube2 className={`h-4 w-4 ${isTesting ? 'animate-pulse' : ''}`} />
                       </Button>

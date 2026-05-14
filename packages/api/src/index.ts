@@ -8,6 +8,7 @@ import { requestLogger } from "./middleware/request-log.js";
 import { generalRateLimit } from "./middleware/rate-limit.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { seedAdminUsers } from "./db/seed-admin.js";
+import { seedDefaultSources } from "./db/seed-sources.js";
 import { runMigrations } from "./db/migrate.js";
 
 // ─── Route modules ───
@@ -124,7 +125,12 @@ async function bootstrap() {
     await seedAdminUsers();
     console.log("[bootstrap] Admin user check complete");
 
-    // 3. Start server
+    // 3. Seed default sources for existing agents
+    console.log("[bootstrap] Seeding default sources...");
+    await seedDefaultSources();
+    console.log("[bootstrap] Default sources check complete");
+
+    // 4. Start server
     app.listen(PORT, () => {
       // eslint-disable-next-line no-console
       console.log(`[api] Server running on port ${PORT} (${env.NODE_ENV})`);

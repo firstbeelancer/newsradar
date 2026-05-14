@@ -38,22 +38,22 @@ export function AgentCard({ agent, onEdit, onDelete, onCollect }: AgentCardProps
   const colorClass = colorMap[agent.color] || colorMap.default;
 
   return (
-    <Card className="group transition-all hover:shadow-md">
+    <Card className="group transition-all hover:shadow-md overflow-hidden">
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
           <Link
             to="/agents/$id"
             params={{ id: agent.id }}
             className={cn(
-              'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-transform group-hover:scale-105',
+              'flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-xl transition-transform group-hover:scale-105',
               colorClass
             )}
           >
             {icon}
           </Link>
 
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1 overflow-hidden">
+            <div className="flex items-center gap-2 flex-wrap">
               <Link
                 to="/agents/$id"
                 params={{ id: agent.id }}
@@ -75,7 +75,7 @@ export function AgentCard({ agent, onEdit, onDelete, onCollect }: AgentCardProps
               </p>
             )}
 
-            <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+            <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
               <span className="flex items-center gap-1">
                 <CircleDot className="h-3 w-3" />
                 {agent.article_count ?? 0} новостей
@@ -89,7 +89,7 @@ export function AgentCard({ agent, onEdit, onDelete, onCollect }: AgentCardProps
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+              <Button variant="ghost" size="icon-sm" className="shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>

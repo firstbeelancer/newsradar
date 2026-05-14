@@ -29,7 +29,7 @@ export async function createWorkspace(userId: string, name: string) {
   return workspace;
 }
 
-export async function updateWorkspace(userId: string, name: string) {
+export async function updateWorkspace(userId: string, name?: string, config?: Record<string, unknown>) {
   const workspace = await db.query.workspaces.findFirst({
     where: eq(workspaces.userId, userId),
   });
@@ -37,9 +37,16 @@ export async function updateWorkspace(userId: string, name: string) {
     throw new AppError(404, "Workspace not found", "WORKSPACE_NOT_FOUND");
   }
 
+  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  if (name !== undefined) updates.name = name;
+  if (config !== undefined) {
+    // Merge config with existing config
+    updates.config = { ...(workspace.config as Record<string, unknown> || {}), ...config };
+  }
+
   const [updated] = await db
     .update(workspaces)
-    .set({ name, updatedAt: new Date() })
+    .set(updates)
     .where(eq(workspaces.id, workspace.id))
     .returning();
 

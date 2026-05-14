@@ -7,6 +7,7 @@ import {
   FileText,
   Cpu,
   BarChart3,
+  MessageSquare,
 } from 'lucide-react';
 
 const settingsNav = [
@@ -15,6 +16,7 @@ const settingsNav = [
   { to: '/settings/templates', label: 'Шаблоны', icon: FileText },
   { to: '/settings/ai-providers', label: 'AI провайдеры', icon: Cpu },
   { to: '/settings/scoring', label: 'Скоринг', icon: BarChart3 },
+  { to: '/settings/prompts', label: 'Промпты', icon: MessageSquare },
 ];
 
 export function SettingsLayout() {

@@ -1,5 +1,6 @@
 import { Sidebar } from './sidebar';
 import { MobileNav } from './mobile-nav';
+import { StatusBar } from './status-bar';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -15,13 +16,14 @@ export function AppShell({ children }: AppShellProps) {
         <Sidebar />
       </div>
 
-      <main className="relative min-h-[100dvh] pb-20 md:ml-64 md:pb-0">
+      <main className="relative min-h-[100dvh] pb-20 md:ml-64 md:pb-14">
         <div className="mx-auto max-w-5xl p-4 md:p-6 lg:p-8">
           {children}
         </div>
       </main>
 
       <MobileNav />
+      <StatusBar />
     </div>
   );
 }

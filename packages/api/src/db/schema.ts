@@ -49,6 +49,7 @@ export const workspaces = pgTable(
       .notNull(),
     name: varchar("name", { length: 255 }).notNull(),
     plan: varchar("plan", { length: 50 }).default("free").notNull(),
+    config: jsonb("config").default({}).notNull(),
     periodEnd: timestamp("period_end", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

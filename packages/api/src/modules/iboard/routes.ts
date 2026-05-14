@@ -15,10 +15,10 @@ const leaderboardQuerySchema = z.object({
   limit: z.coerce.number().min(1).max(100).default(20),
 });
 
-// ─── Routes (all Pro-only via planCheck) ───
+// ─── Routes ───
 
-// GET /api/v1/iboard/stats — key metrics
-router.get("/stats", authMiddleware, planCheck("iboard"), async (req, res, next) => {
+// GET /api/v1/iboard/stats — key metrics (available for ALL plans, basic stats)
+router.get("/stats", authMiddleware, async (req, res, next) => {
   try {
     const workspaceId = req.query.workspaceId as string;
     if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
@@ -30,7 +30,7 @@ router.get("/stats", authMiddleware, planCheck("iboard"), async (req, res, next)
   }
 });
 
-// GET /api/v1/iboard/timeline — activity timeline
+// GET /api/v1/iboard/timeline — activity timeline (Pro-only)
 router.get("/timeline", authMiddleware, planCheck("iboard"), async (req, res, next) => {
   try {
     const workspaceId = req.query.workspaceId as string;
