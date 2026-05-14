@@ -209,6 +209,15 @@ export async function listFavorites(
   });
 }
 
+export async function deleteAllArticles(workspaceId: string) {
+  const deleted = await db
+    .delete(articles)
+    .where(eq(articles.workspaceId, workspaceId))
+    .returning({ id: articles.id });
+
+  return { deleted: deleted.length };
+}
+
 // ─── Article with score details ───
 
 export async function getArticleWithScore(id: string, workspaceId: string) {

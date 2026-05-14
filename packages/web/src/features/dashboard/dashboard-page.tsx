@@ -2,28 +2,26 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useAuthStore } from '@shared/stores/auth-store';
 import { useAgentsStore } from '@shared/stores/agents-store';
-import { articlesApi } from '@shared/api/client';
+import { articlesApi, operationLogsApi } from '@shared/api/client';
 import { Button } from '@shared/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
 import { Skeleton } from '@shared/ui/skeleton';
 import { Avatar, AvatarFallback } from '@shared/ui/avatar';
-import { Separator } from '@shared/ui/separator';
 import { AgentCollectDialog } from '@/features/agents/agent-collect-dialog';
 import { useToast } from '@shared/ui/toast';
 import {
   Plus,
   Bot,
   Bookmark,
-  Clock,
   ArrowRight,
   Newspaper,
   TrendingUp,
   Zap,
   ChevronRight,
-  CircleDot,
+  Trash2,
 } from 'lucide-react';
-import type { Article } from '@shared/api/client';
+import type { Article, OperationLog } from '@shared/api/client';
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -39,12 +37,16 @@ export function DashboardPage() {
   const [favorites, setFavorites] = useState<Article[]>([]);
   const [favoritesLoading, setFavoritesLoading] = useState(true);
   const [favoritesCount, setFavoritesCount] = useState(0);
-  const [totalArticles, setTotalArticles] = useState(0);
+  const [operationLogs, setOperationLogs] = useState<OperationLog[]>([]);
+  const [operationLogsLoading, setOperationLogsLoading] = useState(true);
+  const [operationLogsError, setOperationLogsError] = useState<string | null>(null);
+  const [deleteAllLoading, setDeleteAllLoading] = useState(false);
   const [collectDialogOpen, setCollectDialogOpen] = useState(false);
 
   useEffect(() => {
     fetchAgents();
     loadFavorites();
+    loadOperationLogs();
   }, [fetchAgents]);
 
   const loadFavorites = async () => {
@@ -53,11 +55,6 @@ export function DashboardPage() {
       const response = await articlesApi.list({ favorites_only: true }, undefined, 5);
       setFavorites(response.data);
       setFavoritesCount(response.data.length);
-
-      // Load total articles count (approximate from first page)
-      const allArticles = await articlesApi.list({}, undefined, 1);
-      // We can't get exact total from cursor pagination, so estimate
-      setTotalArticles(allArticles.data.length > 0 ? Math.max(response.data.length, 1) : 0);
     } catch {
       setFavorites([]);
     } finally {
@@ -65,12 +62,49 @@ export function DashboardPage() {
     }
   };
 
+  const loadOperationLogs = async () => {
+    setOperationLogsLoading(true);
+    setOperationLogsError(null);
+    try {
+      const response = await operationLogsApi.list(undefined, 6);
+      setOperationLogs(response.data);
+    } catch (err) {
+      setOperationLogs([]);
+      setOperationLogsError(err instanceof Error ? err.message : 'Не удалось загрузить журнал');
+    } finally {
+      setOperationLogsLoading(false);
+    }
+  };
+
   const handleCollect = async (agentId: string) => {
     try {
-      await collectAgent(agentId);
+      const operationId = await collectAgent(agentId);
       addToast({ title: 'Сбор запущен', description: 'Агент собирает новости', variant: 'success' });
+      void loadOperationLogs();
+      return operationId;
     } catch {
       // Error handled by store
+      return '';
+    }
+  };
+
+  const handleDeleteAllArticles = async () => {
+    const confirmed = window.confirm('Удалить все новости в текущем рабочем пространстве? Действие нельзя отменить.');
+    if (!confirmed) return;
+
+    setDeleteAllLoading(true);
+    try {
+      const result = await articlesApi.deleteAll();
+      addToast({ title: 'Новости удалены', description: `Удалено: ${result.deleted}`, variant: 'success' });
+      await Promise.all([fetchAgents(), loadFavorites(), loadOperationLogs()]);
+    } catch (err) {
+      addToast({
+        title: 'Не удалось удалить новости',
+        description: err instanceof Error ? err.message : 'Попробуй ещё раз',
+        variant: 'danger',
+      });
+    } finally {
+      setDeleteAllLoading(false);
     }
   };
 
@@ -105,10 +139,16 @@ export function DashboardPage() {
             Вот что произошло сегодня
           </p>
         </div>
-        <Button onClick={() => setCollectDialogOpen(true)}>
-          <Plus className="h-4 w-4" />
-          <span className="hidden sm:inline">Собрать новости</span>
-        </Button>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="danger" onClick={handleDeleteAllArticles} loading={deleteAllLoading}>
+            <Trash2 className="h-4 w-4" />
+            <span className="hidden sm:inline">Удалить все новости</span>
+          </Button>
+          <Button onClick={() => setCollectDialogOpen(true)}>
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Собрать новости</span>
+          </Button>
+        </div>
       </div>
 
       {/* Stats cards */}
@@ -236,18 +276,44 @@ export function DashboardPage() {
               <CardTitle>Последние операции</CardTitle>
               <CardDescription>История последних действий</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-1">
-              {/* Real logs will be here from previous step */}
-              <div className="flex items-center justify-between rounded-lg p-3 text-sm text-muted-foreground">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted">
-                    <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <CardContent className="space-y-2">
+              {operationLogsLoading ? (
+                Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton key={i} className="h-14" />
+                ))
+              ) : operationLogsError ? (
+                <p className="rounded-lg border border-danger/30 bg-danger-light p-3 text-sm text-danger">
+                  {operationLogsError}
+                </p>
+              ) : operationLogs.length === 0 ? (
+                <p className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">
+                  Журнал пока пуст
+                </p>
+              ) : (
+                operationLogs.map((log) => (
+                  <div key={log.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted">
+                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{log.message || log.operation_type}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(log.created_at).toLocaleString('ru-RU', {
+                            day: '2-digit',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                    <Badge variant={log.status === 'success' ? 'success' : log.status === 'failed' ? 'danger' : 'default'}>
+                      {log.status}
+                    </Badge>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium">Операции загружаются...</p>
-                  </div>
-                </div>
-              </div>
+                ))
+              )}
             </CardContent>
           </Card>
         </div>

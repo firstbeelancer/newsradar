@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from '@tanstack/react-router';
+import { useNavigate } from '@tanstack/react-router';
 import { Button } from '@shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
@@ -32,8 +32,11 @@ const colorMap: Record<string, string> = {
   default: 'bg-accent-light text-accent',
 };
 
-export function AgentDetailPage() {
-  const { id } = useParams({ from: '/agents/$id' });
+interface AgentDetailPageProps {
+  agentId: string;
+}
+
+export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
   const navigate = useNavigate();
   const { addToast } = useToast();
   const {

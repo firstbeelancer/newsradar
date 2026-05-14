@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
+import type { CSSProperties, FormEvent } from 'react';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@shared/ui/dialog';
 import { Label } from '@shared/ui/label';
-import type { Agent, CreateAgentDto, UpdateAgentDto, ScoringCriterion, ChipFilter } from '@shared/api/client';
-import { Bot, FlaskConical, TrendingUp, Palette, Shield, Brain, Megaphone, Heart, Paintbrush, Plus, X, GripVertical } from 'lucide-react';
+import type { Agent, CreateAgentDto, UpdateAgentDto, ChipFilter } from '@shared/api/client';
+import { Shield, Brain, Megaphone, Heart, Paintbrush, Plus, X, GripVertical } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 
 const SUBJECT_AREAS = [
@@ -26,13 +27,10 @@ const DEFAULT_WEIGHTS = {
   sourceTrust: 0.20,
 };
 
-const CRITERION_LABELS: Record<string, string> = {
-  ai_relevance: 'AI-релевантность',
-  keyword_match: 'Совпадение ключевых слов',
-  freshness: 'Свежесть',
-  source_trust: 'Доверие к источнику',
-  custom: 'Свой критерий',
-};
+function sliderFillStyle(value: number): CSSProperties {
+  const pct = Math.max(0, Math.min(100, Math.round(value * 100)));
+  return { '--slider-pct': `${pct}%` } as CSSProperties;
+}
 
 interface AgentFormProps {
   agent: Agent | null;
@@ -149,7 +147,7 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
     });
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
 
@@ -349,7 +347,8 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
                       max={100}
                       value={Math.round(value * 100)}
                       onChange={(e) => updateWeight(key as keyof typeof weights, Number(e.target.value) / 100)}
-                      className="w-full h-2 rounded-full appearance-none cursor-pointer accent-accent bg-border"
+                      className="slider-filled w-full cursor-pointer"
+                      style={sliderFillStyle(value)}
                     />
                   </div>
                 );

@@ -91,8 +91,13 @@ const agentNewRoute = createRoute({
 const agentDetailRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/agents/$id',
-  component: AgentDetailPage,
+  component: AgentDetailRouteComponent,
 });
+
+function AgentDetailRouteComponent() {
+  const { id } = agentDetailRoute.useParams();
+  return <AgentDetailPage agentId={id} />;
+}
 
 // ─── Sources ─────────────────────────────────────────────────────────────────
 
@@ -165,6 +170,12 @@ const iboardRoute = createRoute({
   component: IBoardPage,
 });
 
+const analyticsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/analytics',
+  component: IBoardPage,
+});
+
 // ─── Notifications ───────────────────────────────────────────────────────────
 
 const notificationsRoute = createRoute({
@@ -181,33 +192,41 @@ const settingsLayoutRoute = createRoute({
   component: SettingsLayout,
 });
 
+const settingsIndexRoute = createRoute({
+  getParentRoute: () => settingsLayoutRoute,
+  path: '/',
+  beforeLoad: () => {
+    throw redirect({ to: '/settings/profile' });
+  },
+});
+
 const settingsProfileRoute = createRoute({
   getParentRoute: () => settingsLayoutRoute,
-  path: '/settings/profile',
+  path: 'profile',
   component: ProfileSettings,
 });
 
 const settingsAgentsRoute = createRoute({
   getParentRoute: () => settingsLayoutRoute,
-  path: '/settings/agents',
+  path: 'agents',
   component: AgentsSettings,
 });
 
 const settingsTemplatesRoute = createRoute({
   getParentRoute: () => settingsLayoutRoute,
-  path: '/settings/templates',
+  path: 'templates',
   component: TemplatesSettings,
 });
 
 const settingsAIProvidersRoute = createRoute({
   getParentRoute: () => settingsLayoutRoute,
-  path: '/settings/ai-providers',
+  path: 'ai-providers',
   component: AIProvidersSettings,
 });
 
 const settingsScoringRoute = createRoute({
   getParentRoute: () => settingsLayoutRoute,
-  path: '/settings/scoring',
+  path: 'scoring',
   component: ScoringSettings,
 });
 
@@ -228,8 +247,10 @@ const routeTree = rootRoute.addChildren([
     generatedPostsRoute,
     subscriptionRoute,
     iboardRoute,
+    analyticsRoute,
     notificationsRoute,
     settingsLayoutRoute.addChildren([
+      settingsIndexRoute,
       settingsProfileRoute,
       settingsAgentsRoute,
       settingsTemplatesRoute,

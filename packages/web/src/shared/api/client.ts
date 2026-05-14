@@ -107,6 +107,27 @@ interface BackendGeneratedPost {
   agent_id?: string;
 }
 
+interface BackendOperationLog {
+  id: string;
+  operationType?: string;
+  operation_type?: string;
+  entityType?: string | null;
+  entity_type?: string | null;
+  entityId?: string | null;
+  entity_id?: string | null;
+  status: string;
+  message?: string | null;
+  metadata?: Record<string, unknown> | null;
+  agentId?: string | null;
+  agent_id?: string | null;
+  createdAt?: string;
+  created_at?: string;
+  startedAt?: string;
+  started_at?: string;
+  finishedAt?: string | null;
+  finished_at?: string | null;
+}
+
 // ─── Normalizers ─────────────────────────────────────────────────────────────
 
 function normalizeCursorResponse<TInput, TOutput>(
@@ -173,6 +194,24 @@ export function normalizeGeneratedPost(raw: BackendGeneratedPost): GeneratedPost
     model: raw.model ?? raw.modelSnapshot ?? 'default',
     metadata: raw.metadata,
     created_at: raw.created_at ?? raw.createdAt ?? new Date(0).toISOString(),
+  };
+}
+
+export function normalizeOperationLog(raw: BackendOperationLog): OperationLog {
+  const createdAt = raw.created_at ?? raw.createdAt ?? raw.started_at ?? raw.startedAt ?? new Date(0).toISOString();
+
+  return {
+    id: raw.id,
+    operation_type: raw.operation_type ?? raw.operationType ?? 'operation',
+    entity_type: raw.entity_type ?? raw.entityType ?? undefined,
+    entity_id: raw.entity_id ?? raw.entityId ?? undefined,
+    status: raw.status as OperationLog['status'],
+    message: raw.message ?? undefined,
+    metadata: raw.metadata ?? undefined,
+    agent_id: raw.agent_id ?? raw.agentId ?? undefined,
+    created_at: createdAt,
+    started_at: raw.started_at ?? raw.startedAt ?? createdAt,
+    finished_at: raw.finished_at ?? raw.finishedAt ?? undefined,
   };
 }
 
@@ -410,6 +449,7 @@ export interface Agent {
       freshness: number;
       sourceTrust: number;
     };
+    chipFilters?: Partial<ChipFilter>[];
     fetchSchedule?: string;
     assetPackId?: string;
   };
@@ -593,6 +633,20 @@ export interface GeneratedPost {
   created_at: string;
 }
 
+export interface OperationLog {
+  id: string;
+  operation_type: string;
+  entity_type?: string;
+  entity_id?: string;
+  status: 'pending' | 'running' | 'success' | 'failed' | 'partial' | 'cancelled' | string;
+  message?: string;
+  metadata?: Record<string, unknown>;
+  agent_id?: string;
+  created_at: string;
+  started_at: string;
+  finished_at?: string;
+}
+
 // ─── Scoring Types ───────────────────────────────────────────────────────────
 
 export interface ScoringConfig {
@@ -702,9 +756,9 @@ export const agentsApi = {
     apiGet<BackendCursorResponse<BackendAgent>>(`/agents?limit=${limit}${cursor ? `&cursor=${cursor}` : ''}`).then((payload) =>
       normalizeCursorResponse(payload, normalizeAgent)
     ),
-  get: (id: string) => apiGet<Agent>(`/agents/${id}`),
-  create: (data: CreateAgentDto) => apiPost<Agent, CreateAgentDto>('/agents', data),
-  update: (id: string, data: UpdateAgentDto) => apiPut<Agent, UpdateAgentDto>(`/agents/${id}`, data),
+  get: (id: string) => apiGet<BackendAgent>(`/agents/${id}`).then(normalizeAgent),
+  create: (data: CreateAgentDto) => apiPost<BackendAgent, CreateAgentDto>('/agents', data).then(normalizeAgent),
+  update: (id: string, data: UpdateAgentDto) => apiPut<BackendAgent, UpdateAgentDto>(`/agents/${id}`, data).then(normalizeAgent),
   delete: (id: string) => apiDelete<void>(`/agents/${id}`),
   stats: (id: string) => apiGet<AgentStats>(`/agents/${id}/stats`),
   collect: (id: string) => apiPost<{ operationId?: string; op_id?: string }>(`/agents/${id}/collect`, {}).then((payload) => ({
@@ -777,6 +831,14 @@ export const articlesApi = {
   get: (id: string) => apiGet<BackendArticle>(`/articles/${id}`).then(normalizeArticle),
   favorite: (id: string) => apiPost<BackendArticle, Record<string, never>>(`/articles/${id}/favorite`, {}).then(normalizeArticle),
   unfavorite: (id: string) => apiDelete<BackendArticle>(`/articles/${id}/favorite`).then(normalizeArticle),
+  deleteAll: () => apiDelete<{ deleted: number }>('/articles'),
+};
+
+export const operationLogsApi = {
+  list: (cursor?: string, limit = 8) =>
+    apiGet<BackendCursorResponse<BackendOperationLog>>(`/operation-logs?limit=${limit}${cursor ? `&cursor=${cursor}` : ''}`).then((payload) =>
+      normalizeCursorResponse(payload, normalizeOperationLog)
+    ),
 };
 
 // Templates

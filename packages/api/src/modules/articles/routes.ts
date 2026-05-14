@@ -10,7 +10,9 @@ import {
   addToFavorite,
   removeFromFavorite,
   getArticleWithScore,
+  deleteAllArticles,
 } from "./service.js";
+import { createOperationLog } from "../operation-logs/service.js";
 
 const router = Router();
 
@@ -44,6 +46,30 @@ router.get("/", authMiddleware, async (req, res, next) => {
       isFavorite: filters.isFavorite === "true" ? true : filters.isFavorite === "false" ? false : undefined,
       limit,
       cursor: cursor ?? null,
+    });
+
+    res.json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete("/", authMiddleware, async (req, res, next) => {
+  try {
+    const workspaceId = req.query.workspaceId as string;
+    if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
+
+    const result = await deleteAllArticles(workspaceId);
+    await createOperationLog({
+      userId: req.user!.sub,
+      workspaceId,
+      operationType: "articles_delete_all",
+      entityType: "articles",
+      status: "success",
+      message: `Deleted ${result.deleted} articles`,
+      metadata: { deletedCount: result.deleted },
+      startedAt: new Date(),
+      finishedAt: new Date(),
     });
 
     res.json({ success: true, data: result });
