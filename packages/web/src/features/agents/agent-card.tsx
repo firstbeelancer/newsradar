@@ -13,13 +13,13 @@ import {
 } from '@shared/ui/dropdown-menu';
 import {
   Bot, MoreVertical, Pencil, Trash2, Play, CircleDot, Link2, ChevronDown, ChevronUp,
-  Rss, MessageCircle, Plus,
+  Rss, MessageCircle, Plus, Filter,
   Shield, Brain, Megaphone, Heart, Paintbrush, Globe, Zap, Star,
   Eye, Search, BookOpen, Target, Lightbulb, Compass, Newspaper,
   Hammer, Wrench, type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
-import { agentsApi, type Agent, type Source } from '@shared/api/client';
+import { agentsApi, type Agent, type Source, type ChipFilter } from '@shared/api/client';
 
 interface AgentCardProps {
   agent: Agent;
@@ -136,6 +136,37 @@ function SourceToggleList({ agentId }: { agentId: string }) {
   );
 }
 
+function ChipFilterBadges({ agent }: { agent: Agent }) {
+  const chipFilters: Partial<ChipFilter>[] = agent.chipFilters?.length
+    ? agent.chipFilters
+    : (agent.config?.chipFilters ?? []);
+
+  if (chipFilters.length === 0) return null;
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-1">
+      <Filter className="h-3 w-3 text-muted-foreground shrink-0" />
+      {chipFilters.filter(cf => cf.isActive !== false).slice(0, 5).map((cf) => (
+        <span
+          key={cf.key}
+          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium border border-border/60 bg-muted/40 text-muted-foreground"
+        >
+          <span
+            className="h-1.5 w-1.5 rounded-full shrink-0"
+            style={{ backgroundColor: cf.color && cf.color !== 'default' ? cf.color : '#94a3b8' }}
+          />
+          {cf.label ?? cf.key}
+        </span>
+      ))}
+      {chipFilters.filter(cf => cf.isActive !== false).length > 5 && (
+        <span className="text-[10px] text-muted-foreground">
+          +{chipFilters.filter(cf => cf.isActive !== false).length - 5}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function AgentCard({ agent, onEdit, onDelete, onCollect }: AgentCardProps) {
   const navigate = useNavigate();
   const AgentIcon = getAgentIcon(agent.icon);
@@ -181,6 +212,9 @@ export function AgentCard({ agent, onEdit, onDelete, onCollect }: AgentCardProps
               </p>
             )}
 
+            {/* Chip Filters */}
+            <ChipFilterBadges agent={agent} />
+
             <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
               <span className="flex items-center gap-1">
                 <CircleDot className="h-3 w-3" />
@@ -193,19 +227,18 @@ export function AgentCard({ agent, onEdit, onDelete, onCollect }: AgentCardProps
                   setSourcesOpen(!sourcesOpen);
                 }}
                 className={cn(
-                  'flex items-center gap-1 transition-colors cursor-pointer rounded px-1.5 py-0.5 -mx-1.5 -my-0.5',
+                  'flex items-center gap-1.5 transition-colors cursor-pointer rounded-md px-2 py-1 -mx-2 -my-1 border',
                   sourcesOpen
-                    ? 'text-accent bg-accent/10'
-                    : 'text-muted-foreground hover:text-accent hover:bg-accent/5'
+                    ? 'text-accent bg-accent/10 border-accent/30'
+                    : 'text-muted-foreground hover:text-accent hover:bg-accent/5 border-transparent hover:border-accent/20'
                 )}
               >
                 <Link2 className="h-3 w-3" />
-                {agent.source_count ?? 0} источников
-                {sourcesOpen ? (
-                  <ChevronUp className="h-3 w-3" />
-                ) : (
-                  <ChevronDown className="h-3 w-3" />
-                )}
+                <span>{agent.source_count ?? 0} источников</span>
+                <Switch
+                  checked={sourcesOpen}
+                  className="scale-[0.6] shrink-0 pointer-events-none"
+                />
               </button>
             </div>
           </div>
@@ -238,13 +271,19 @@ export function AgentCard({ agent, onEdit, onDelete, onCollect }: AgentCardProps
 
         {/* Sources toggle panel */}
         {sourcesOpen && (
-          <div className="mt-3 pt-3 border-t border-border/60">
+          <div className="mt-3 pt-3 border-t border-border/60 animate-in slide-in-from-top-1 duration-200">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-medium text-foreground">Источники</p>
+              <div className="flex items-center gap-2">
+                <Link2 className="h-3.5 w-3.5 text-accent" />
+                <p className="text-xs font-semibold text-foreground">Источники агента</p>
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                  {agent.source_count ?? 0}
+                </Badge>
+              </div>
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 px-2 text-[10px]"
+                className="h-6 px-2 text-[10px] text-accent hover:text-accent"
                 onClick={() => navigate({ to: '/agents/$id', params: { id: agent.id } })}
               >
                 <Plus className="h-3 w-3 mr-0.5" />

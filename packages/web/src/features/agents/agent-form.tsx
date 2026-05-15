@@ -4,9 +4,10 @@ import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@shared/ui/dialog';
 import { Label } from '@shared/ui/label';
+import { Badge } from '@shared/ui/badge';
 import { useToast } from '@shared/ui/toast';
 import type { Agent, CreateAgentDto, UpdateAgentDto, ChipFilter } from '@shared/api/client';
-import { Shield, Brain, Megaphone, Heart, Paintbrush, Plus, X, GripVertical, Hammer, Wrench, Bot, Globe, Zap, Star, Eye, Search, BookOpen, Rss, MessageCircle, Target, Lightbulb, Compass, Newspaper, type LucideIcon } from 'lucide-react';
+import { Shield, Brain, Megaphone, Heart, Paintbrush, Plus, X, GripVertical, Hammer, Wrench, Bot, Globe, Zap, Star, Eye, Search, BookOpen, Rss, MessageCircle, Target, Lightbulb, Compass, Newspaper, Settings2, Sliders, Filter, MessageSquare, type LucideIcon } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 
 const SUBJECT_AREAS = [
@@ -206,39 +207,46 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
   };
 
   const tabs = [
-    { key: 'basic' as const, label: 'Основное' },
-    { key: 'scoring' as const, label: 'Веса скоринга' },
-    { key: 'filters' as const, label: 'Чип-фильтры' },
-    { key: 'prompts' as const, label: 'Промпты' },
+    { key: 'basic' as const, label: 'Основное', icon: Settings2 },
+    { key: 'scoring' as const, label: 'Скоринг', icon: Sliders },
+    { key: 'filters' as const, label: 'Чип-фильтры', icon: Filter },
+    { key: 'prompts' as const, label: 'Промпты', icon: MessageSquare },
   ];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{agent ? 'Редактировать агента' : 'Новый агент'}</DialogTitle>
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto p-0">
+        <DialogHeader className="px-6 pt-6 pb-0">
+          <DialogTitle className="text-xl">{agent ? 'Редактировать агента' : 'Новый агент'}</DialogTitle>
         </DialogHeader>
 
         {/* Tabs */}
-        <div className="flex gap-0.5 border-b border-border/60 bg-muted/40 rounded-t-lg px-1 pt-1">
-          {tabs.map(t => (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => setTab(t.key)}
-              className={cn(
-                'px-4 py-2 text-sm font-medium rounded-t-lg transition-all relative',
-                tab === t.key
-                  ? 'bg-white text-accent shadow-sm after:absolute after:bottom-0 after:left-2 after:right-2 after:h-0.5 after:bg-accent after:rounded-full'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-white/50'
-              )}
-            >
-              {t.label}
-            </button>
-          ))}
+        <div className="flex gap-1 border-b border-border/60 bg-muted/30 px-4 py-0">
+          {tabs.map(t => {
+            const TabIcon = t.icon;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setTab(t.key)}
+                className={cn(
+                  'flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium transition-all relative',
+                  tab === t.key
+                    ? 'text-accent'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                <TabIcon className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{t.label}</span>
+                {tab === t.key && (
+                  <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-accent rounded-full" />
+                )}
+              </button>
+            );
+          })}
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="px-6 pb-6 space-y-5">
           {/* === TAB: Basic === */}
           {tab === 'basic' && (
             <>
@@ -259,9 +267,9 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
                   placeholder="Краткое описание агента..."
                   rows={2}
                   className={cn(
-                    'flex w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground transition-colors',
+                    'flex w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-foreground transition-colors',
                     'placeholder:text-muted-foreground',
-                    'focus:outline-none focus:ring-2 focus:ring-accent',
+                    'focus:outline-none focus:ring-2 focus:ring-accent focus:bg-muted/20',
                     'resize-none'
                   )}
                 />
@@ -278,10 +286,10 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
                         type="button"
                         onClick={() => { setSubjectArea(subjectArea === area.id ? '' : area.id); setCustomSubjectArea(''); }}
                         className={cn(
-                          'flex items-center gap-3 px-3 py-2 rounded-lg border-2 transition-all text-left',
+                          'flex items-center gap-3 px-3.5 py-2.5 rounded-xl border-2 transition-all text-left',
                           subjectArea === area.id
-                            ? 'border-accent bg-accent-light'
-                            : 'border-border hover:border-muted-foreground'
+                            ? 'border-accent bg-accent-light shadow-sm'
+                            : 'border-border/80 hover:border-muted-foreground/40 hover:bg-muted/30'
                         )}
                       >
                         <Icon className="h-5 w-5 shrink-0" style={{ color: area.color }} />
@@ -299,6 +307,7 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
                     value={customSubjectArea}
                     onChange={(e) => { setCustomSubjectArea(e.target.value); if (e.target.value) setSubjectArea(''); }}
                     placeholder="Например: Финтех, E-commerce, Автопром..."
+                    className="rounded-lg"
                   />
                 </div>
               </div>
@@ -326,7 +335,7 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } }}
                     placeholder="Добавить тег..."
                     className={cn(
-                      'flex-1 rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground',
+                      'flex-1 rounded-lg border border-border bg-card px-3 py-1.5 text-sm text-foreground',
                       'focus:outline-none focus:ring-2 focus:ring-accent'
                     )}
                   />
@@ -350,10 +359,10 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
                         onClick={() => setIcon(opt.id)}
                         title={opt.label}
                         className={cn(
-                          'flex h-10 w-10 items-center justify-center rounded-lg border-2 transition-all',
+                          'flex h-10 w-10 items-center justify-center rounded-xl border-2 transition-all',
                           icon === opt.id
-                            ? 'border-accent bg-accent-light text-accent scale-110'
-                            : 'border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground'
+                            ? 'border-accent bg-accent-light text-accent scale-110 shadow-sm'
+                            : 'border-border/80 text-muted-foreground hover:border-muted-foreground/40 hover:text-foreground hover:bg-muted/30'
                         )}
                       >
                         <Icon className="h-5 w-5" />
@@ -388,57 +397,73 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
           {tab === 'scoring' && (
             <>
               <div className="space-y-1">
-                <h3 className="text-sm font-semibold">Веса критериев AI-скоринга</h3>
+                <div className="flex items-center gap-2">
+                  <Sliders className="h-4 w-4 text-accent" />
+                  <h3 className="text-sm font-semibold">Веса критериев AI-скоринга</h3>
+                </div>
                 <p className="text-xs text-muted-foreground">
                   AI оценивает новость по 5 критериям (0–100), затем считается взвешенное среднее.
                   Сумма весов = 100.
                 </p>
               </div>
 
-              {Object.entries(weights).map(([key, value]) => {
-                const labelMap: Record<string, string> = {
-                  relevance: 'Релевантность',
-                  novelty: 'Новизна',
-                  hype: 'Вирусный потенциал',
-                  practical: 'Практическая польза',
-                  local: 'Локальный контекст (РФ)',
-                };
-                const descMap: Record<string, string> = {
-                  relevance: 'Соответствие теме агента и интересам аудитории',
-                  novelty: 'Свежесть новости, не повторяет старые темы',
-                  hype: 'Потенциал для обсуждения, репостов, интереса',
-                  practical: 'Применимость в работе, бизнесе, ИТ',
-                  local: 'Актуальность для РФ и русскоязычной аудитории',
-                };
-                return (
-                  <div key={key} className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <Label className="text-sm">{labelMap[key] || key}</Label>
-                        <p className="text-xs text-muted-foreground">{descMap[key] || ''}</p>
+              <div className="space-y-4">
+                {Object.entries(weights).map(([key, value]) => {
+                  const labelMap: Record<string, string> = {
+                    relevance: 'Релевантность',
+                    novelty: 'Новизна',
+                    hype: 'Вирусный потенциал',
+                    practical: 'Практическая польза',
+                    local: 'Локальный контекст (РФ)',
+                  };
+                  const descMap: Record<string, string> = {
+                    relevance: 'Соответствие теме агента и интересам аудитории',
+                    novelty: 'Свежесть новости, не повторяет старые темы',
+                    hype: 'Потенциал для обсуждения, репостов, интереса',
+                    practical: 'Применимость в работе, бизнесе, ИТ',
+                    local: 'Актуальность для РФ и русскоязычной аудитории',
+                  };
+                  const colorMap: Record<string, string> = {
+                    relevance: '#3b82f6',
+                    novelty: '#8b5cf6',
+                    hype: '#f97316',
+                    practical: '#10b981',
+                    local: '#06b6d4',
+                  };
+                  return (
+                    <div key={key} className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="h-2 w-2 rounded-full shrink-0"
+                            style={{ backgroundColor: colorMap[key] || '#94a3b8' }}
+                          />
+                          <Label className="text-sm">{labelMap[key] || key}</Label>
+                        </div>
+                        <span className="text-sm font-mono text-accent tabular-nums font-medium">
+                          {value}%
+                        </span>
                       </div>
-                      <span className="text-sm font-mono text-accent tabular-nums">
-                        {value}%
-                      </span>
+                      <p className="text-[11px] text-muted-foreground pl-4">{descMap[key] || ''}</p>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={value}
+                        onChange={(e) => updateWeight(key as keyof typeof weights, Number(e.target.value))}
+                        className="slider-filled w-full cursor-pointer"
+                        style={sliderFillStyle(value / 100)}
+                      />
                     </div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      value={value}
-                      onChange={(e) => updateWeight(key as keyof typeof weights, Number(e.target.value))}
-                      className="slider-filled w-full cursor-pointer"
-                      style={sliderFillStyle(value / 100)}
-                    />
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
 
-              <div className="flex items-center justify-between pt-2 border-t border-border">
+              <div className="flex items-center justify-between p-3 rounded-xl bg-muted/50 border border-border/60">
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">Сумма весов:</span>
                   <span className={cn(
-                    'text-sm font-mono tabular-nums font-medium',
+                    'text-sm font-mono tabular-nums font-bold',
                     Math.abs(Object.values(weights).reduce((a, b) => a + b, 0) - 100) < 5
                       ? 'text-green-600'
                       : 'text-red-600'
@@ -447,46 +472,48 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
                   </span>
                 </div>
                 {Math.abs(Object.values(weights).reduce((a, b) => a + b, 0) - 100) >= 5 && (
-                  <span className="text-xs text-red-500">Сумма должна быть ~100%</span>
+                  <span className="text-xs text-red-500 font-medium">Сумма должна быть ~100%</span>
                 )}
               </div>
 
-              <div className="p-3 rounded-lg bg-accent/5 border border-accent/15">
+              <div className="p-3 rounded-xl bg-accent/5 border border-accent/15">
                 <p className="text-xs text-muted-foreground">
                   <strong className="text-foreground">Гибридная формула:</strong> AI оценивает по 5 критериям → взвешенное среднее = ai_score.
-                  Затем: <code className="text-[11px] bg-muted px-1 py-0.5 rounded">final = ai_score×0.55 + keyword×0.20 + freshness×0.15 + source_trust×0.10</code>
+                  Затем: <code className="text-[11px] bg-muted px-1 py-0.5 rounded font-mono">final = ai_score×0.55 + keyword×0.20 + freshness×0.15 + source_trust×0.10</code>
                 </p>
               </div>
 
-              <div className="space-y-1.5">
-                <Label>Целевая аудитория</Label>
-                <input
-                  value={targetAudience}
-                  onChange={(e) => setTargetAudience(e.target.value)}
-                  placeholder="Например: специалисты по кибербезопасности"
-                  className={cn(
-                    'w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground',
-                    'focus:outline-none focus:ring-2 focus:ring-accent'
-                  )}
-                />
-              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label>Целевая аудитория</Label>
+                  <input
+                    value={targetAudience}
+                    onChange={(e) => setTargetAudience(e.target.value)}
+                    placeholder="Например: специалисты по кибербезопасности"
+                    className={cn(
+                      'w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground',
+                      'focus:outline-none focus:ring-2 focus:ring-accent'
+                    )}
+                  />
+                </div>
 
-              <div className="space-y-1.5">
-                <Label>Тональность</Label>
-                <select
-                  value={tone}
-                  onChange={(e) => setTone(e.target.value)}
-                  className={cn(
-                    'w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground',
-                    'focus:outline-none focus:ring-2 focus:ring-accent'
-                  )}
-                >
-                  <option value="профессиональный">Профессиональный</option>
-                  <option value="дружелюбный">Дружелюбный</option>
-                  <option value="академический">Академический</option>
-                  <option value="неформальный">Неформальный</option>
-                  <option value="экспертный">Экспертный</option>
-                </select>
+                <div className="space-y-1.5">
+                  <Label>Тональность</Label>
+                  <select
+                    value={tone}
+                    onChange={(e) => setTone(e.target.value)}
+                    className={cn(
+                      'w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground',
+                      'focus:outline-none focus:ring-2 focus:ring-accent'
+                    )}
+                  >
+                    <option value="профессиональный">Профессиональный</option>
+                    <option value="дружелюбный">Дружелюбный</option>
+                    <option value="академический">Академический</option>
+                    <option value="неформальный">Неформальный</option>
+                    <option value="экспертный">Экспертный</option>
+                  </select>
+                </div>
               </div>
             </>
           )}
@@ -495,74 +522,117 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
           {tab === 'filters' && (
             <>
               <div className="space-y-1">
-                <h3 className="text-sm font-semibold">Чип-фильтры</h3>
+                <div className="flex items-center gap-2">
+                  <Filter className="h-4 w-4 text-accent" />
+                  <h3 className="text-sm font-semibold">Чип-фильтры</h3>
+                  <Badge variant="outline" className="text-[10px]">{chipFilters.length}</Badge>
+                </div>
                 <p className="text-xs text-muted-foreground">
                   Фильтры применяются при скоринге. Модифицируют итоговый score статьи.
                 </p>
               </div>
 
-              {chipFilters.map((cf, i) => (
-                <div key={i} className="p-3 rounded-lg border border-border space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <GripVertical className="h-4 w-4 text-muted-foreground" />
-                      <input
-                        value={cf.label || ''}
-                        onChange={(e) => updateChipFilter(i, 'label', e.target.value)}
-                        placeholder="Название фильтра"
-                        className="text-sm font-medium bg-transparent border-none focus:outline-none"
-                      />
-                    </div>
-                    <button type="button" onClick={() => removeChipFilter(i)} className="text-muted-foreground hover:text-destructive">
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label className="text-xs">Оператор</Label>
-                      <select
-                        value={cf.operator || 'contains'}
-                        onChange={(e) => updateChipFilter(i, 'operator', e.target.value)}
-                        className="w-full rounded-md border border-border bg-card px-2 py-1 text-xs"
+              <div className="space-y-3">
+                {chipFilters.map((cf, i) => (
+                  <div
+                    key={i}
+                    className="group relative p-4 rounded-xl border border-border/80 bg-card hover:border-accent/30 transition-colors space-y-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div
+                          className="h-3 w-3 rounded-full shrink-0 ring-2 ring-offset-1 ring-offset-card"
+                          style={{
+                            backgroundColor: cf.color && cf.color !== 'default' ? cf.color : '#94a3b8',
+                            ringColor: cf.color && cf.color !== 'default' ? cf.color : '#94a3b8',
+                          }}
+                        />
+                        <input
+                          value={cf.label || ''}
+                          onChange={(e) => updateChipFilter(i, 'label', e.target.value)}
+                          placeholder="Название фильтра"
+                          className="text-sm font-semibold bg-transparent border-none focus:outline-none focus:ring-0 placeholder:text-muted-foreground/50"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeChipFilter(i)}
+                        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all p-1 rounded-md hover:bg-destructive/10"
                       >
-                        <option value="contains">Содержит</option>
-                        <option value="not_contains">Не содержит</option>
-                        <option value="equals">Равно</option>
-                        <option value="starts_with">Начинается с</option>
-                        <option value="regex">Регулярное выражение</option>
-                        <option value="in">В списке</option>
-                        <option value="gt">Больше</option>
-                        <option value="lt">Меньше</option>
-                      </select>
+                        <X className="h-3.5 w-3.5" />
+                      </button>
                     </div>
-                    <div>
-                      <Label className="text-xs">Модификатор score</Label>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-[11px] text-muted-foreground">Оператор</Label>
+                        <select
+                          value={cf.operator || 'contains'}
+                          onChange={(e) => updateChipFilter(i, 'operator', e.target.value)}
+                          className="w-full rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent"
+                        >
+                          <option value="contains">Содержит</option>
+                          <option value="not_contains">Не содержит</option>
+                          <option value="equals">Равно</option>
+                          <option value="starts_with">Начинается с</option>
+                          <option value="regex">Регулярное выражение</option>
+                          <option value="in">В списке</option>
+                          <option value="gt">Больше</option>
+                          <option value="lt">Меньше</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[11px] text-muted-foreground">Модификатор score</Label>
+                        <input
+                          type="number"
+                          step={0.05}
+                          min={-1}
+                          max={1}
+                          value={cf.scoreModifier ?? 0}
+                          onChange={(e) => updateChipFilter(i, 'scoreModifier', Number(e.target.value))}
+                          className={cn(
+                            'w-full rounded-lg border bg-card px-2.5 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-accent',
+                            (cf.scoreModifier ?? 0) > 0 ? 'border-green-300 text-green-700' :
+                            (cf.scoreModifier ?? 0) < 0 ? 'border-red-300 text-red-700' :
+                            'border-border'
+                          )}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label className="text-[11px] text-muted-foreground">Шаблон / Значение</Label>
                       <input
-                        type="number"
-                        step={0.05}
-                        min={-1}
-                        max={1}
-                        value={cf.scoreModifier ?? 0}
-                        onChange={(e) => updateChipFilter(i, 'scoreModifier', Number(e.target.value))}
-                        className="w-full rounded-md border border-border bg-card px-2 py-1 text-xs"
+                        value={cf.pattern || ''}
+                        onChange={(e) => updateChipFilter(i, 'pattern', e.target.value)}
+                        placeholder="Например: уязвимость, CVE, эксплойт"
+                        className="w-full rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent"
                       />
                     </div>
-                  </div>
 
-                  <div>
-                    <Label className="text-xs">Шаблон / Значение</Label>
-                    <input
-                      value={cf.pattern || ''}
-                      onChange={(e) => updateChipFilter(i, 'pattern', e.target.value)}
-                      placeholder="Например: уязвимость, CVE, эксплойт"
-                      className="w-full rounded-md border border-border bg-card px-2 py-1 text-xs"
-                    />
+                    {/* Color chips */}
+                    <div className="space-y-1">
+                      <Label className="text-[11px] text-muted-foreground">Цвет</Label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {COLORS.slice(0, 8).map(c => (
+                          <button
+                            key={c}
+                            type="button"
+                            onClick={() => updateChipFilter(i, 'color', c)}
+                            className={cn(
+                              'h-5 w-5 rounded-full transition-all border-2',
+                              cf.color === c ? 'border-foreground scale-110' : 'border-transparent hover:scale-105'
+                            )}
+                            style={{ backgroundColor: c }}
+                          />
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
 
-              <Button type="button" variant="outline" onClick={addChipFilter} className="w-full">
+              <Button type="button" variant="outline" onClick={addChipFilter} className="w-full border-dashed">
                 <Plus className="h-4 w-4 mr-2" /> Добавить чип-фильтр
               </Button>
             </>
@@ -572,7 +642,10 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
           {tab === 'prompts' && (
             <>
               <div className="space-y-1">
-                <h3 className="text-sm font-semibold">Промпты для генерации</h3>
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4 text-accent" />
+                  <h3 className="text-sm font-semibold">Промпты для генерации</h3>
+                </div>
                 <p className="text-xs text-muted-foreground">
                   Эти промпты используются при генерации постов и дайджестов для данного агента.
                 </p>
@@ -584,29 +657,35 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
                   value={systemPrompt}
                   onChange={(e) => setSystemPrompt(e.target.value)}
                   placeholder="Ты — аналитик новостей в области [предметная область]. Твоя задача — анализировать новости, определять их важность и генерировать краткие посты для социальных сетей на русском языке..."
-                  rows={6}
+                  rows={8}
                   className={cn(
-                    'w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground',
-                    'focus:outline-none focus:ring-2 focus:ring-accent',
-                    'resize-none font-mono text-xs'
+                    'w-full rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm text-foreground',
+                    'focus:outline-none focus:ring-2 focus:ring-accent focus:bg-card',
+                    'resize-none font-mono text-xs leading-relaxed'
                   )}
                 />
+                <p className="text-[11px] text-muted-foreground">
+                  Используйте переменные: {'{title}'}, {'{description}'}, {'{source}'}, {'{agentName}'}
+                </p>
               </div>
 
-              <div className="space-y-1.5">
-                <Label>Тональность генерации</Label>
-                <p className="text-xs text-muted-foreground">
-                  Текущая: <span className="font-medium text-foreground">{tone}</span>
+              <div className="p-3 rounded-xl bg-muted/50 border border-border/60">
+                <div className="flex items-center gap-2 mb-1">
+                  <Label className="text-xs font-medium">Текущая тональность:</Label>
+                  <Badge variant="outline" className="text-[10px]">{tone}</Badge>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Тональность настраивается во вкладке «Скоринг»
                 </p>
               </div>
             </>
           )}
 
-          <DialogFooter className="pt-4 border-t border-border/60">
+          <DialogFooter className="pt-4 border-t border-border/60 px-0">
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               Отмена
             </Button>
-            <Button type="submit" loading={isSubmitting} className="min-w-[120px] shadow-md shadow-accent/20">
+            <Button type="submit" loading={isSubmitting} className="min-w-[140px] shadow-md shadow-accent/20">
               {agent ? 'Сохранить' : 'Создать агента'}
             </Button>
           </DialogFooter>
