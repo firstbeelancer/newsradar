@@ -1,72 +1,106 @@
 /**
  * ------------------------------------------------------------------
- * Scorer — article scoring system
+ * Scorer — article scoring system (hybrid model v2)
  * ------------------------------------------------------------------
- * 4 scoring criteria:
- *   1. ai_relevance    — AI-evaluated relevance (0–1)
- *   2. keyword_match   — keyword occurrences from agent topic
- *   3. freshness       — recency of publication
- *   4. source_trust    — inverse of source error rate
+ * Hybrid formula:
+ *   final_score = ai_score×0.55 + keyword×0.20 + freshness×0.15 + source_trust×0.10
+ *
+ * AI score evaluates 5 criteria (0–100):
+ *   1. relevance  — matches agent topic and audience
+ *   2. novelty    — fresh, not repeating old themes
+ *   3. hype       — viral potential, discussion-worthy
+ *   4. practical  — actionable, applicable in work
+ *   5. local      — relevant for RU/RF audience
+ *
+ * Then ai_score = weighted average of 5 criteria using agent weights.
  *
  * Plus chips: exclusive, actionable, trending, controversy, verified
  * ------------------------------------------------------------------
  */
 
 import { db } from "../db/index.js";
-import { sources, articles } from "../db/schema.js";
-import { eq } from "drizzle-orm";
+import { sources, articles, scoringCriteria } from "../db/schema.js";
+import { eq, and } from "drizzle-orm";
 import { complete } from "./ai-client.js";
+import type { Logger } from "pino";
 
 /* ─── Types ─── */
 
-export interface ScoringWeights {
-  aiRelevance: number;
-  keywordMatch: number;
-  freshness: number;
-  sourceTrust: number;
+export interface AIWeights {
+  relevance: number;
+  novelty: number;
+  hype: number;
+  practical: number;
+  local: number;
 }
 
-export const DEFAULT_WEIGHTS: ScoringWeights = {
-  aiRelevance: 0.35,
-  keywordMatch: 0.25,
-  freshness: 0.20,
-  sourceTrust: 0.20,
+export const DEFAULT_AI_WEIGHTS: AIWeights = {
+  relevance: 30,
+  novelty: 25,
+  hype: 20,
+  practical: 15,
+  local: 10,
 };
 
+/** Hybrid blend weights (fixed) */
+export const HYBRID_WEIGHTS = {
+  ai: 0.55,
+  keyword: 0.20,
+  freshness: 0.15,
+  sourceTrust: 0.10,
+} as const;
+
+export interface AIScores {
+  relevance: number;
+  novelty: number;
+  hype: number;
+  practical: number;
+  local: number;
+}
+
 export interface ScoreResult {
-  aiRelevance: number;
-  keywordMatch: number;
-  freshness: number;
-  sourceTrust: number;
+  aiScores: AIScores;
+  aiScore: number;
+  keywordScore: number;
+  freshnessScore: number;
+  sourceTrustScore: number;
   overallScore: number;
   weightedScore: number;
   chips: string[];
 }
 
-/* ─── 1. AI Relevance ─── */
+/* ─── 1. AI Scoring (5 criteria) ─── */
 
 /**
- * Evaluate article relevance using AI.
- * Returns a score between 0 and 1.
+ * Evaluate article using AI across 5 criteria.
+ * Each score is 0–100.
  */
-export async function scoreAiRelevance(
+export async function scoreWithAI(
   title: string,
   description: string,
-  agentTopic?: string
-): Promise<number> {
+  agentTopic?: string,
+  agentTone?: string
+): Promise<AIScores> {
   const topic = agentTopic ?? "news and current events";
+  const tone = agentTone ?? "professional";
 
-  const prompt = `Evaluate how relevant the following article is to the topic "${topic}".
+  const prompt = `You are a news scoring assistant for a "${topic}" channel.
+Evaluate the following article on 5 criteria, each 0–100.
 
 Article title: ${title}
 Article description: ${description || "N/A"}
 
-Respond with ONLY a number from 0.00 to 1.00, where:
-- 1.00 = highly relevant, directly about the topic
-- 0.50 = moderately relevant, tangentially related
-- 0.00 = completely irrelevant
+Scoring criteria:
+1. relevance — How well does this match the topic "${topic}" and its audience?
+2. novelty — How fresh and new is this? Does it repeat old news?
+3. hype — How likely is this to generate discussion, shares, interest?
+4. practical — How actionable or useful is this for work/business/tech?
+5. local — How relevant is this for a Russian-speaking audience?
 
-Score:`;
+Respond with ONLY a JSON object, no other text:
+{"relevance":N,"novelty":N,"hype":N,"practical":N,"local":N}
+
+Each value must be an integer 0–100.`;
 
   try {
     const response = await complete({
@@ -74,34 +108,68 @@ Score:`;
         {
           role: "system",
           content:
-            "You are a relevance scoring assistant. Respond with only a decimal number between 0.00 and 1.00.",
+            'You are a scoring assistant. Respond with only a JSON object like {"relevance":85,"novelty":70,"hype":60,"practical":40,"local":90}. No other text.',
         },
         { role: "user", content: prompt },
       ],
       temperature: 0.1,
-      maxTokens: 10,
+      maxTokens: 80,
     });
 
-    const score = parseFloat(response.trim());
-    if (isNaN(score)) return 0.5;
-    return Math.max(0, Math.min(1, score));
+    // Parse JSON from response
+    const cleaned = response.trim().replace(/```json\s*|\s*```/g, "");
+    const parsed = JSON.parse(cleaned);
+
+    return {
+      relevance: clampInt(parsed.relevance, 50),
+      novelty: clampInt(parsed.novelty, 50),
+      hype: clampInt(parsed.hype, 50),
+      practical: clampInt(parsed.practical, 50),
+      local: clampInt(parsed.local, 50),
+    };
   } catch {
-    return 0.5; // Fallback on error
+    // Fallback: neutral scores
+    return { relevance: 50, novelty: 50, hype: 50, practical: 50, local: 50 };
   }
+}
+
+function clampInt(val: unknown, fallback: number): number {
+  const n = typeof val === "number" ? val : parseInt(String(val), 10);
+  if (isNaN(n)) return fallback;
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+/**
+ * Calculate AI composite score from 5 criteria using agent weights.
+ * Returns 0–100.
+ */
+export function calculateAIScore(scores: AIScores, weights: AIWeights): number {
+  const totalWeight =
+    weights.relevance + weights.novelty + weights.hype + weights.practical + weights.local;
+  if (totalWeight === 0) return 50;
+
+  const weighted =
+    scores.relevance * weights.relevance +
+    scores.novelty * weights.novelty +
+    scores.hype * weights.hype +
+    scores.practical * weights.practical +
+    scores.local * weights.local;
+
+  return Math.round((weighted / totalWeight) * 10) / 10;
 }
 
 /* ─── 2. Keyword Match ─── */
 
 /**
  * Count keyword occurrences in article text.
- * Returns normalized score 0–1 based on keyword density.
+ * Returns score 0–100.
  */
 export function scoreKeywordMatch(
   title: string,
   description: string,
   keywords: string[]
 ): number {
-  if (!keywords.length) return 0.5;
+  if (!keywords.length) return 50;
 
   const text = `${title} ${description || ""}`.toLowerCase();
   const totalKeywords = keywords.length;
@@ -111,22 +179,23 @@ export function scoreKeywordMatch(
     const lowerKeyword = keyword.toLowerCase().trim();
     if (lowerKeyword.length < 2) continue;
 
-    // Count occurrences
-    const regex = new RegExp(lowerKeyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g");
+    const regex = new RegExp(
+      lowerKeyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+      "g"
+    );
     const matches = text.match(regex);
     if (matches && matches.length > 0) {
       matchedCount++;
     }
   }
 
-  // Normalize: 0.3 base + up to 0.7 based on match ratio
+  // Normalize: 30 base + up to 70 based on match ratio
   const matchRatio = matchedCount / totalKeywords;
-  return Math.min(1, 0.3 + matchRatio * 0.7);
+  return Math.min(100, Math.round(30 + matchRatio * 70));
 }
 
 /**
  * Extract keywords from an agent's name and description.
- * Simple word-tokenization approach.
  */
 export function extractKeywords(topic: string): string[] {
   const stopWords = new Set([
@@ -154,37 +223,33 @@ export function extractKeywords(topic: string): string[] {
 
 /**
  * Score article freshness based on publication date.
- *   today      = 1.0
- *   yesterday  = 0.8
- *   this week  = 0.5
- *   this month = 0.2
- *   older      = 0.1
+ * Returns 0–100.
  */
 export function scoreFreshness(publishedAt: Date | null): number {
-  if (!publishedAt) return 0.5; // Unknown date gets middle score
+  if (!publishedAt) return 50;
 
   const now = Date.now();
   const pubTime = publishedAt.getTime();
   const ageMs = now - pubTime;
 
-  // Future articles get full score
-  if (ageMs < 0) return 1.0;
+  if (ageMs < 0) return 100; // Future
 
   const ageHours = ageMs / (1_000 * 60 * 60);
   const ageDays = ageHours / 24;
 
-  if (ageHours <= 24) return 1.0; // Today
-  if (ageDays <= 2) return 0.8; // Yesterday
-  if (ageDays <= 7) return 0.5; // This week
-  if (ageDays <= 30) return 0.2; // This month
-  return 0.1; // Older
+  if (ageHours <= 6) return 100;
+  if (ageHours <= 24) return 90;
+  if (ageDays <= 2) return 70;
+  if (ageDays <= 7) return 50;
+  if (ageDays <= 30) return 20;
+  return 10;
 }
 
 /* ─── 4. Source Trust ─── */
 
 /**
  * Score source trust based on historical error rate.
- * High error_count → lower trust.
+ * Returns 0–100.
  */
 export async function scoreSourceTrust(sourceId: string): Promise<number> {
   const result = await db
@@ -197,27 +262,20 @@ export async function scoreSourceTrust(sourceId: string): Promise<number> {
     .limit(1);
 
   const row = result[0];
-  if (!row) return 0.5;
+  if (!row) return 50;
 
   const { errorCount, fetchCount } = row;
-  if (fetchCount === 0) return 0.8; // New source — assume decent
+  if (fetchCount === 0) return 80; // New source — assume decent
 
   const errorRate = errorCount / fetchCount;
-  // errorRate 0 → 1.0, errorRate 1 → 0.1
-  return Math.max(0.1, 1.0 - errorRate);
+  // errorRate 0 → 100, errorRate 1 → 10
+  return Math.max(10, Math.round(100 - errorRate * 90));
 }
 
 /* ─── Chips ─── */
 
 /**
  * Determine article chips based on content analysis.
- *
- * Chips:
- *   - exclusive    — breaking news, first coverage
- *   - actionable   — contains actionable advice
- *   - trending     — high-velocity topic
- *   - controversy  — polarizing topic
- *   - verified     — from high-trust source
  */
 export async function determineChips(
   title: string,
@@ -227,23 +285,20 @@ export async function determineChips(
   const chips: string[] = [];
   const text = `${title} ${description || ""}`.toLowerCase();
 
-  // Verified: high source trust (>0.9) and no error history
-  if (sourceTrust >= 0.9) {
+  if (sourceTrust >= 90) {
     chips.push("verified");
   }
 
-  // Controversy: polarizing keywords
   const controversyKeywords = [
     "scandal", "кризис", "коррупция", "задержан", "арест", "обвинение",
     "конфликт", "война", "санкции", "против", "критика", "осуждение",
-    "расследование", "нарушение", "крах", "крах", "провал", "трагедия",
+    "расследование", "нарушение", "крах", "провал", "трагедия",
     "банкротство", "уволен", "отставка", "спор", "полемика",
   ];
   if (controversyKeywords.some((kw) => text.includes(kw))) {
     chips.push("controversy");
   }
 
-  // Actionable: how-to, guides, tips
   const actionableKeywords = [
     "как", "how to", "guide", "совет", "tip", "инструкция", "шаг",
     "рекомендация", "советуем", "следуйте", "пошаговый", "tutorial",
@@ -253,7 +308,6 @@ export async function determineChips(
     chips.push("actionable");
   }
 
-  // Trending: trending keywords
   const trendingKeywords = [
     "тренд", "популяр", "viral", "хит", "boom", " record", "рекорд",
     "взлет", "рост", "подорожал", "дефицит", "хайп", "сенсаци",
@@ -263,7 +317,6 @@ export async function determineChips(
     chips.push("trending");
   }
 
-  // Exclusive: first coverage / breaking
   const exclusiveKeywords = [
     "эксклюзив", "exclusive", "first", "первый", "breaking",
     "срочная новость", "только что", "недавно", "анонс",
@@ -279,25 +332,62 @@ export async function determineChips(
 /* ─── Composite scoring ─── */
 
 /**
- * Calculate weighted score from individual components.
+ * Calculate hybrid score.
+ * final = ai×0.55 + keyword×0.20 + freshness×0.15 + source_trust×0.10
+ * All inputs are 0–100, output is 0–100.
  */
-export function calculateWeightedScore(
-  scores: Omit<ScoreResult, "overallScore" | "weightedScore" | "chips">,
-  weights: ScoringWeights = DEFAULT_WEIGHTS
-): { overallScore: number; weightedScore: number } {
-  const overallScore =
-    (scores.aiRelevance + scores.keywordMatch + scores.freshness + scores.sourceTrust) / 4;
+export function calculateHybridScore(
+  aiScore: number,
+  keywordScore: number,
+  freshnessScore: number,
+  sourceTrustScore: number
+): number {
+  const raw =
+    aiScore * HYBRID_WEIGHTS.ai +
+    keywordScore * HYBRID_WEIGHTS.keyword +
+    freshnessScore * HYBRID_WEIGHTS.freshness +
+    sourceTrustScore * HYBRID_WEIGHTS.sourceTrust;
 
-  const weightedScore =
-    scores.aiRelevance * weights.aiRelevance +
-    scores.keywordMatch * weights.keywordMatch +
-    scores.freshness * weights.freshness +
-    scores.sourceTrust * weights.sourceTrust;
+  return Math.round(raw * 10) / 10;
+}
 
-  return {
-    overallScore: Math.round(overallScore * 1_000) / 1_000,
-    weightedScore: Math.round(weightedScore * 1_000) / 1_000,
-  };
+/**
+ * Load agent-specific AI weights from scoring criteria table.
+ */
+export async function loadAgentWeights(agentId: string): Promise<AIWeights> {
+  try {
+    const criteria = await db
+      .select()
+      .from(scoringCriteria)
+      .where(eq(scoringCriteria.agentId, agentId));
+
+    if (!criteria.length) return DEFAULT_AI_WEIGHTS;
+
+    const weights: AIWeights = { ...DEFAULT_AI_WEIGHTS };
+    for (const c of criteria) {
+      const w = parseFloat(c.weight);
+      switch (c.criterionType) {
+        case "relevance":
+          weights.relevance = w;
+          break;
+        case "novelty":
+          weights.novelty = w;
+          break;
+        case "hype":
+          weights.hype = w;
+          break;
+        case "practical":
+          weights.practical = w;
+          break;
+        case "local":
+          weights.local = w;
+          break;
+      }
+    }
+    return weights;
+  } catch {
+    return DEFAULT_AI_WEIGHTS;
+  }
 }
 
 /**
@@ -307,17 +397,19 @@ export async function scoreArticle(
   articleId: string,
   options: {
     agentTopic?: string;
+    agentTone?: string;
     keywords?: string[];
-    weights?: ScoringWeights;
+    weights?: AIWeights;
+    logger?: Logger;
   } = {}
 ): Promise<ScoreResult> {
-  // Fetch article data
   const result = await db
     .select({
       title: articles.title,
       description: articles.description,
       publishedAt: articles.publishedAt,
       sourceId: articles.sourceId,
+      agentId: articles.agentId,
     })
     .from(articles)
     .where(eq(articles.id, articleId))
@@ -328,43 +420,61 @@ export async function scoreArticle(
     throw new Error(`Article not found: ${articleId}`);
   }
 
+  // Load agent weights if not provided
+  const weights = options.weights ?? (await loadAgentWeights(article.agentId));
+
   // Resolve keywords
   const keywords =
     options.keywords ??
     (options.agentTopic ? extractKeywords(options.agentTopic) : []);
 
-  const weights = options.weights ?? DEFAULT_WEIGHTS;
-
-  // Run all scoring criteria in parallel where possible
-  const [aiRelevance, sourceTrust] = await Promise.all([
-    scoreAiRelevance(article.title, article.description ?? "", options.agentTopic),
+  // Run scoring in parallel
+  const [aiScores, sourceTrustScore] = await Promise.all([
+    scoreWithAI(
+      article.title,
+      article.description ?? "",
+      options.agentTopic,
+      options.agentTone
+    ),
     scoreSourceTrust(article.sourceId),
   ]);
 
-  const keywordMatch = scoreKeywordMatch(
+  const keywordScore = scoreKeywordMatch(
     article.title,
     article.description ?? "",
     keywords
   );
 
-  const freshness = scoreFreshness(article.publishedAt);
+  const freshnessScore = scoreFreshness(article.publishedAt);
 
+  // AI composite from 5 criteria
+  const aiScore = calculateAIScore(aiScores, weights);
+
+  // Hybrid final score
+  const weightedScore = calculateHybridScore(
+    aiScore,
+    keywordScore,
+    freshnessScore,
+    sourceTrustScore
+  );
+
+  // Chips
   const chips = await determineChips(
     article.title,
     article.description ?? "",
-    sourceTrust
+    sourceTrustScore
   );
 
-  const { overallScore, weightedScore } = calculateWeightedScore(
-    { aiRelevance, keywordMatch, freshness, sourceTrust },
-    weights
-  );
+  // Overall = simple average for reference
+  const overallScore =
+    Math.round(((aiScore + keywordScore + freshnessScore + sourceTrustScore) / 4) * 10) / 10;
 
   return {
-    aiRelevance,
-    keywordMatch,
-    freshness,
-    sourceTrust,
+    aiScores,
+    aiScore,
+    keywordScore,
+    freshnessScore,
+    sourceTrustScore,
     overallScore,
     weightedScore,
     chips,

@@ -96,11 +96,7 @@ export function SourcesPage() {
 
   const handleToggleActive = async (source: Source) => {
     try {
-      // Send both formats to handle backend differences
-      await updateSource(source.id, { 
-        is_active: !source.is_active,
-        isActive: !source.is_active,
-      } as UpdateSourceDto);
+      await updateSource(source.id, { isActive: !source.is_active } as UpdateSourceDto);
       addToast({ 
         title: source.is_active ? 'Отключен' : 'Включен', 
         description: `Источник "${source.name}" ${source.is_active ? 'отключен' : 'включен'}`, 

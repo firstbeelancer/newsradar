@@ -444,10 +444,11 @@ export interface Agent {
     userPrompt?: string;
     tags?: string[];
     scoringWeights?: {
-      aiRelevance: number;
-      keywordMatch: number;
-      freshness: number;
-      sourceTrust: number;
+      relevance: number;
+      novelty: number;
+      hype: number;
+      practical: number;
+      local: number;
     };
     chipFilters?: Partial<ChipFilter>[];
     fetchSchedule?: string;
@@ -473,10 +474,11 @@ export interface CreateAgentDto {
     userPrompt?: string;
     tags?: string[];
     scoringWeights?: {
-      aiRelevance: number;
-      keywordMatch: number;
-      freshness: number;
-      sourceTrust: number;
+      relevance: number;
+      novelty: number;
+      hype: number;
+      practical: number;
+      local: number;
     };
     chipFilters?: Partial<ChipFilter>[];
     fetchSchedule?: string;
@@ -520,6 +522,47 @@ export interface Source {
   last_error?: string;
   created_at: string;
   updated_at: string;
+}
+
+interface BackendSource {
+  id: string;
+  name: string;
+  url: string;
+  type: SourceType;
+  agentId?: string;
+  agent_id?: string;
+  isActive?: boolean;
+  is_active?: boolean;
+  fetchCount?: number;
+  fetch_count?: number;
+  lastFetchAt?: string | null;
+  last_fetch_at?: string | null;
+  lastError?: string | null;
+  last_error?: string | null;
+  createdAt?: string;
+  created_at?: string;
+  updatedAt?: string;
+  updated_at?: string;
+  workspaceId?: string;
+  workspace_id?: string;
+  channelUsername?: string | null;
+  fetchSchedule?: string | null;
+}
+
+export function normalizeSource(raw: BackendSource): Source {
+  return {
+    id: raw.id,
+    agent_id: raw.agent_id ?? raw.agentId ?? '',
+    name: raw.name,
+    url: raw.url,
+    type: raw.type,
+    is_active: raw.is_active ?? raw.isActive ?? true,
+    fetch_count: raw.fetch_count ?? raw.fetchCount ?? 0,
+    last_fetch_at: raw.last_fetch_at ?? raw.lastFetchAt ?? undefined,
+    last_error: raw.last_error ?? raw.lastError ?? undefined,
+    created_at: raw.created_at ?? raw.createdAt ?? new Date(0).toISOString(),
+    updated_at: raw.updated_at ?? raw.updatedAt ?? new Date(0).toISOString(),
+  };
 }
 
 export interface CreateSourceDto {
@@ -799,9 +842,9 @@ export const chipFiltersApi = {
 
 // Sources
 export const sourcesApi = {
-  list: () => apiGet<{ data: Source[] }>('/sources').then((res) => res.data ?? []),
-  create: (data: CreateSourceDto) => apiPost<Source, CreateSourceDto>('/sources', data),
-  update: (id: string, data: UpdateSourceDto) => apiPut<Source, UpdateSourceDto>(`/sources/${id}`, data),
+  list: () => apiGet<{ data: BackendSource[] }>('/sources').then((res) => (res.data ?? []).map(normalizeSource)),
+  create: (data: CreateSourceDto) => apiPost<BackendSource, CreateSourceDto>('/sources', data).then(normalizeSource),
+  update: (id: string, data: UpdateSourceDto) => apiPut<BackendSource, UpdateSourceDto>(`/sources/${id}`, data).then(normalizeSource),
   delete: (id: string) => apiDelete<void>(`/sources/${id}`),
   test: (id: string) => apiPost<SourceTestResult>(`/sources/${id}/test`, {}),
   fetch: (id: string) => apiPost<{ operationId?: string; op_id?: string }>(`/sources/${id}/fetch`, {}).then((payload) => ({

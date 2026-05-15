@@ -1,10 +1,12 @@
 /**
  * ------------------------------------------------------------------
- * Worker: score-article
+ * Worker: score-article (hybrid model v2)
  * ------------------------------------------------------------------
- * Runs 4 scoring criteria (ai_relevance, keyword_match, freshness,
- * source_trust), computes weighted score, writes article_scores,
- * updates article.score and status='scored', determines chips.
+ * Hybrid formula:
+ *   final = ai_score×0.55 + keyword×0.20 + freshness×0.15 + source_trust×0.10
+ *
+ * AI evaluates 5 criteria (relevance, novelty, hype, practical, local).
+ * Agent-specific weights control the AI sub-score.
  * ------------------------------------------------------------------
  */
 
@@ -13,14 +15,12 @@ import {
   articles,
   articleScores,
   agents,
-  sources,
 } from "../db/schema.js";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import {
   scoreArticle,
-  DEFAULT_WEIGHTS,
+  loadAgentWeights,
   extractKeywords,
-  type ScoringWeights,
   type ScoreResult,
 } from "../lib/scorer.js";
 import type { Job } from "bullmq";
@@ -31,29 +31,26 @@ export interface ScoreArticleJob {
 }
 
 /**
- * Load workspace-specific scoring weights.
- * Falls back to defaults if no custom config exists.
+ * Resolve agent topic and tone for scoring.
  */
-async function getWorkspaceWeights(workspaceId: string): Promise<ScoringWeights> {
-  // TODO: Load from workspace_config table when implemented
-  // For now, use defaults
-  void workspaceId;
-  return DEFAULT_WEIGHTS;
-}
-
-/**
- * Resolve agent topic for keyword matching.
- */
-async function resolveAgentTopic(agentId: string): Promise<string | undefined> {
+async function resolveAgentContext(agentId: string): Promise<{
+  topic?: string;
+  tone?: string;
+}> {
   const result = await db
-    .select({ name: agents.name, description: agents.description })
+    .select({ name: agents.name, description: agents.description, config: agents.config })
     .from(agents)
     .where(eq(agents.id, agentId))
     .limit(1);
 
   const agent = result[0];
-  if (!agent) return undefined;
-  return `${agent.name} ${agent.description ?? ""}`.trim();
+  if (!agent) return {};
+
+  const config = (agent.config as Record<string, unknown>) ?? {};
+  const topic = `${agent.name} ${agent.description ?? ""}`.trim();
+  const tone = (config.tone as string) ?? "professional";
+
+  return { topic, tone };
 }
 
 /**
@@ -67,14 +64,10 @@ export async function processScoreArticle(
 
   logger.debug({ articleId, jobId: job.id }, "Processing article scoring");
 
-  // Load article with agent info
-  const result = await db
+  // Load article
+  const articleRow = await db
     .select({
       id: articles.id,
-      title: articles.title,
-      description: articles.description,
-      publishedAt: articles.publishedAt,
-      sourceId: articles.sourceId,
       agentId: articles.agentId,
       workspaceId: articles.workspaceId,
     })
@@ -82,18 +75,18 @@ export async function processScoreArticle(
     .where(eq(articles.id, articleId))
     .limit(1);
 
-  const article = result[0];
+  const article = articleRow[0];
   if (!article) {
     throw new Error(`Article not found: ${articleId}`);
   }
 
-  // Load scoring configuration
-  const [weights, agentTopic] = await Promise.all([
-    getWorkspaceWeights(article.workspaceId),
-    resolveAgentTopic(article.agentId),
+  // Load agent context and weights
+  const [agentCtx, weights] = await Promise.all([
+    resolveAgentContext(article.agentId),
+    loadAgentWeights(article.agentId),
   ]);
 
-  const keywords = agentTopic ? extractKeywords(agentTopic) : [];
+  const keywords = agentCtx.topic ? extractKeywords(agentCtx.topic) : [];
 
   logger.debug(
     { articleId, keywords: keywords.length, weights },
@@ -102,9 +95,11 @@ export async function processScoreArticle(
 
   // Run scoring
   const scoreResult = await scoreArticle(articleId, {
-    agentTopic,
+    agentTopic: agentCtx.topic,
+    agentTone: agentCtx.tone,
     keywords,
     weights,
+    logger,
   });
 
   // Upsert article_scores record
@@ -116,33 +111,30 @@ export async function processScoreArticle(
     .where(eq(articleScores.articleId, articleId))
     .limit(1);
 
+  const scoreData = {
+    aiRelevance: scoreResult.aiScores.relevance.toFixed(0),
+    keywordMatch: scoreResult.keywordScore.toFixed(0),
+    freshness: scoreResult.freshnessScore.toFixed(0),
+    sourceTrust: scoreResult.sourceTrustScore.toFixed(0),
+    overallScore: scoreResult.overallScore.toFixed(1),
+    weightedScore: scoreResult.weightedScore.toFixed(1),
+    weightsSnapshot: {
+      aiWeights: weights,
+      hybrid: { ai: 0.55, keyword: 0.2, freshness: 0.15, sourceTrust: 0.1 },
+    } as unknown as Record<string, unknown>,
+    chips: scoreResult.chips,
+    scoredAt,
+  };
+
   if (existingScore[0]) {
     await db
       .update(articleScores)
-      .set({
-        aiRelevance: scoreResult.aiRelevance.toFixed(2),
-        keywordMatch: scoreResult.keywordMatch.toFixed(2),
-        freshness: scoreResult.freshness.toFixed(2),
-        sourceTrust: scoreResult.sourceTrust.toFixed(2),
-        overallScore: scoreResult.overallScore.toFixed(3),
-        weightedScore: scoreResult.weightedScore.toFixed(3),
-        weightsSnapshot: weights as unknown as Record<string, unknown>,
-        chips: scoreResult.chips,
-        scoredAt,
-      })
+      .set(scoreData)
       .where(eq(articleScores.id, existingScore[0].id));
   } else {
     await db.insert(articleScores).values({
       articleId,
-      aiRelevance: scoreResult.aiRelevance.toFixed(2),
-      keywordMatch: scoreResult.keywordMatch.toFixed(2),
-      freshness: scoreResult.freshness.toFixed(2),
-      sourceTrust: scoreResult.sourceTrust.toFixed(2),
-      overallScore: scoreResult.overallScore.toFixed(3),
-      weightedScore: scoreResult.weightedScore.toFixed(3),
-      weightsSnapshot: weights as unknown as Record<string, unknown>,
-      chips: scoreResult.chips,
-      scoredAt,
+      ...scoreData,
     });
   }
 
@@ -150,7 +142,7 @@ export async function processScoreArticle(
   await db
     .update(articles)
     .set({
-      score: scoreResult.weightedScore.toFixed(3),
+      score: scoreResult.weightedScore.toFixed(1),
       status: "scored",
       updatedAt: scoredAt,
     })
@@ -159,11 +151,14 @@ export async function processScoreArticle(
   logger.info(
     {
       articleId,
+      aiScore: scoreResult.aiScore,
+      keywordScore: scoreResult.keywordScore,
+      freshnessScore: scoreResult.freshnessScore,
+      sourceTrustScore: scoreResult.sourceTrustScore,
       weightedScore: scoreResult.weightedScore,
-      overallScore: scoreResult.overallScore,
       chips: scoreResult.chips,
     },
-    "Article scored successfully"
+    "Article scored (hybrid v2)"
   );
 
   return { ...scoreResult, articleId };

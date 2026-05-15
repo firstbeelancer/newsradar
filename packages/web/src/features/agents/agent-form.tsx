@@ -48,10 +48,11 @@ const ICON_OPTIONS: { id: string; icon: LucideIcon; label: string }[] = [
 ];
 
 const DEFAULT_WEIGHTS = {
-  aiRelevance: 0.35,
-  keywordMatch: 0.25,
-  freshness: 0.20,
-  sourceTrust: 0.20,
+  relevance: 30,
+  novelty: 25,
+  hype: 20,
+  practical: 15,
+  local: 10,
 };
 
 const DEFAULT_CHIP_FILTERS: Partial<ChipFilter>[] = [
@@ -175,9 +176,9 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
     e.preventDefault();
     if (!validate()) return;
 
-    // Validate scoring weights sum = 1.0
+    // Validate scoring weights sum = 100
     const weightsSum = Object.values(weights).reduce((a, b) => a + b, 0);
-    if (Math.abs(weightsSum - 1.0) >= 0.02) {
+    if (Math.abs(weightsSum - 100) >= 2) {
       addToast({ title: 'Ошибка', description: 'Сумма весов скоринга должна быть 100%', variant: 'danger' });
       return;
     }
@@ -387,35 +388,47 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
           {tab === 'scoring' && (
             <>
               <div className="space-y-1">
-                <h3 className="text-sm font-semibold">Веса критериев скоринга</h3>
+                <h3 className="text-sm font-semibold">Веса критериев AI-скоринга</h3>
                 <p className="text-xs text-muted-foreground">
-                  Настройте, какие критерии важнее для этого агента. Сумма весов = 1.0
+                  AI оценивает новость по 5 критериям (0–100), затем считается взвешенное среднее.
+                  Сумма весов = 100.
                 </p>
               </div>
 
               {Object.entries(weights).map(([key, value]) => {
                 const labelMap: Record<string, string> = {
-                  aiRelevance: 'AI-релевантность',
-                  keywordMatch: 'Совпадение ключевых слов',
-                  freshness: 'Свежесть новости',
-                  sourceTrust: 'Доверие к источнику',
+                  relevance: 'Релевантность',
+                  novelty: 'Новизна',
+                  hype: 'Вирусный потенциал',
+                  practical: 'Практическая польза',
+                  local: 'Локальный контекст (РФ)',
+                };
+                const descMap: Record<string, string> = {
+                  relevance: 'Соответствие теме агента и интересам аудитории',
+                  novelty: 'Свежесть новости, не повторяет старые темы',
+                  hype: 'Потенциал для обсуждения, репостов, интереса',
+                  practical: 'Применимость в работе, бизнесе, ИТ',
+                  local: 'Актуальность для РФ и русскоязычной аудитории',
                 };
                 return (
                   <div key={key} className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <Label className="text-sm">{labelMap[key] || key}</Label>
+                      <div>
+                        <Label className="text-sm">{labelMap[key] || key}</Label>
+                        <p className="text-xs text-muted-foreground">{descMap[key] || ''}</p>
+                      </div>
                       <span className="text-sm font-mono text-accent tabular-nums">
-                        {(value * 100).toFixed(0)}%
+                        {value}%
                       </span>
                     </div>
                     <input
                       type="range"
                       min={0}
                       max={100}
-                      value={Math.round(value * 100)}
-                      onChange={(e) => updateWeight(key as keyof typeof weights, Number(e.target.value) / 100)}
+                      value={value}
+                      onChange={(e) => updateWeight(key as keyof typeof weights, Number(e.target.value))}
                       className="slider-filled w-full cursor-pointer"
-                      style={sliderFillStyle(value)}
+                      style={sliderFillStyle(value / 100)}
                     />
                   </div>
                 );
@@ -426,16 +439,23 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
                   <span className="text-xs text-muted-foreground">Сумма весов:</span>
                   <span className={cn(
                     'text-sm font-mono tabular-nums font-medium',
-                    Math.abs(Object.values(weights).reduce((a, b) => a + b, 0) - 1.0) < 0.02
+                    Math.abs(Object.values(weights).reduce((a, b) => a + b, 0) - 100) < 2
                       ? 'text-green-600'
                       : 'text-red-600'
                   )}>
-                    {(Object.values(weights).reduce((a, b) => a + b, 0) * 100).toFixed(0)}%
+                    {Object.values(weights).reduce((a, b) => a + b, 0)}%
                   </span>
                 </div>
-                {Math.abs(Object.values(weights).reduce((a, b) => a + b, 0) - 1.0) >= 0.02 && (
+                {Math.abs(Object.values(weights).reduce((a, b) => a + b, 0) - 100) >= 2 && (
                   <span className="text-xs text-red-500">Сумма должна быть 100%</span>
                 )}
+              </div>
+
+              <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                <p className="text-xs text-muted-foreground">
+                  <strong>Гибридная формула:</strong> AI оценивает по 5 критериям → взвешенное среднее = ai_score.
+                  Затем: <code className="text-[11px]">final = ai_score×0.55 + keyword×0.20 + freshness×0.15 + source_trust×0.10</code>
+                </p>
               </div>
 
               <div className="space-y-1.5">
