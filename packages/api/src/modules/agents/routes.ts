@@ -22,6 +22,13 @@ const router = Router();
 // ─── Schemas ───
 
 const scoringWeightSchema = z.object({
+  // New 5-criteria AI weights (percentages 0–100)
+  relevance: z.number().min(0).max(100).optional(),
+  novelty: z.number().min(0).max(100).optional(),
+  hype: z.number().min(0).max(100).optional(),
+  practical: z.number().min(0).max(100).optional(),
+  local: z.number().min(0).max(100).optional(),
+  // Legacy keys (decimals 0–1) — kept for backward compat
   aiRelevance: z.number().min(0).max(1).optional(),
   keywordMatch: z.number().min(0).max(1).optional(),
   freshness: z.number().min(0).max(1).optional(),

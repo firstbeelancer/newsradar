@@ -178,8 +178,8 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
 
     // Validate scoring weights sum = 100
     const weightsSum = Object.values(weights).reduce((a, b) => a + b, 0);
-    if (Math.abs(weightsSum - 100) >= 2) {
-      addToast({ title: 'Ошибка', description: 'Сумма весов скоринга должна быть 100%', variant: 'danger' });
+    if (Math.abs(weightsSum - 100) >= 5) {
+      addToast({ title: 'Ошибка', description: 'Сумма весов скоринга должна быть ~100% (допуск ±5%)', variant: 'danger' });
       return;
     }
 
@@ -220,17 +220,17 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
         </DialogHeader>
 
         {/* Tabs */}
-        <div className="flex gap-1 border-b border-border pb-1">
+        <div className="flex gap-0.5 border-b border-border/60 bg-muted/40 rounded-t-lg px-1 pt-1">
           {tabs.map(t => (
             <button
               key={t.key}
               type="button"
               onClick={() => setTab(t.key)}
               className={cn(
-                'px-3 py-1.5 text-sm font-medium rounded-t-md transition-colors',
+                'px-4 py-2 text-sm font-medium rounded-t-lg transition-all relative',
                 tab === t.key
-                  ? 'bg-accent text-accent-foreground'
-                  : 'text-muted-foreground hover:text-foreground'
+                  ? 'bg-white text-accent shadow-sm after:absolute after:bottom-0 after:left-2 after:right-2 after:h-0.5 after:bg-accent after:rounded-full'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-white/50'
               )}
             >
               {t.label}
@@ -439,22 +439,22 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
                   <span className="text-xs text-muted-foreground">Сумма весов:</span>
                   <span className={cn(
                     'text-sm font-mono tabular-nums font-medium',
-                    Math.abs(Object.values(weights).reduce((a, b) => a + b, 0) - 100) < 2
+                    Math.abs(Object.values(weights).reduce((a, b) => a + b, 0) - 100) < 5
                       ? 'text-green-600'
                       : 'text-red-600'
                   )}>
                     {Object.values(weights).reduce((a, b) => a + b, 0)}%
                   </span>
                 </div>
-                {Math.abs(Object.values(weights).reduce((a, b) => a + b, 0) - 100) >= 2 && (
-                  <span className="text-xs text-red-500">Сумма должна быть 100%</span>
+                {Math.abs(Object.values(weights).reduce((a, b) => a + b, 0) - 100) >= 5 && (
+                  <span className="text-xs text-red-500">Сумма должна быть ~100%</span>
                 )}
               </div>
 
-              <div className="p-3 rounded-lg bg-muted/50 border border-border">
+              <div className="p-3 rounded-lg bg-accent/5 border border-accent/15">
                 <p className="text-xs text-muted-foreground">
-                  <strong>Гибридная формула:</strong> AI оценивает по 5 критериям → взвешенное среднее = ai_score.
-                  Затем: <code className="text-[11px]">final = ai_score×0.55 + keyword×0.20 + freshness×0.15 + source_trust×0.10</code>
+                  <strong className="text-foreground">Гибридная формула:</strong> AI оценивает по 5 критериям → взвешенное среднее = ai_score.
+                  Затем: <code className="text-[11px] bg-muted px-1 py-0.5 rounded">final = ai_score×0.55 + keyword×0.20 + freshness×0.15 + source_trust×0.10</code>
                 </p>
               </div>
 
@@ -602,12 +602,12 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
             </>
           )}
 
-          <DialogFooter className="pt-4 border-t border-border">
+          <DialogFooter className="pt-4 border-t border-border/60">
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               Отмена
             </Button>
-            <Button type="submit" loading={isSubmitting}>
-              {agent ? 'Сохранить' : 'Создать'}
+            <Button type="submit" loading={isSubmitting} className="min-w-[120px] shadow-md shadow-accent/20">
+              {agent ? 'Сохранить' : 'Создать агента'}
             </Button>
           </DialogFooter>
         </form>

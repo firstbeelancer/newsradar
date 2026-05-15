@@ -6,13 +6,24 @@ import type { PaginatedResult, Cursor } from "../../lib/pagination.js";
 import { encodeCursor, decodeCursor } from "../../lib/pagination.js";
 import type { Agent, NewAgent } from "../../db/types.js";
 
-// ─── Default scoring weights (must sum to 1.0) ───
+// ─── Default scoring weights ───
+// 5 AI criteria weights (percentages, must sum to ~100)
+// Plus 4 hybrid formula weights (decimals 0–1, fixed)
 
 export const DEFAULT_SCORING_WEIGHTS = {
-  aiRelevance: 0.35,
-  keywordMatch: 0.25,
-  freshness: 0.20,
-  sourceTrust: 0.20,
+  relevance: 30,
+  novelty: 25,
+  hype: 20,
+  practical: 15,
+  local: 10,
+};
+
+/** Hybrid blend weights (fixed formula) */
+export const HYBRID_FORMULA_WEIGHTS = {
+  ai: 0.55,
+  keyword: 0.20,
+  freshness: 0.15,
+  sourceTrust: 0.10,
 };
 
 // ─── Default config for a new agent ───
@@ -58,13 +69,13 @@ export async function createAgent(data: NewAgent) {
     config,
   }).returning();
 
-  // Create default scoring criteria for this agent
+  // Create default scoring criteria for this agent (hybrid formula weights)
   if (agent) {
     const criteriaRows = [
-      { criterionType: "ai_relevance", label: "AI-релевантность", weight: "0.3500", position: 0 },
-      { criterionType: "keyword_match", label: "Совпадение ключевых слов", weight: "0.2500", position: 1 },
-      { criterionType: "freshness", label: "Свежесть", weight: "0.2000", position: 2 },
-      { criterionType: "source_trust", label: "Доверие к источнику", weight: "0.2000", position: 3 },
+      { criterionType: "ai_relevance", label: "AI-релевантность (55%)", weight: "0.5500", position: 0 },
+      { criterionType: "keyword_match", label: "Совпадение ключевых слов (20%)", weight: "0.2000", position: 1 },
+      { criterionType: "freshness", label: "Свежесть (15%)", weight: "0.1500", position: 2 },
+      { criterionType: "source_trust", label: "Доверие к источнику (10%)", weight: "0.1000", position: 3 },
     ];
 
     for (const c of criteriaRows) {
@@ -233,19 +244,23 @@ export async function updateAgent(
   const existingConfig = (existing.config as Record<string, unknown>) ?? {};
   const newConfig = data.config ? { ...existingConfig, ...data.config } : existingConfig;
 
-  // If scoring weights changed in config, sync to scoringCriteria table
+  // If scoring weights changed in config, update hybrid formula in scoringCriteria
+  // The 5 AI sub-weights (relevance, novelty, hype, practical, local) stay in config.
+  // The 4 hybrid formula weights (ai, keyword, freshness, sourceTrust) stay in scoring_criteria.
   if (data.config?.scoringWeights) {
     const weights = data.config.scoringWeights as Record<string, number>;
-    for (const [key, value] of Object.entries(weights)) {
-      const criterionType = key === "aiRelevance" ? "ai_relevance"
-        : key === "keywordMatch" ? "keyword_match"
-        : key === "freshness" ? "freshness"
-        : key === "sourceTrust" ? "source_trust"
-        : null;
-      if (criterionType) {
+    // Sync hybrid formula weights if provided (legacy keys, decimals 0–1)
+    const hybridMapping: Record<string, string> = {
+      aiRelevance: "ai_relevance",
+      keywordMatch: "keyword_match",
+      freshness: "freshness",
+      sourceTrust: "source_trust",
+    };
+    for (const [key, criterionType] of Object.entries(hybridMapping)) {
+      if (weights[key] !== undefined) {
         await db
           .update(scoringCriteria)
-          .set({ weight: value.toFixed(4), updatedAt: new Date() })
+          .set({ weight: weights[key].toFixed(4), updatedAt: new Date() })
           .where(
             and(
               eq(scoringCriteria.agentId, id),

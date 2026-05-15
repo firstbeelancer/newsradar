@@ -19,7 +19,7 @@
  */
 
 import { db } from "../db/index.js";
-import { sources, articles, scoringCriteria } from "../db/schema.js";
+import { sources, articles, agents } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import { complete } from "./ai-client.js";
 import type { Logger } from "pino";
@@ -352,39 +352,28 @@ export function calculateHybridScore(
 }
 
 /**
- * Load agent-specific AI weights from scoring criteria table.
+ * Load agent-specific AI weights from agent config.
+ * Falls back to default weights if not configured.
  */
 export async function loadAgentWeights(agentId: string): Promise<AIWeights> {
   try {
-    const criteria = await db
-      .select()
-      .from(scoringCriteria)
-      .where(eq(scoringCriteria.agentId, agentId));
+    const result = await db
+      .select({ config: agents.config })
+      .from(agents)
+      .where(eq(agents.id, agentId))
+      .limit(1);
 
-    if (!criteria.length) return DEFAULT_AI_WEIGHTS;
+    const agent = result[0];
+    const config = (agent?.config as Record<string, unknown>) ?? {};
+    const sw = (config.scoringWeights as Record<string, number>) ?? {};
 
-    const weights: AIWeights = { ...DEFAULT_AI_WEIGHTS };
-    for (const c of criteria) {
-      const w = parseFloat(c.weight);
-      switch (c.criterionType) {
-        case "relevance":
-          weights.relevance = w;
-          break;
-        case "novelty":
-          weights.novelty = w;
-          break;
-        case "hype":
-          weights.hype = w;
-          break;
-        case "practical":
-          weights.practical = w;
-          break;
-        case "local":
-          weights.local = w;
-          break;
-      }
-    }
-    return weights;
+    return {
+      relevance: typeof sw.relevance === "number" ? sw.relevance : DEFAULT_AI_WEIGHTS.relevance,
+      novelty: typeof sw.novelty === "number" ? sw.novelty : DEFAULT_AI_WEIGHTS.novelty,
+      hype: typeof sw.hype === "number" ? sw.hype : DEFAULT_AI_WEIGHTS.hype,
+      practical: typeof sw.practical === "number" ? sw.practical : DEFAULT_AI_WEIGHTS.practical,
+      local: typeof sw.local === "number" ? sw.local : DEFAULT_AI_WEIGHTS.local,
+    };
   } catch {
     return DEFAULT_AI_WEIGHTS;
   }
