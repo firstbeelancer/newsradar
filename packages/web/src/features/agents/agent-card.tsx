@@ -1,4 +1,4 @@
-import { Link } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { Card, CardContent } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
@@ -8,7 +8,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@shared/ui/dropdown-menu';
-import { Bot, MoreVertical, Pencil, Trash2, Play, CircleDot, Link2 } from 'lucide-react';
+import {
+  Bot, MoreVertical, Pencil, Trash2, Play, CircleDot, Link2,
+  Shield, Brain, Megaphone, Heart, Paintbrush, Globe, Zap, Star,
+  Eye, Search, BookOpen, Rss, MessageCircle, Target, Lightbulb,
+  Compass, Newspaper, Hammer, Wrench, type LucideIcon,
+} from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import type { Agent } from '@shared/api/client';
 
@@ -19,21 +24,40 @@ interface AgentCardProps {
   onCollect: (agent: Agent) => void;
 }
 
-function hexToBg(hex: string): string {
-  if (!hex || !hex.startsWith('#')) return '';
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgb(${r}, ${g}, ${b})`;
-}
-
-const iconMap: Record<string, React.ReactNode> = {
-  bot: <Bot className="h-5 w-5" />,
-  default: <Bot className="h-5 w-5" />,
+const ICON_MAP: Record<string, LucideIcon> = {
+  bot: Bot,
+  shield: Shield,
+  brain: Brain,
+  megaphone: Megaphone,
+  heart: Heart,
+  paintbrush: Paintbrush,
+  globe: Globe,
+  zap: Zap,
+  star: Star,
+  eye: Eye,
+  search: Search,
+  book: BookOpen,
+  bookopen: BookOpen,
+  rss: Rss,
+  message: MessageCircle,
+  messagecircle: MessageCircle,
+  target: Target,
+  lightbulb: Lightbulb,
+  compass: Compass,
+  newspaper: Newspaper,
+  hammer: Hammer,
+  wrench: Wrench,
 };
 
+function getAgentIcon(iconStr?: string): LucideIcon {
+  if (!iconStr) return Bot;
+  const key = iconStr.toLowerCase().replace(/[^a-z]/g, '');
+  return ICON_MAP[key] || Bot;
+}
+
 export function AgentCard({ agent, onEdit, onDelete, onCollect }: AgentCardProps) {
-  const icon = iconMap[agent.icon] || iconMap.default;
+  const navigate = useNavigate();
+  const AgentIcon = getAgentIcon(agent.icon);
   const agentColor = agent.color || '#0ea5e9';
   const isHex = agentColor.startsWith('#');
 
@@ -49,7 +73,7 @@ export function AgentCard({ agent, onEdit, onDelete, onCollect }: AgentCardProps
             )}
             style={isHex ? { backgroundColor: `${agentColor}18`, color: agentColor } : undefined}
           >
-            {icon}
+            <AgentIcon className="h-5 w-5" />
           </Link>
 
           <div className="min-w-0 flex-1 overflow-hidden">
@@ -80,10 +104,17 @@ export function AgentCard({ agent, onEdit, onDelete, onCollect }: AgentCardProps
                 <CircleDot className="h-3 w-3" />
                 {agent.article_count ?? 0} новостей
               </span>
-              <span className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigate({ to: '/agents/$id', params: { id: agent.id } });
+                }}
+                className="flex items-center gap-1 hover:text-accent transition-colors cursor-pointer"
+              >
                 <Link2 className="h-3 w-3" />
                 {agent.source_count ?? 0} источников
-              </span>
+              </button>
             </div>
           </div>
 

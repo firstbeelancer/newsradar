@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '@shared/ui/label';
 import { useToast } from '@shared/ui/toast';
 import type { Agent, CreateAgentDto, UpdateAgentDto, ChipFilter } from '@shared/api/client';
-import { Shield, Brain, Megaphone, Heart, Paintbrush, Plus, X, GripVertical, Hammer, Wrench } from 'lucide-react';
+import { Shield, Brain, Megaphone, Heart, Paintbrush, Plus, X, GripVertical, Hammer, Wrench, Bot, Globe, Zap, Star, Eye, Search, BookOpen, Rss, MessageCircle, Target, Lightbulb, Compass, Newspaper, type LucideIcon } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 
 const SUBJECT_AREAS = [
@@ -21,6 +21,30 @@ const SUBJECT_AREAS = [
 
 const COLORS = [
   '#3b82f6', '#ef4444', '#8b5cf6', '#f97316', '#06b6d4', '#ec4899', '#10b981', '#6366f1',
+  '#f59e0b', '#14b8a6', '#e11d48', '#7c3aed',
+];
+
+const ICON_OPTIONS: { id: string; icon: LucideIcon; label: string }[] = [
+  { id: 'bot', icon: Bot, label: 'Бот' },
+  { id: 'shield', icon: Shield, label: 'Щит' },
+  { id: 'brain', icon: Brain, label: 'Мозг' },
+  { id: 'megaphone', icon: Megaphone, label: 'Мегафон' },
+  { id: 'heart', icon: Heart, label: 'Сердце' },
+  { id: 'paintbrush', icon: Paintbrush, label: 'Кисть' },
+  { id: 'hammer', icon: Hammer, label: 'Молоток' },
+  { id: 'wrench', icon: Wrench, label: 'Гаечный ключ' },
+  { id: 'globe', icon: Globe, label: 'Глобус' },
+  { id: 'zap', icon: Zap, label: 'Молния' },
+  { id: 'star', icon: Star, label: 'Звезда' },
+  { id: 'eye', icon: Eye, label: 'Глаз' },
+  { id: 'search', icon: Search, label: 'Поиск' },
+  { id: 'book', icon: BookOpen, label: 'Книга' },
+  { id: 'rss', icon: Rss, label: 'RSS' },
+  { id: 'message', icon: MessageCircle, label: 'Сообщение' },
+  { id: 'target', icon: Target, label: 'Цель' },
+  { id: 'lightbulb', icon: Lightbulb, label: 'Лампа' },
+  { id: 'compass', icon: Compass, label: 'Компас' },
+  { id: 'newspaper', icon: Newspaper, label: 'Газета' },
 ];
 
 const DEFAULT_WEIGHTS = {
@@ -312,10 +336,36 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
                 <p className="text-xs text-muted-foreground">Enter или кнопка + чтобы добавить. Теги используются для поиска и скоринга.</p>
               </div>
 
+              {/* Icon */}
+              <div className="space-y-2">
+                <Label>Иконка</Label>
+                <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
+                  {ICON_OPTIONS.map((opt) => {
+                    const Icon = opt.icon;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setIcon(opt.id)}
+                        title={opt.label}
+                        className={cn(
+                          'flex h-10 w-10 items-center justify-center rounded-lg border-2 transition-all',
+                          icon === opt.id
+                            ? 'border-accent bg-accent-light text-accent scale-110'
+                            : 'border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground'
+                        )}
+                      >
+                        <Icon className="h-5 w-5" />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Color */}
               <div className="space-y-2">
                 <Label>Цвет</Label>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {COLORS.map(c => (
                     <button
                       key={c}

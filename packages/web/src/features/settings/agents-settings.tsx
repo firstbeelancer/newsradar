@@ -13,19 +13,46 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@shared/ui/dialog';
-import { Bot, Plus, Pencil, Trash2, ArrowRight } from 'lucide-react';
+import {
+  Bot, Plus, Pencil, Trash2, ArrowRight,
+  Shield, Brain, Megaphone, Heart, Paintbrush, Globe, Zap, Star,
+  Eye, Search, BookOpen, Rss, MessageCircle, Target, Lightbulb,
+  Compass, Newspaper, Hammer, Wrench, type LucideIcon,
+} from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import type { Agent } from '@shared/api/client';
 import { AgentForm } from '@/features/agents/agent-form';
 
-const colorMap: Record<string, string> = {
-  blue: 'bg-blue-50 text-blue-600',
-  green: 'bg-green-50 text-green-600',
-  purple: 'bg-purple-50 text-purple-600',
-  orange: 'bg-orange-50 text-orange-600',
-  red: 'bg-red-50 text-red-600',
-  default: 'bg-accent-light text-accent',
+const ICON_MAP: Record<string, LucideIcon> = {
+  bot: Bot,
+  shield: Shield,
+  brain: Brain,
+  megaphone: Megaphone,
+  heart: Heart,
+  paintbrush: Paintbrush,
+  globe: Globe,
+  zap: Zap,
+  star: Star,
+  eye: Eye,
+  search: Search,
+  book: BookOpen,
+  bookopen: BookOpen,
+  rss: Rss,
+  message: MessageCircle,
+  messagecircle: MessageCircle,
+  target: Target,
+  lightbulb: Lightbulb,
+  compass: Compass,
+  newspaper: Newspaper,
+  hammer: Hammer,
+  wrench: Wrench,
 };
+
+function getAgentIcon(iconStr?: string): LucideIcon {
+  if (!iconStr) return Bot;
+  const key = iconStr.toLowerCase().replace(/[^a-z]/g, '');
+  return ICON_MAP[key] || Bot;
+}
 
 export function AgentsSettings() {
   const navigate = useNavigate();
@@ -124,12 +151,19 @@ export function AgentsSettings() {
       </div>
 
       <div className="space-y-2">
-        {agents.map((agent) => (
+        {agents.map((agent) => {
+          const AgentIcon = getAgentIcon(agent.icon);
+          const agentColor = agent.color || '#3b82f6';
+          const isHex = agentColor.startsWith('#');
+          return (
           <Card key={agent.id} className="hover:shadow-md transition-all overflow-hidden">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-lg', colorMap[agent.color] || colorMap.default)}>
-                  <Bot className="h-5 w-5" />
+                <div
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
+                  style={isHex ? { backgroundColor: `${agentColor}18`, color: agentColor } : undefined}
+                >
+                  <AgentIcon className="h-5 w-5" />
                 </div>
                 <div className="min-w-0 flex-1 overflow-hidden">
                   <p className="text-sm font-medium truncate">{agent.name}</p>
@@ -165,7 +199,8 @@ export function AgentsSettings() {
               </div>
             </CardContent>
           </Card>
-        ))}
+          );
+        })}
       </div>
 
       <AgentForm

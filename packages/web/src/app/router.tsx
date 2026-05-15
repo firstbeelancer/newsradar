@@ -19,7 +19,6 @@ import { ProfileSettings } from '@/features/settings/profile-settings';
 import { AgentsSettings } from '@/features/settings/agents-settings';
 import { TemplatesSettings } from '@/features/settings/templates-settings';
 import { AIProvidersSettings } from '@/features/settings/ai-providers-settings';
-import { ScoringSettings } from '@/features/settings/scoring-settings';
 import { PromptsSettings } from '@/features/settings/prompts-settings';
 import { SubscriptionPage } from '@/features/subscriptions/subscription-page';
 import { IBoardPage } from '@/features/iboard/iboard-page';
@@ -225,12 +224,6 @@ const settingsAIProvidersRoute = createRoute({
   component: AIProvidersSettings,
 });
 
-const settingsScoringRoute = createRoute({
-  getParentRoute: () => settingsLayoutRoute,
-  path: 'scoring',
-  component: ScoringSettings,
-});
-
 const settingsPromptsRoute = createRoute({
   getParentRoute: () => settingsLayoutRoute,
   path: 'prompts',
@@ -262,7 +255,6 @@ const routeTree = rootRoute.addChildren([
       settingsAgentsRoute,
       settingsTemplatesRoute,
       settingsAIProvidersRoute,
-      settingsScoringRoute,
       settingsPromptsRoute,
     ]),
   ]),
