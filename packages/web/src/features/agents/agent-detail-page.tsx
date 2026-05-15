@@ -100,6 +100,7 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
     sources,
     isLoading: sourcesLoading,
     fetchSourcesByAgent,
+    updateSource: updateSourceInStore,
   } = useSourcesStore();
 
   const [formOpen, setFormOpen] = useState(false);
@@ -215,10 +216,9 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
   const handleToggleSource = async (sourceId: string, nextActive: boolean) => {
     setTogglingSourceId(sourceId);
     try {
-      await sourcesApi.update(sourceId, { isActive: nextActive });
-      if (id) fetchSourcesByAgent(id);
+      await updateSourceInStore(sourceId, { isActive: nextActive });
     } catch {
-      // silent
+      // Error handled by store
     } finally {
       setTogglingSourceId(null);
     }
