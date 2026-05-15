@@ -35,6 +35,8 @@ import {
   Lightbulb,
   Compass,
   BarChart3,
+  Hammer,
+  Wrench,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -60,6 +62,8 @@ const ICON_MAP: Record<string, LucideIcon> = {
   lightbulb: Lightbulb,
   compass: Compass,
   newspaper: Newspaper,
+  hammer: Hammer,
+  wrench: Wrench,
 };
 
 function getAgentIcon(iconStr?: string): LucideIcon {

@@ -79,8 +79,9 @@ export function AgentsListPage() {
         await updateAgent(editingAgent.id, data as UpdateAgentDto);
         addToast({ title: 'Сохранено', description: 'Агент обновлен', variant: 'success' });
       } else {
-        await createAgent(data as CreateAgentDto);
+        const created = await createAgent(data as CreateAgentDto);
         addToast({ title: 'Создано', description: 'Агент создан', variant: 'success' });
+        return created;
       }
     } catch {
       // Error handled by store

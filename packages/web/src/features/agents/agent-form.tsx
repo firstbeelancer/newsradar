@@ -74,7 +74,7 @@ interface AgentFormProps {
   agent: Agent | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: CreateAgentDto | UpdateAgentDto) => Promise<void>;
+  onSubmit: (data: CreateAgentDto | UpdateAgentDto) => Promise<Agent | void>;
   isSubmitting: boolean;
 }
 
@@ -208,23 +208,22 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
         systemPrompt: systemPrompt.trim() || undefined,
         tags: tags.length > 0 ? tags : undefined,
         scoringWeights: weights,
-        // chipFilters NOT sent in config — saved separately via API
       },
     };
 
-    await onSubmit(agent ? { ...data } : data);
+    // Submit agent data — for new agents, onSubmit should return the created agent
+    const result = await onSubmit(agent ? { ...data } : data);
 
-    // Save chip filters via dedicated API if we have an agent ID
-    const agentId = agent?.id;
+    // Resolve agent ID: existing agent or newly created from store
+    const agentId = agent?.id || result?.id;
+
     if (agentId) {
       try {
-        // Determine which filters to create, update, delete
         const currentIds = new Set(chipFilters.filter(f => f.id).map(f => f.id!));
         const toDelete = [...loadedFilterIds].filter(id => !currentIds.has(id));
 
         for (const cf of chipFilters) {
           if (cf.id && loadedFilterIds.has(cf.id)) {
-            // Update existing
             await chipFiltersApi.update(cf.id, {
               key: cf.key,
               label: cf.label,
@@ -236,7 +235,6 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
               isActive: cf.isActive,
             });
           } else {
-            // Create new
             await chipFiltersApi.create(agentId, {
               key: cf.key || `filter_${Date.now()}`,
               label: cf.label || 'Фильтр',
@@ -272,11 +270,13 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto p-0">
         <DialogHeader className="px-6 pt-6 pb-0">
-          <DialogTitle className="text-xl">{agent ? 'Редактировать агента' : 'Новый агент'}</DialogTitle>
+          <DialogTitle className="text-xl font-bold tracking-tight">
+            {agent ? 'Редактировать агента' : 'Новый агент'}
+          </DialogTitle>
         </DialogHeader>
 
         {/* Tabs */}
-        <div className="flex gap-1 border-b border-border/60 bg-muted/30 px-4 py-0">
+        <div className="flex gap-1 border-b border-border/60 bg-muted/40 backdrop-blur-sm px-4 py-0 mx-6 rounded-t-xl">
           {tabs.map(t => {
             const TabIcon = t.icon;
             return (
@@ -288,7 +288,7 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
                   'flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium transition-all relative',
                   tab === t.key
                     ? 'text-accent'
-                    : 'text-muted-foreground hover:text-foreground'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/40 rounded-t-lg'
                 )}
               >
                 <TabIcon className="h-3.5 w-3.5" />
@@ -514,7 +514,7 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
                 })}
               </div>
 
-              <div className="flex items-center justify-between p-3 rounded-xl bg-muted/50 border border-border/60">
+              <div className="flex items-center justify-between p-3 rounded-xl bg-white/60 backdrop-blur-sm border border-border/60 shadow-sm">
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">Сумма весов:</span>
                   <span className={cn(
@@ -531,7 +531,7 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
                 )}
               </div>
 
-              <div className="p-3 rounded-xl bg-accent/5 border border-accent/15">
+              <div className="p-3 rounded-xl bg-accent/5 border border-accent/15 backdrop-blur-sm">
                 <p className="text-xs text-muted-foreground">
                   <strong className="text-foreground">Гибридная формула:</strong> AI оценивает по 5 критериям → взвешенное среднее = ai_score.
                   Затем: <code className="text-[11px] bg-muted px-1 py-0.5 rounded font-mono">final = ai_score×0.55 + keyword×0.20 + freshness×0.15 + source_trust×0.10</code>
@@ -591,7 +591,7 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
                 {chipFilters.map((cf, i) => (
                   <div
                     key={i}
-                    className="group relative p-4 rounded-xl border border-border/80 bg-card hover:border-accent/30 transition-colors space-y-3"
+                    className="group relative p-4 rounded-xl border border-border/60 bg-white/60 backdrop-blur-sm hover:border-accent/30 hover:shadow-sm transition-all space-y-3"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2.5">
@@ -634,6 +634,8 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
                           <option value="in">В списке</option>
                           <option value="gt">Больше</option>
                           <option value="lt">Меньше</option>
+                          <option value="gte">Больше или равно</option>
+                          <option value="lte">Меньше или равно</option>
                         </select>
                       </div>
                       <div className="space-y-1">
