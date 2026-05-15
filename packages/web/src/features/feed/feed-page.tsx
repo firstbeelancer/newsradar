@@ -49,6 +49,7 @@ export function FeedPage() {
     agentId: agentIdFromRoute ?? '',
     status: '',
     favoritesOnly: false,
+    activeChipFilters: [],
   });
 
   useEffect(() => {

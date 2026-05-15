@@ -213,7 +213,7 @@ export function DigestGenerator() {
         </div>
 
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleSaveConfig} disabled={savingConfig} className="shrink-0">
+          <Button size="sm" onClick={handleSaveConfig} disabled={savingConfig} className="shrink-0">
             <Save className="h-4 w-4 mr-1" />
             {savingConfig ? '...' : 'Сохранить конфигурацию'}
           </Button>

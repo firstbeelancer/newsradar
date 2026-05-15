@@ -142,31 +142,7 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
   }, []);
 
   const updateWeight = useCallback((key: keyof typeof weights, value: number) => {
-    setWeights(prev => {
-      const updated = { ...prev, [key]: value };
-      // Normalize to sum = 1.0, clamping negatives to 0
-      const sum = Object.values(updated).reduce((a, b) => a + b, 0);
-      if (sum > 0 && Math.abs(sum - 1.0) > 0.005) {
-        const diff = 1.0 - sum;
-        const otherKeys = (Object.keys(updated) as (keyof typeof weights)[]).filter(k => k !== key);
-        const otherSum = otherKeys.reduce((a, k) => a + updated[k], 0);
-        if (otherSum > 0) {
-          for (const k of otherKeys) {
-            updated[k] = Math.max(0, updated[k] + (updated[k] / otherSum) * diff);
-          }
-        } else if (otherKeys.length > 0) {
-          const share = diff / otherKeys.length;
-          for (const k of otherKeys) {
-            updated[k] = Math.max(0, share);
-          }
-        }
-        // Final clamp: ensure no negatives
-        for (const k of Object.keys(updated) as (keyof typeof weights)[]) {
-          updated[k] = Math.max(0, updated[k]);
-        }
-      }
-      return updated;
-    });
+    setWeights(prev => ({ ...prev, [key]: value }));
   }, []);
 
   const handleSubmit = async (e: FormEvent) => {
@@ -388,12 +364,7 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
 
               <div className="flex items-center justify-between pt-2 border-t border-border">
                 <span className="text-xs text-muted-foreground">Сумма весов:</span>
-                <span className={cn(
-                  'text-sm font-mono tabular-nums',
-                  Math.abs(Object.values(weights).reduce((a, b) => a + b, 0) - 1.0) < 0.02
-                    ? 'text-green-500'
-                    : 'text-destructive'
-                )}>
+                <span className="text-sm font-mono tabular-nums text-accent">
                   {(Object.values(weights).reduce((a, b) => a + b, 0) * 100).toFixed(0)}%
                 </span>
               </div>

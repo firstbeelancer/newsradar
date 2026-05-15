@@ -7,10 +7,14 @@ import { apiGet } from '@shared/api/client';
 import { BarChart3, Crown, Newspaper, Radio, TrendingUp, Calendar, AlertTriangle } from 'lucide-react';
 
 interface IBoardAPIStats {
-  totalArticles: number;
-  avgScore: number;
-  topSources: Array<{ sourceId: string; sourceName: string; articleCount: number }>;
-  activity7d: Array<{ date: string; count: number }>;
+  totalArticles?: number;
+  total_articles?: number;
+  avgScore?: number;
+  avg_score?: number;
+  topSources?: Array<{ sourceId: string; sourceName: string; articleCount: number }>;
+  top_sources?: Array<{ source_id?: string; sourceId?: string; source_name?: string; sourceName?: string; article_count?: number; articleCount?: number }>;
+  activity7d?: Array<{ date: string; count: number }>;
+  activity_7d?: Array<{ date: string; count: number }>;
 }
 
 function MetricCard({ title, value, icon: Icon }: { title: string; value: string | number; icon: React.ElementType }) {
@@ -66,11 +70,17 @@ export function IBoardPage() {
   const isPro = subscription?.plan === 'pro' && subscription?.status === 'active';
   const plan = subscription?.plan || 'free';
 
-  // Compute derived values from API response
-  const totalArticles = stats?.totalArticles ?? 0;
-  const avgScore = stats?.avgScore ?? 0;
-  const activeSources = stats?.topSources?.length ?? 0;
-  const todayCount = stats?.activity7d?.[stats.activity7d.length - 1]?.count ?? 0;
+  // Compute derived values from API response - handle both camelCase and snake_case
+  const totalArticles = stats?.totalArticles ?? stats?.total_articles ?? 0;
+  const avgScore = stats?.avgScore ?? stats?.avg_score ?? 0;
+  const topSources = stats?.topSources ?? stats?.top_sources?.map(s => ({
+    sourceId: s.sourceId ?? s.source_id ?? '',
+    sourceName: s.sourceName ?? s.source_name ?? '',
+    articleCount: s.articleCount ?? s.article_count ?? 0,
+  })) ?? [];
+  const activity7d = stats?.activity7d ?? stats?.activity_7d ?? [];
+  const activeSources = topSources.length ?? 0;
+  const todayCount = activity7d[activity7d.length - 1]?.count ?? 0;
 
   return (
     <div className="space-y-6">
@@ -119,7 +129,7 @@ export function IBoardPage() {
           </div>
         )}
 
-        {isPro && !statsError && stats && stats.topSources.length > 0 && (
+        {isPro && !statsError && stats && topSources.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Топ источники</CardTitle>
@@ -127,7 +137,7 @@ export function IBoardPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {stats.topSources.map((source) => (
+                {topSources.map((source) => (
                   <div key={source.sourceId} className="flex items-center justify-between text-sm">
                     <span className="truncate">{source.sourceName}</span>
                     <span className="text-muted-foreground shrink-0 ml-2">{source.articleCount} статей</span>
@@ -138,7 +148,7 @@ export function IBoardPage() {
           </Card>
         )}
 
-        {isPro && !statsError && stats && stats.activity7d.length > 0 && (
+        {isPro && !statsError && stats && activity7d.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Активность за 7 дней</CardTitle>
@@ -146,13 +156,13 @@ export function IBoardPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-1">
-                {stats.activity7d.map((day) => (
+                {activity7d.map((day) => (
                   <div key={day.date} className="flex items-center gap-3 text-sm">
                     <span className="text-muted-foreground w-20 shrink-0 text-xs">{new Date(day.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</span>
                     <div className="flex-1 h-5 bg-muted rounded-full overflow-hidden">
                       <div
                         className="h-full bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full transition-all"
-                        style={{ width: `${Math.min(100, Math.max(2, (day.count / Math.max(...stats.activity7d.map(d => d.count), 1)) * 100))}%` }}
+                        style={{ width: `${Math.min(100, Math.max(2, (day.count / Math.max(...activity7d.map(d => d.count), 1)) * 100))}%` }}
                       />
                     </div>
                     <span className="text-xs text-muted-foreground w-8 text-right">{day.count}</span>

@@ -1,7 +1,6 @@
 import { Card, CardContent } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
-import { Switch } from '@shared/ui/switch';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -72,16 +71,21 @@ export function SourceCard({ source, onEdit, onDelete, onTest, onFetch, onToggle
         </div>
 
         <div className="mt-3 flex items-center justify-between border-t border-border/50 pt-3">
-          <div className="flex items-center gap-1.5">
-            <Switch
-              checked={source.is_active}
-              onCheckedChange={() => onToggleActive(source)}
-              className="data-[state=checked]:bg-success"
-            />
-            <span className="text-[10px] text-muted-foreground">
-              {source.is_active ? 'Вкл' : 'Выкл'}
-            </span>
-          </div>
+          <Button
+            variant={source.is_active ? 'outline' : 'default'}
+            size="sm"
+            onClick={() => onToggleActive(source)}
+            className={cn(
+              'h-7 text-xs gap-1.5',
+              !source.is_active && 'bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-600 hover:to-emerald-600 shadow-sm'
+            )}
+          >
+            <div className={cn(
+              'h-2 w-2 rounded-full',
+              source.is_active ? 'bg-green-500' : 'bg-white/80'
+            )} />
+            {source.is_active ? 'Выключить' : 'Включить'}
+          </Button>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

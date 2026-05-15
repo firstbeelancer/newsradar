@@ -210,7 +210,7 @@ export function PostGenerator() {
           </div>
 
           <div className="flex justify-end">
-            <Button variant="outline" size="sm" onClick={handleSaveConfig} disabled={savingConfig}>
+            <Button size="sm" onClick={handleSaveConfig} disabled={savingConfig}>
               <Save className="h-4 w-4 mr-1" />
               {savingConfig ? 'Сохранение...' : 'Сохранить конфигурацию'}
             </Button>
