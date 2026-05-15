@@ -808,7 +808,9 @@ export const agentsApi = {
   collect: (id: string) => apiPost<{ operationId?: string; op_id?: string }>(`/agents/${id}/collect`, {}).then((payload) => ({
     op_id: payload.op_id ?? payload.operationId ?? '',
   })),
-  sources: (id: string) => apiGet<Source[]>(`/agents/${id}/sources`),
+  sources: (id: string) => apiGet<{ data: BackendSource[] }>(`/agents/${id}/sources`).then((res) =>
+    (Array.isArray(res) ? res : res.data ?? []).map(normalizeSource)
+  ),
   linkSource: (agentId: string, sourceId: string) =>
     apiPost<{ agentId: string; sourceId: string }, { sourceId: string }>(`/agents/${agentId}/sources`, { sourceId }),
   unlinkSource: (agentId: string, sourceId: string) =>
