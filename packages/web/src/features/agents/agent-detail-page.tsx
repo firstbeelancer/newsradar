@@ -28,15 +28,6 @@ import { cn } from '@shared/lib/utils';
 import type { CreateAgentDto, UpdateAgentDto, AgentStats } from '@shared/api/client';
 import { agentsApi, sourcesApi } from '@shared/api/client';
 
-const colorMap: Record<string, string> = {
-  blue: 'bg-blue-50 text-blue-600',
-  green: 'bg-green-50 text-green-600',
-  purple: 'bg-purple-50 text-purple-600',
-  orange: 'bg-orange-50 text-orange-600',
-  red: 'bg-red-50 text-red-600',
-  default: 'bg-accent-light text-accent',
-};
-
 interface AgentDetailPageProps {
   agentId: string;
 }
@@ -63,6 +54,9 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
   const [stats, setStats] = useState<AgentStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [addSourceOpen, setAddSourceOpen] = useState(false);
+  const [linkExistingOpen, setLinkExistingOpen] = useState(false);
+  const [allSources, setAllSources] = useState<{ id: string; name: string; url: string; type: string }[]>([]);
+  const [linkingSourceId, setLinkingSourceId] = useState<string | null>(null);
   const [newSourceName, setNewSourceName] = useState('');
   const [newSourceUrl, setNewSourceUrl] = useState('');
   const [newSourceType, setNewSourceType] = useState<'rss' | 'telegram'>('rss');
@@ -138,6 +132,36 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
     }
   };
 
+  const handleOpenLinkExisting = async () => {
+    setLinkExistingOpen(true);
+    try {
+      const all = await sourcesApi.list();
+      const linkedIds = new Set(sources.map(s => s.id));
+      setAllSources(all.filter(s => !linkedIds.has(s.id)));
+    } catch {
+      setAllSources([]);
+    }
+  };
+
+  const handleLinkExisting = async (sourceId: string) => {
+    if (!id) return;
+    setLinkingSourceId(sourceId);
+    try {
+      await agentsApi.linkSource(id, sourceId);
+      addToast({ title: 'Источник привязан', variant: 'success' });
+      fetchSourcesByAgent(id);
+      setAllSources(prev => prev.filter(s => s.id !== sourceId));
+    } catch (err) {
+      addToast({
+        title: 'Ошибка',
+        description: err instanceof Error ? err.message : 'Не удалось привязать источник',
+        variant: 'danger',
+      });
+    } finally {
+      setLinkingSourceId(null);
+    }
+  };
+
   const handleUnlinkSource = async (sourceId: string) => {
     if (!id) return;
     setUnlinkSourceId(sourceId);
@@ -178,7 +202,8 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
     );
   }
 
-  const colorClass = colorMap[currentAgent.color] || colorMap.default;
+  const agentColor = currentAgent.color || '#0ea5e9';
+  const isHex = agentColor.startsWith('#');
 
   return (
     <div className="space-y-6">
@@ -195,7 +220,10 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
 
       {/* Agent header */}
       <div className="flex items-start gap-3 sm:gap-4">
-        <div className={cn('flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-2xl', colorClass)}>
+        <div
+          className="flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-2xl"
+          style={isHex ? { backgroundColor: `${agentColor}18`, color: agentColor } : { backgroundColor: 'var(--accent-light)', color: 'var(--accent)' }}
+        >
           <Bot className="h-6 w-6 sm:h-7 sm:w-7" />
         </div>
         <div className="min-w-0 flex-1">
@@ -345,11 +373,53 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
                     </Button>
                   </CardContent>
                 </Card>
+              ) : linkExistingOpen ? (
+                <Card>
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium">Привязать существующий источник</p>
+                      <Button variant="ghost" size="icon-sm" onClick={() => setLinkExistingOpen(false)}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    {allSources.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        Нет доступных источников для привязки
+                      </p>
+                    ) : (
+                      <div className="space-y-2 max-h-60 overflow-y-auto">
+                        {allSources.map((src) => (
+                          <div key={src.id} className="flex items-center justify-between gap-2 rounded-lg border border-border p-2.5">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium truncate">{src.name}</p>
+                              <p className="text-xs text-muted-foreground truncate">{src.url}</p>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleLinkExisting(src.id)}
+                              disabled={linkingSourceId === src.id}
+                            >
+                              <Link2 className="h-3.5 w-3.5 mr-1" />
+                              {linkingSourceId === src.id ? '...' : 'Привязать'}
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               ) : (
-                <Button variant="outline" size="sm" onClick={() => setAddSourceOpen(true)}>
-                  <Plus className="h-4 w-4 mr-1" />
-                  Добавить источник
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setAddSourceOpen(true)}>
+                    <Plus className="h-4 w-4 mr-1" />
+                    Новый источник
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleOpenLinkExisting}>
+                    <Link2 className="h-4 w-4 mr-1" />
+                    Привязать существующий
+                  </Button>
+                </div>
               )}
 
               {/* Sources list */}

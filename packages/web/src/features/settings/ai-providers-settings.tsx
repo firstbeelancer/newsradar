@@ -34,6 +34,7 @@ import {
   Globe,
   TestTube2,
   XCircle,
+  Save,
 } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -280,6 +281,23 @@ export function AIProvidersSettings() {
     }
   };
 
+  // ─── Inline process assignment save ──────────────────────────────────────
+
+  const handleSaveAssignments = async (provider: AIProvider) => {
+    try {
+      await apiPut<AIProvider, Partial<AIProvider>>(`/ai-providers/${provider.id}`, {
+        assignedTo: provider.assignedTo || [],
+      });
+      addToast({ title: 'Конфигурация сохранена', variant: 'success' });
+    } catch (err) {
+      addToast({
+        title: 'Ошибка',
+        description: err instanceof Error ? err.message : 'Не удалось сохранить',
+        variant: 'danger',
+      });
+    }
+  };
+
   // ─── Toggle active ──────────────────────────────────────────────────────
 
   const handleToggleActive = async (provider: AIProvider) => {
@@ -308,10 +326,33 @@ export function AIProvidersSettings() {
             Управление подключениями к AI-сервисам для генерации контента
           </p>
         </div>
-        <Button onClick={openAddDialog} size="sm">
-          <Plus className="h-4 w-4 mr-1" />
-          Добавить
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              try {
+                for (const p of providers) {
+                  await apiPut<AIProvider, Partial<AIProvider>>(`/ai-providers/${p.id}`, {
+                    assignedTo: p.assignedTo || [],
+                    isActive: p.isActive,
+                  });
+                }
+                addToast({ title: 'Конфигурация сохранена', description: `Сохранено ${providers.length} провайдеров`, variant: 'success' });
+              } catch (err) {
+                addToast({ title: 'Ошибка', description: err instanceof Error ? err.message : '', variant: 'danger' });
+              }
+            }}
+            disabled={providers.length === 0}
+          >
+            <Save className="h-4 w-4 mr-1" />
+            Сохранить всё
+          </Button>
+          <Button onClick={openAddDialog} size="sm">
+            <Plus className="h-4 w-4 mr-1" />
+            Добавить
+          </Button>
+        </div>
       </div>
 
       {loading && (
@@ -386,7 +427,7 @@ export function AIProvidersSettings() {
                           </div>
                         )}
                         {provider.assignedTo && provider.assignedTo.length > 0 && (
-                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                             {provider.assignedTo.map((proc) => {
                               const procOpt = PROCESS_OPTIONS.find((p) => p.value === proc);
                               return (
@@ -395,6 +436,15 @@ export function AIProvidersSettings() {
                                 </span>
                               );
                             })}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-5 px-1.5 text-[10px]"
+                              onClick={() => handleSaveAssignments(provider)}
+                              title="Сохранить назначения"
+                            >
+                              <Save className="h-3 w-3" />
+                            </Button>
                           </div>
                         )}
                         {testResult && (

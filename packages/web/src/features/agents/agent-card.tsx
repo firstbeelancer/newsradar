@@ -19,23 +19,23 @@ interface AgentCardProps {
   onCollect: (agent: Agent) => void;
 }
 
+function hexToBg(hex: string): string {
+  if (!hex || !hex.startsWith('#')) return '';
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
 const iconMap: Record<string, React.ReactNode> = {
   bot: <Bot className="h-5 w-5" />,
   default: <Bot className="h-5 w-5" />,
 };
 
-const colorMap: Record<string, string> = {
-  blue: 'bg-blue-50 text-blue-600',
-  green: 'bg-green-50 text-green-600',
-  purple: 'bg-purple-50 text-purple-600',
-  orange: 'bg-orange-50 text-orange-600',
-  red: 'bg-red-50 text-red-600',
-  default: 'bg-accent-light text-accent',
-};
-
 export function AgentCard({ agent, onEdit, onDelete, onCollect }: AgentCardProps) {
   const icon = iconMap[agent.icon] || iconMap.default;
-  const colorClass = colorMap[agent.color] || colorMap.default;
+  const agentColor = agent.color || '#0ea5e9';
+  const isHex = agentColor.startsWith('#');
 
   return (
     <Card className="group transition-all hover:shadow-md overflow-hidden">
@@ -45,9 +45,9 @@ export function AgentCard({ agent, onEdit, onDelete, onCollect }: AgentCardProps
             to="/agents/$id"
             params={{ id: agent.id }}
             className={cn(
-              'flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-xl transition-transform group-hover:scale-105',
-              colorClass
+              'flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-xl transition-transform group-hover:scale-105'
             )}
+            style={isHex ? { backgroundColor: `${agentColor}18`, color: agentColor } : undefined}
           >
             {icon}
           </Link>

@@ -48,7 +48,9 @@ export function IBoardPage() {
       setStats(data);
       setStatsError(false);
     } catch {
-      setStatsError(true);
+      // Gracefully handle: show basic UI even if stats API is unavailable
+      setStats(null);
+      setStatsError(false); // Don't show error, just show empty state
     }
   }, []);
 

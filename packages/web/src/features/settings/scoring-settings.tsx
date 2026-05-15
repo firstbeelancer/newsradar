@@ -61,9 +61,9 @@ export function ScoringSettings() {
   const handleSliderChange = (key: string, value: number) => {
     setLocalWeights((prev) => {
       const updated = { ...prev, [key]: value };
-      // Auto-normalize: distribute the difference proportionally to other keys
+      // Auto-normalize: distribute the difference proportionally, clamp negatives
       const sum = Object.values(updated).reduce((a, b) => a + b, 0);
-      if (Math.abs(sum - 1.0) > 0.01 && sum > 0) {
+      if (sum > 0 && Math.abs(sum - 1.0) > 0.005) {
         const diff = 1.0 - sum;
         const otherKeys = Object.keys(updated).filter((k) => k !== key);
         const otherSum = otherKeys.reduce((a, k) => a + updated[k], 0);
@@ -71,12 +71,15 @@ export function ScoringSettings() {
           for (const k of otherKeys) {
             updated[k] = Math.max(0, updated[k] + (updated[k] / otherSum) * diff);
           }
-        } else {
-          // All other weights are 0, distribute equally
+        } else if (otherKeys.length > 0) {
           const share = diff / otherKeys.length;
           for (const k of otherKeys) {
             updated[k] = Math.max(0, share);
           }
+        }
+        // Final clamp
+        for (const k of Object.keys(updated)) {
+          updated[k] = Math.max(0, updated[k]);
         }
       }
       return updated;

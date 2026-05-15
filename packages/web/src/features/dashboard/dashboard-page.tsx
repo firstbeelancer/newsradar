@@ -118,23 +118,23 @@ export function DashboardPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 overflow-x-hidden">
       {/* Header: Welcome */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
+      <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
             Привет, {user?.name?.split(' ')[0] || 'пользователь'}!
           </h1>
-          <p className="text-muted-foreground mt-1">
+          <p className="text-muted-foreground mt-1 text-sm">
             Вот что произошло сегодня
           </p>
         </div>
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button variant="danger" onClick={handleDeleteAllArticles} loading={deleteAllLoading}>
+        <div className="flex flex-wrap justify-end gap-2 shrink-0">
+          <Button variant="danger" size="sm" onClick={handleDeleteAllArticles} loading={deleteAllLoading}>
             <Trash2 className="h-4 w-4" />
-            <span className="hidden sm:inline">Удалить все новости</span>
+            <span className="hidden sm:inline">Удалить все</span>
           </Button>
-          <Button onClick={() => setCollectDialogOpen(true)}>
+          <Button size="sm" onClick={() => setCollectDialogOpen(true)}>
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">Собрать новости</span>
           </Button>
@@ -199,16 +199,16 @@ export function DashboardPage() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Main column */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-6 min-w-0">
           {/* Agents list */}
-          <Card>
+          <Card className="overflow-hidden">
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Агенты сбора</CardTitle>
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <CardTitle className="text-base sm:text-lg">Агенты сбора</CardTitle>
                   <CardDescription>Активные агенты мониторинга</CardDescription>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => navigate({ to: '/agents' })}>
+                <Button variant="ghost" size="sm" onClick={() => navigate({ to: '/agents' })} className="shrink-0">
                   Все
                   <ChevronRight className="h-4 w-4" />
                 </Button>
@@ -234,20 +234,23 @@ export function DashboardPage() {
                     key={agent.id}
                     to="/agents/$id"
                     params={{ id: agent.id }}
-                    className="flex items-center justify-between rounded-lg border border-border p-3 transition-colors hover:bg-muted/50"
+                    className="flex items-center justify-between rounded-lg border border-border p-3 transition-colors hover:bg-muted/50 gap-3"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-light text-accent">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
+                        style={{ backgroundColor: agent.color ? `${agent.color}18` : undefined, color: agent.color || undefined }}
+                      >
                         <Bot className="h-5 w-5" />
                       </div>
-                      <div>
-                        <p className="text-sm font-medium">{agent.name}</p>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{agent.name}</p>
                         <p className="text-xs text-muted-foreground">
                           {agent.article_count ?? 0} новостей
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 shrink-0">
                       <Badge
                         variant={agent.is_active ? 'success' : 'default'}
                       >
@@ -260,10 +263,10 @@ export function DashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Recent activity - now real from previous PR */}
-          <Card>
+          {/* Recent activity */}
+          <Card className="overflow-hidden">
             <CardHeader className="pb-3">
-              <CardTitle>Последние операции</CardTitle>
+              <CardTitle className="text-base sm:text-lg">Последние операции</CardTitle>
               <CardDescription>История последних действий</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
@@ -298,7 +301,7 @@ export function DashboardPage() {
                         </p>
                       </div>
                     </div>
-                    <Badge variant={log.status === 'success' ? 'success' : log.status === 'failed' ? 'danger' : 'default'}>
+                    <Badge variant={log.status === 'success' ? 'success' : log.status === 'failed' ? 'danger' : 'default'} className="shrink-0">
                       {log.status}
                     </Badge>
                   </div>
@@ -308,17 +311,17 @@ export function DashboardPage() {
           </Card>
         </div>
 
-        {/* Right column - removed duplicate collect card */}
-        <div className="space-y-6">
+        {/* Right column */}
+        <div className="space-y-6 min-w-0">
           {/* Bookmarks */}
-          <Card>
+          <Card className="overflow-hidden">
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Избранное</CardTitle>
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <CardTitle className="text-base sm:text-lg">Избранное</CardTitle>
                   <CardDescription>Сохранённые материалы</CardDescription>
                 </div>
-                <Bookmark className="h-4 w-4 text-muted-foreground" />
+                <Bookmark className="h-4 w-4 text-muted-foreground shrink-0" />
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -341,11 +344,11 @@ export function DashboardPage() {
                     <p className="text-sm font-medium leading-snug group-hover:text-accent transition-colors line-clamp-2">
                       {item.title}
                     </p>
-                    <div className="mt-2 flex items-center justify-between">
-                      <Badge variant="outline" className="text-[10px]">
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <Badge variant="outline" className="text-[10px] shrink-0">
                         {item.source_name}
                       </Badge>
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-[10px] text-muted-foreground shrink-0">
                         {new Date(item.published_at).toLocaleDateString('ru-RU', {
                           day: 'numeric',
                           month: 'short',

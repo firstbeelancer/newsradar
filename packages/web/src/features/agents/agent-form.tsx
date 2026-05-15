@@ -29,6 +29,14 @@ const DEFAULT_WEIGHTS = {
   sourceTrust: 0.20,
 };
 
+const DEFAULT_CHIP_FILTERS: Partial<ChipFilter>[] = [
+  { key: 'breaking', label: 'Срочное', operator: 'contains', pattern: 'срочно,экстренно,breaking,urgent', scoreModifier: 0.15, color: '#ef4444', icon: 'zap', isActive: true },
+  { key: 'exclusive', label: 'Эксклюзив', operator: 'contains', pattern: 'эксклюзив,exclusive,первоисточник', scoreModifier: 0.10, color: '#8b5cf6', icon: 'star', isActive: true },
+  { key: 'trending', label: 'Тренд', operator: 'contains', pattern: 'тренд,хайп,viral,популярн', scoreModifier: 0.08, color: '#f97316', icon: 'trending-up', isActive: true },
+  { key: 'actionable', label: 'Actionable', operator: 'contains', pattern: 'как,пошагов,instruction,руководство,гайд', scoreModifier: 0.05, color: '#06b6d4', icon: 'check-circle', isActive: true },
+  { key: 'spam', label: 'Спам', operator: 'contains', pattern: 'реклама,акция,скидка,promo,промо', scoreModifier: -0.20, color: '#6b7280', icon: 'x-circle', isActive: true },
+];
+
 function sliderFillStyle(value: number): CSSProperties {
   const pct = Math.max(0, Math.min(100, Math.round(value * 100)));
   return { '--slider-pct': `${pct}%` } as CSSProperties;
@@ -55,6 +63,7 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
   const [systemPrompt, setSystemPrompt] = useState('');
   const [weights, setWeights] = useState(DEFAULT_WEIGHTS);
   const [chipFilters, setChipFilters] = useState<Partial<ChipFilter>[]>([]);
+  const [customSubjectArea, setCustomSubjectArea] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [tab, setTab] = useState<'basic' | 'scoring' | 'filters' | 'prompts'>('basic');
 
@@ -64,7 +73,10 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
       setDescription(agent.description || '');
       setIcon(agent.icon || 'bot');
       setColor(agent.color || '#3b82f6');
-      setSubjectArea(agent.subjectArea || '');
+      const sa = agent.subjectArea || '';
+      const isPreset = SUBJECT_AREAS.some(a => a.id === sa);
+      setSubjectArea(isPreset ? sa : '');
+      setCustomSubjectArea(isPreset ? '' : sa);
       setTargetAudience(agent.config?.targetAudience || '');
       setTone(agent.config?.tone || 'профессиональный');
       setSystemPrompt(agent.config?.systemPrompt || '');
@@ -73,8 +85,8 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
       setChipFilters(agent.chipFilters || agent.config?.chipFilters || []);
     } else {
       setName(''); setDescription(''); setIcon('bot'); setColor('#3b82f6');
-      setSubjectArea(''); setTargetAudience(''); setTone('профессиональный');
-      setSystemPrompt(''); setTags([]); setWeights(DEFAULT_WEIGHTS); setChipFilters([]);
+      setSubjectArea(''); setCustomSubjectArea(''); setTargetAudience(''); setTone('профессиональный');
+      setSystemPrompt(''); setTags([]); setWeights(DEFAULT_WEIGHTS); setChipFilters([...DEFAULT_CHIP_FILTERS]);
     }
     setErrors({}); setTab('basic');
   }, [agent, open]);
@@ -132,10 +144,9 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
   const updateWeight = useCallback((key: keyof typeof weights, value: number) => {
     setWeights(prev => {
       const updated = { ...prev, [key]: value };
-      // Normalize to sum = 1.0
+      // Normalize to sum = 1.0, clamping negatives to 0
       const sum = Object.values(updated).reduce((a, b) => a + b, 0);
-      if (Math.abs(sum - 1.0) > 0.01) {
-        // Auto-normalize: distribute the difference proportionally
+      if (sum > 0 && Math.abs(sum - 1.0) > 0.005) {
         const diff = 1.0 - sum;
         const otherKeys = (Object.keys(updated) as (keyof typeof weights)[]).filter(k => k !== key);
         const otherSum = otherKeys.reduce((a, k) => a + updated[k], 0);
@@ -143,6 +154,15 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
           for (const k of otherKeys) {
             updated[k] = Math.max(0, updated[k] + (updated[k] / otherSum) * diff);
           }
+        } else if (otherKeys.length > 0) {
+          const share = diff / otherKeys.length;
+          for (const k of otherKeys) {
+            updated[k] = Math.max(0, share);
+          }
+        }
+        // Final clamp: ensure no negatives
+        for (const k of Object.keys(updated) as (keyof typeof weights)[]) {
+          updated[k] = Math.max(0, updated[k]);
         }
       }
       return updated;
@@ -153,12 +173,14 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
     e.preventDefault();
     if (!validate()) return;
 
+    const finalSubjectArea = customSubjectArea.trim() || subjectArea || undefined;
+
     const data: CreateAgentDto = {
       name: name.trim(),
       description: description.trim(),
       icon,
       color,
-      subjectArea: subjectArea || undefined,
+      subjectArea: finalSubjectArea,
       config: {
         targetAudience: targetAudience.trim() || undefined,
         tone: tone.trim() || undefined,
@@ -244,7 +266,7 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
                       <button
                         key={area.id}
                         type="button"
-                        onClick={() => setSubjectArea(subjectArea === area.id ? '' : area.id)}
+                        onClick={() => { setSubjectArea(subjectArea === area.id ? '' : area.id); setCustomSubjectArea(''); }}
                         className={cn(
                           'flex items-center gap-3 px-3 py-2 rounded-lg border-2 transition-all text-left',
                           subjectArea === area.id
@@ -260,6 +282,14 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
                       </button>
                     );
                   })}
+                </div>
+                <div className="mt-2 space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Или укажите свою предметную область:</Label>
+                  <Input
+                    value={customSubjectArea}
+                    onChange={(e) => { setCustomSubjectArea(e.target.value); if (e.target.value) setSubjectArea(''); }}
+                    placeholder="Например: Финтех, E-commerce, Автопром..."
+                  />
                 </div>
               </div>
 

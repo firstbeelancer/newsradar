@@ -178,4 +178,40 @@
     background: linear-gradient(135deg, #0057ea 0%, #0031b8 50%, #00cfff 140%);
     box-shadow: 0 14px 30px rgba(0, 71, 217, 0.34), 0 0 28px rgba(0, 234, 255, 0.32);
   }
+
+  /* Modern card with subtle glow on hover */
+  .nr-card-glow {
+    transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+  }
+  .nr-card-glow:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 0 20px rgba(0, 100, 244, 0.12),
+      0 8px 32px rgba(0, 39, 126, 0.10),
+      0 1px 3px rgba(0, 0, 0, 0.06);
+    border-color: rgba(0, 180, 255, 0.35);
+  }
+
+  /* Accent glow for primary buttons */
+  .nr-btn-glow {
+    transition: box-shadow 200ms ease, transform 150ms ease;
+  }
+  .nr-btn-glow:hover {
+    box-shadow: 0 0 16px rgba(0, 100, 244, 0.35), 0 4px 12px rgba(0, 71, 217, 0.25);
+    transform: translateY(-1px);
+  }
+  .nr-btn-glow:active {
+    transform: translateY(0);
+    box-shadow: 0 0 8px rgba(0, 100, 244, 0.2);
+  }
+
+  /* Input focus glow */
+  .nr-input-glow:focus {
+    box-shadow: 0 0 0 3px rgba(0, 100, 244, 0.15), 0 0 12px rgba(0, 180, 255, 0.10);
+  }
+
+  /* Badge with subtle glow */
+  .nr-badge-glow {
+    box-shadow: 0 0 6px rgba(0, 100, 244, 0.15);
+  }
 }
