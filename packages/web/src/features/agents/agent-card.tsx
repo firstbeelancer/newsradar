@@ -19,7 +19,7 @@ import {
   Hammer, Wrench, type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
-import { agentsApi, type Agent, type Source, type ChipFilter } from '@shared/api/client';
+import { agentsApi, sourcesApi, type Agent, type Source, type ChipFilter } from '@shared/api/client';
 
 interface AgentCardProps {
   agent: Agent;
@@ -60,10 +60,11 @@ function getAgentIcon(iconStr?: string): LucideIcon {
   return ICON_MAP[key] || Bot;
 }
 
-function SourceToggleList({ agentId }: { agentId: string }) {
+function SourceToggleList({ agentId, onSourceDeleted }: { agentId: string; onSourceDeleted?: () => void }) {
   const [sources, setSources] = useState<Source[]>([]);
   const [loading, setLoading] = useState(true);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -92,6 +93,19 @@ function SourceToggleList({ agentId }: { agentId: string }) {
     }
   }, []);
 
+  const handleDelete = useCallback(async (sourceId: string) => {
+    setDeletingId(sourceId);
+    try {
+      await sourcesApi.delete(sourceId);
+      setSources(prev => prev.filter(s => s.id !== sourceId));
+      onSourceDeleted?.();
+    } catch {
+      // silent
+    } finally {
+      setDeletingId(null);
+    }
+  }, [onSourceDeleted]);
+
   if (loading) {
     return (
       <div className="space-y-2">
@@ -107,12 +121,16 @@ function SourceToggleList({ agentId }: { agentId: string }) {
   }
 
   return (
-    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+    <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
       {sources.map((source) => (
         <div
           key={source.id}
-          className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted/60 transition-colors"
+          className={cn(
+            'flex items-center gap-2 rounded-lg px-2.5 py-2 transition-colors group/src',
+            source.is_active ? 'bg-muted/40 hover:bg-muted/60' : 'bg-muted/20 opacity-60 hover:opacity-80'
+          )}
         >
+          {/* Type icon */}
           <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground">
             {source.type === 'telegram' ? (
               <MessageCircle className="h-3.5 w-3.5" />
@@ -120,16 +138,31 @@ function SourceToggleList({ agentId }: { agentId: string }) {
               <Rss className="h-3.5 w-3.5" />
             )}
           </div>
+
+          {/* Name + URL */}
           <div className="min-w-0 flex-1">
             <p className="text-xs font-medium truncate leading-tight">{source.name}</p>
             <p className="text-[10px] text-muted-foreground truncate">{source.url}</p>
           </div>
+
+          {/* Toggle switch — standalone, NOT inside a <button> */}
           <Switch
             checked={source.is_active}
             onCheckedChange={(checked) => handleToggle(source.id, checked)}
             disabled={togglingId === source.id}
             className="shrink-0 scale-75"
           />
+
+          {/* Delete button */}
+          <button
+            type="button"
+            onClick={() => handleDelete(source.id)}
+            disabled={deletingId === source.id}
+            className="shrink-0 opacity-0 group-hover/src:opacity-100 transition-opacity p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+            title="Удалить источник"
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
         </div>
       ))}
     </div>
@@ -220,14 +253,23 @@ export function AgentCard({ agent, onEdit, onDelete, onCollect }: AgentCardProps
                 <CircleDot className="h-3 w-3" />
                 {agent.article_count ?? 0} новостей
               </span>
-              <button
-                type="button"
+
+              {/* Sources toggle — div, NOT button, to avoid nesting issues */}
+              <div
+                role="button"
+                tabIndex={0}
                 onClick={(e) => {
                   e.preventDefault();
                   setSourcesOpen(!sourcesOpen);
                 }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setSourcesOpen(!sourcesOpen);
+                  }
+                }}
                 className={cn(
-                  'flex items-center gap-1.5 transition-colors cursor-pointer rounded-md px-2 py-1 -mx-2 -my-1 border',
+                  'flex items-center gap-1.5 transition-colors cursor-pointer rounded-md px-2 py-1 -mx-2 -my-1 border select-none',
                   sourcesOpen
                     ? 'text-accent bg-accent/10 border-accent/30'
                     : 'text-muted-foreground hover:text-accent hover:bg-accent/5 border-transparent hover:border-accent/20'
@@ -235,11 +277,12 @@ export function AgentCard({ agent, onEdit, onDelete, onCollect }: AgentCardProps
               >
                 <Link2 className="h-3 w-3" />
                 <span>{agent.source_count ?? 0} источников</span>
-                <Switch
-                  checked={sourcesOpen}
-                  className="scale-[0.6] shrink-0 pointer-events-none"
-                />
-              </button>
+                {sourcesOpen ? (
+                  <ChevronUp className="h-3 w-3" />
+                ) : (
+                  <ChevronDown className="h-3 w-3" />
+                )}
+              </div>
             </div>
           </div>
 
@@ -269,15 +312,15 @@ export function AgentCard({ agent, onEdit, onDelete, onCollect }: AgentCardProps
           </DropdownMenu>
         </div>
 
-        {/* Sources toggle panel */}
+        {/* Sources panel */}
         {sourcesOpen && (
-          <div className="mt-3 pt-3 border-t border-border/60 animate-in slide-in-from-top-1 duration-200">
+          <div className="mt-3 pt-3 border-t border-border/60">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <Link2 className="h-3.5 w-3.5 text-accent" />
-                <p className="text-xs font-semibold text-foreground">Источники агента</p>
+                <p className="text-xs font-semibold text-foreground">Источники</p>
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                  {agent.source_count ?? 0}
+                  {sources.length}
                 </Badge>
               </div>
               <Button
@@ -287,7 +330,7 @@ export function AgentCard({ agent, onEdit, onDelete, onCollect }: AgentCardProps
                 onClick={() => navigate({ to: '/agents/$id', params: { id: agent.id } })}
               >
                 <Plus className="h-3 w-3 mr-0.5" />
-                Управление
+                Все источники
               </Button>
             </div>
             <SourceToggleList agentId={agent.id} />
