@@ -10,22 +10,64 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icons/*.svg', 'favicon.ico'],
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        runtimeCaching: [
+          {
+            urlPattern: /^https?:\/\/.*\/api\/.*/i,
+            handler: 'NetworkOnly',
+          },
+        ],
+      },
+      includeAssets: ['icons/*.svg', 'icons/*.png', 'favicon.ico'],
       manifest: {
         name: 'Newsradar',
         short_name: 'Newsradar',
-        description: 'Newsradar — сбор, скоринг и генерация новостей через AI-агентов',
+        description: 'AI-радар новостей: сбор, скоринг, генерация контента',
         theme_color: '#0047d9',
         background_color: '#f5f8ff',
         display: 'standalone',
+        orientation: 'any',
         scope: '/',
         start_url: '/',
+        lang: 'ru',
+        categories: ['news', 'productivity'],
         icons: [
+          {
+            src: '/icons/icon-192x192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any',
+          },
+          {
+            src: '/icons/icon-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any',
+          },
+          {
+            src: '/icons/icon-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
           {
             src: '/icons/newsradar-app-icon.svg',
             sizes: 'any',
             type: 'image/svg+xml',
             purpose: 'any maskable',
+          },
+        ],
+        shortcuts: [
+          {
+            name: 'Лента',
+            url: '/feed',
+            description: 'Просмотр новостной ленты',
+          },
+          {
+            name: 'Генерация',
+            url: '/generation',
+            description: 'Генерация постов',
           },
         ],
       },
