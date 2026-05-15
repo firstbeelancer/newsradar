@@ -217,7 +217,29 @@ export async function listAgents(
         } as Cursor)
       : null;
 
-  return { data, nextCursor, hasMore };
+  // Load chip filters for all agents in one query
+  const agentIds = data.map(a => a.id);
+  let chipFiltersByAgent: Record<string, unknown[]> = {};
+  if (agentIds.length > 0) {
+    const allFilters = await db
+      .select()
+      .from(chipFilters)
+      .where(
+        sql`${chipFilters.agentId} IN (${sql.join(agentIds.map(id => sql`${id}`), sql`, `)})`
+      )
+      .orderBy(chipFilters.position);
+    for (const f of allFilters) {
+      if (!chipFiltersByAgent[f.agentId]) chipFiltersByAgent[f.agentId] = [];
+      chipFiltersByAgent[f.agentId].push(f);
+    }
+  }
+
+  const enrichedData = data.map(a => ({
+    ...a,
+    chipFilters: chipFiltersByAgent[a.id] || [],
+  }));
+
+  return { data: enrichedData, nextCursor, hasMore };
 }
 
 export async function updateAgent(
