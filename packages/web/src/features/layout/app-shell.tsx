@@ -16,7 +16,7 @@ export function AppShell({ children }: AppShellProps) {
         <Sidebar />
       </div>
 
-      <main className="relative min-h-[100dvh] pb-20 md:ml-64 md:pb-14">
+      <main className="relative min-h-[100dvh] pb-20 md:ml-64 md:pb-14 overflow-x-hidden">
         <div className="mx-auto max-w-5xl p-3 sm:p-4 md:p-6 lg:p-8">
           {children}
         </div>

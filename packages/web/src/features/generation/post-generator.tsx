@@ -6,11 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@shared/ui/card';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@shared/ui/select';
 import { useGenerationStore } from '@shared/stores/generation-store';
 import { useSettingsStore } from '@shared/stores/settings-store';
-import { articlesApi } from '@shared/api/client';
+import { useToast } from '@shared/ui/toast';
+import { articlesApi, apiPut, apiGet } from '@shared/api/client';
 import { SSEStream } from './sse-stream';
 import { GenerationResult } from './generation-result';
 import { Checkbox } from '@shared/ui/checkbox';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Save } from 'lucide-react';
 
 const PAGE_SIZE = 20;
 const DEFAULT_TEMPLATE_VALUE = '__default_template__';
@@ -51,9 +52,11 @@ export function PostGenerator() {
   } = useGenerationStore();
 
   const { templates, fetchTemplates } = useSettingsStore();
+  const { addToast } = useToast();
   const streamUnsubscribe = useRef<(() => void) | null>(null);
 
   const [showResult, setShowResult] = useState(false);
+  const [savingConfig, setSavingConfig] = useState(false);
 
   useEffect(() => {
     fetchTemplates();
@@ -96,6 +99,31 @@ export function PostGenerator() {
     resetGeneration();
     setShowResult(false);
     handleGenerate();
+  };
+
+  const handleSaveConfig = async () => {
+    setSavingConfig(true);
+    try {
+      // Fetch current AI providers and update the first active one with generation settings
+      const providers = await apiGet<Array<{ id: string; isActive: boolean }>>('/ai-providers');
+      const activeProvider = Array.isArray(providers) ? providers.find((p) => p.isActive) : null;
+      if (activeProvider) {
+        await apiPut(`/ai-providers/${activeProvider.id}`, {
+          model: selectedModel,
+        });
+        addToast({ title: 'Конфигурация сохранена', description: `Модель: ${selectedModel}`, variant: 'success' });
+      } else {
+        addToast({ title: 'Нет активного провайдера', description: 'Добавьте AI провайдер в настройках', variant: 'warning' });
+      }
+    } catch (err) {
+      addToast({
+        title: 'Ошибка',
+        description: err instanceof Error ? err.message : 'Не удалось сохранить',
+        variant: 'danger',
+      });
+    } finally {
+      setSavingConfig(false);
+    }
   };
 
   if (showResult && (streamContent || streamError)) {
@@ -179,6 +207,13 @@ export function PostGenerator() {
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          <div className="flex justify-end">
+            <Button variant="outline" size="sm" onClick={handleSaveConfig} disabled={savingConfig}>
+              <Save className="h-4 w-4 mr-1" />
+              {savingConfig ? 'Сохранение...' : 'Сохранить конфигурацию'}
+            </Button>
           </div>
         </CardContent>
       </Card>

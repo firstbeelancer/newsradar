@@ -5,9 +5,11 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { useGenerationStore } from '@shared/stores/generation-store';
 import { useAgentsStore } from '@shared/stores/agents-store';
 import { useSettingsStore } from '@shared/stores/settings-store';
+import { useToast } from '@shared/ui/toast';
+import { apiGet, apiPut } from '@shared/api/client';
 import { SSEStream } from './sse-stream';
 import { GenerationResult } from './generation-result';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Save } from 'lucide-react';
 
 const DEFAULT_TEMPLATE_VALUE = '__default_template__';
 
@@ -35,9 +37,11 @@ export function DigestGenerator() {
 
   const { agents, fetchAgents } = useAgentsStore();
   const { templates, fetchTemplates } = useSettingsStore();
+  const { addToast } = useToast();
   const streamUnsubscribe = useRef<(() => void) | null>(null);
 
   const [showResult, setShowResult] = useState(false);
+  const [savingConfig, setSavingConfig] = useState(false);
 
   useEffect(() => {
     fetchAgents();
@@ -70,6 +74,30 @@ export function DigestGenerator() {
     resetGeneration();
     setShowResult(false);
     handleGenerate();
+  };
+
+  const handleSaveConfig = async () => {
+    setSavingConfig(true);
+    try {
+      const providers = await apiGet<Array<{ id: string; isActive: boolean }>>('/ai-providers');
+      const activeProvider = Array.isArray(providers) ? providers.find((p) => p.isActive) : null;
+      if (activeProvider) {
+        await apiPut(`/ai-providers/${activeProvider.id}`, {
+          model: selectedModel,
+        });
+        addToast({ title: 'Конфигурация сохранена', description: `Модель: ${selectedModel}`, variant: 'success' });
+      } else {
+        addToast({ title: 'Нет активного провайдера', description: 'Добавьте AI провайдер в настройках', variant: 'warning' });
+      }
+    } catch (err) {
+      addToast({
+        title: 'Ошибка',
+        description: err instanceof Error ? err.message : 'Не удалось сохранить',
+        variant: 'danger',
+      });
+    } finally {
+      setSavingConfig(false);
+    }
   };
 
   if (showResult && (streamContent || streamError)) {
@@ -184,15 +212,21 @@ export function DigestGenerator() {
           </div>
         </div>
 
-        <Button
-          className="w-full"
-          onClick={handleGenerate}
-          disabled={!selectedAgentId || isGenerating}
-          loading={isGenerating}
-        >
-          {!isGenerating && <Sparkles className="h-4 w-4" />}
-          Сгенерировать дайджест
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleSaveConfig} disabled={savingConfig} className="shrink-0">
+            <Save className="h-4 w-4 mr-1" />
+            {savingConfig ? '...' : 'Сохранить конфигурацию'}
+          </Button>
+          <Button
+            className="flex-1"
+            onClick={handleGenerate}
+            disabled={!selectedAgentId || isGenerating}
+            loading={isGenerating}
+          >
+            {!isGenerating && <Sparkles className="h-4 w-4" />}
+            Сгенерировать дайджест
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );

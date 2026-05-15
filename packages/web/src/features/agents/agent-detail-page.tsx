@@ -23,8 +23,54 @@ import {
   Trash2,
   Unlink,
   X,
+  Shield,
+  Brain,
+  Megaphone,
+  Heart,
+  Paintbrush,
+  Globe,
+  Zap,
+  Star,
+  Eye,
+  Search,
+  BookOpen,
+  Rss,
+  MessageCircle,
+  Target,
+  Lightbulb,
+  Compass,
+  type LucideIcon,
 } from 'lucide-react';
-import { cn } from '@shared/lib/utils';
+
+// Map agent.icon string to Lucide icon component
+const ICON_MAP: Record<string, LucideIcon> = {
+  bot: Bot,
+  shield: Shield,
+  brain: Brain,
+  megaphone: Megaphone,
+  heart: Heart,
+  paintbrush: Paintbrush,
+  globe: Globe,
+  zap: Zap,
+  star: Star,
+  eye: Eye,
+  search: Search,
+  book: BookOpen,
+  bookopen: BookOpen,
+  rss: Rss,
+  message: MessageCircle,
+  messagecircle: MessageCircle,
+  target: Target,
+  lightbulb: Lightbulb,
+  compass: Compass,
+  newspaper: Newspaper,
+};
+
+function getAgentIcon(iconStr?: string): LucideIcon {
+  if (!iconStr) return Bot;
+  const key = iconStr.toLowerCase().replace(/[^a-z]/g, '');
+  return ICON_MAP[key] || Bot;
+}
 import type { CreateAgentDto, UpdateAgentDto, AgentStats } from '@shared/api/client';
 import { agentsApi, sourcesApi } from '@shared/api/client';
 
@@ -54,9 +100,6 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
   const [stats, setStats] = useState<AgentStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [addSourceOpen, setAddSourceOpen] = useState(false);
-  const [linkExistingOpen, setLinkExistingOpen] = useState(false);
-  const [allSources, setAllSources] = useState<{ id: string; name: string; url: string; type: string }[]>([]);
-  const [linkingSourceId, setLinkingSourceId] = useState<string | null>(null);
   const [newSourceName, setNewSourceName] = useState('');
   const [newSourceUrl, setNewSourceUrl] = useState('');
   const [newSourceType, setNewSourceType] = useState<'rss' | 'telegram'>('rss');
@@ -132,36 +175,6 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
     }
   };
 
-  const handleOpenLinkExisting = async () => {
-    setLinkExistingOpen(true);
-    try {
-      const all = await sourcesApi.list();
-      const linkedIds = new Set(sources.map(s => s.id));
-      setAllSources(all.filter(s => !linkedIds.has(s.id)));
-    } catch {
-      setAllSources([]);
-    }
-  };
-
-  const handleLinkExisting = async (sourceId: string) => {
-    if (!id) return;
-    setLinkingSourceId(sourceId);
-    try {
-      await agentsApi.linkSource(id, sourceId);
-      addToast({ title: 'Источник привязан', variant: 'success' });
-      fetchSourcesByAgent(id);
-      setAllSources(prev => prev.filter(s => s.id !== sourceId));
-    } catch (err) {
-      addToast({
-        title: 'Ошибка',
-        description: err instanceof Error ? err.message : 'Не удалось привязать источник',
-        variant: 'danger',
-      });
-    } finally {
-      setLinkingSourceId(null);
-    }
-  };
-
   const handleUnlinkSource = async (sourceId: string) => {
     if (!id) return;
     setUnlinkSourceId(sourceId);
@@ -204,6 +217,7 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
 
   const agentColor = currentAgent.color || '#0ea5e9';
   const isHex = agentColor.startsWith('#');
+  const AgentIcon = getAgentIcon(currentAgent.icon);
 
   return (
     <div className="space-y-6">
@@ -224,7 +238,7 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
           className="flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-2xl"
           style={isHex ? { backgroundColor: `${agentColor}18`, color: agentColor } : { backgroundColor: 'var(--accent-light)', color: 'var(--accent)' }}
         >
-          <Bot className="h-6 w-6 sm:h-7 sm:w-7" />
+          <AgentIcon className="h-6 w-6 sm:h-7 sm:w-7" />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
@@ -373,51 +387,11 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
                     </Button>
                   </CardContent>
                 </Card>
-              ) : linkExistingOpen ? (
-                <Card>
-                  <CardContent className="p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium">Привязать существующий источник</p>
-                      <Button variant="ghost" size="icon-sm" onClick={() => setLinkExistingOpen(false)}>
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    {allSources.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-4">
-                        Нет доступных источников для привязки
-                      </p>
-                    ) : (
-                      <div className="space-y-2 max-h-60 overflow-y-auto">
-                        {allSources.map((src) => (
-                          <div key={src.id} className="flex items-center justify-between gap-2 rounded-lg border border-border p-2.5">
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium truncate">{src.name}</p>
-                              <p className="text-xs text-muted-foreground truncate">{src.url}</p>
-                            </div>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleLinkExisting(src.id)}
-                              disabled={linkingSourceId === src.id}
-                            >
-                              <Link2 className="h-3.5 w-3.5 mr-1" />
-                              {linkingSourceId === src.id ? '...' : 'Привязать'}
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
               ) : (
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={() => setAddSourceOpen(true)}>
                     <Plus className="h-4 w-4 mr-1" />
                     Новый источник
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleOpenLinkExisting}>
-                    <Link2 className="h-4 w-4 mr-1" />
-                    Привязать существующий
                   </Button>
                 </div>
               )}

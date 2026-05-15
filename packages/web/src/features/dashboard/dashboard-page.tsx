@@ -19,7 +19,54 @@ import {
   Zap,
   ChevronRight,
   Trash2,
+  Shield,
+  Brain,
+  Megaphone,
+  Heart,
+  Paintbrush,
+  Globe,
+  Star,
+  Eye,
+  Search,
+  BookOpen,
+  Rss,
+  MessageCircle,
+  Target,
+  Lightbulb,
+  Compass,
+  BarChart3,
+  type LucideIcon,
 } from 'lucide-react';
+
+// Map agent.icon string to Lucide icon component
+const ICON_MAP: Record<string, LucideIcon> = {
+  bot: Bot,
+  shield: Shield,
+  brain: Brain,
+  megaphone: Megaphone,
+  heart: Heart,
+  paintbrush: Paintbrush,
+  globe: Globe,
+  zap: Zap,
+  star: Star,
+  eye: Eye,
+  search: Search,
+  book: BookOpen,
+  bookopen: BookOpen,
+  rss: Rss,
+  message: MessageCircle,
+  messagecircle: MessageCircle,
+  target: Target,
+  lightbulb: Lightbulb,
+  compass: Compass,
+  newspaper: Newspaper,
+};
+
+function getAgentIcon(iconStr?: string): LucideIcon {
+  if (!iconStr) return Bot;
+  const key = iconStr.toLowerCase().replace(/[^a-z]/g, '');
+  return ICON_MAP[key] || Bot;
+}
 import type { Article, OperationLog } from '@shared/api/client';
 
 export function DashboardPage() {
@@ -118,9 +165,9 @@ export function DashboardPage() {
   };
 
   return (
-    <div className="space-y-6 overflow-x-hidden">
+    <div className="space-y-6 overflow-x-hidden min-w-0">
       {/* Header: Welcome */}
-      <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
+      <div className="flex flex-col sm:flex-row items-start justify-between gap-4 min-w-0">
         <div className="min-w-0">
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
             Привет, {user?.name?.split(' ')[0] || 'пользователь'}!
@@ -229,7 +276,9 @@ export function DashboardPage() {
                   </Button>
                 </div>
               ) : (
-                agents.slice(0, 5).map((agent) => (
+                agents.slice(0, 5).map((agent) => {
+                  const AgentIcon = getAgentIcon(agent.icon);
+                  return (
                   <Link
                     key={agent.id}
                     to="/agents/$id"
@@ -241,7 +290,7 @@ export function DashboardPage() {
                         className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
                         style={{ backgroundColor: agent.color ? `${agent.color}18` : undefined, color: agent.color || undefined }}
                       >
-                        <Bot className="h-5 w-5" />
+                        <AgentIcon className="h-5 w-5" />
                       </div>
                       <div className="min-w-0">
                         <p className="text-sm font-medium truncate">{agent.name}</p>
@@ -258,7 +307,8 @@ export function DashboardPage() {
                       </Badge>
                     </div>
                   </Link>
-                ))
+                  );
+                })
               )}
             </CardContent>
           </Card>

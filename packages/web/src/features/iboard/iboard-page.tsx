@@ -35,11 +35,16 @@ export function IBoardPage() {
   const { subscription, fetchSubscription, isLoading: subLoading } = useSubscriptionStore();
   const [stats, setStats] = useState<IBoardAPIStats | null>(null);
   const [statsError, setStatsError] = useState(false);
+  const [subReady, setSubReady] = useState(false);
 
   useEffect(() => {
-    fetchSubscription().catch(() => {
-      // Subscription fetch failed, handled gracefully
-    });
+    fetchSubscription()
+      .catch(() => {
+        // Subscription fetch failed, handled gracefully
+      })
+      .finally(() => {
+        setSubReady(true);
+      });
   }, [fetchSubscription]);
 
   const fetchStats = useCallback(async () => {
@@ -159,7 +164,7 @@ export function IBoardPage() {
         )}
       </div>
 
-      {subLoading && <p className="text-sm text-muted-foreground">Загрузка…</p>}
+      {subLoading && !subReady && <p className="text-sm text-muted-foreground">Загрузка…</p>}
     </div>
   );
 }

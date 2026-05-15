@@ -186,18 +186,20 @@
   .nr-card-glow:hover {
     transform: translateY(-2px);
     box-shadow:
-      0 0 20px rgba(0, 100, 244, 0.12),
-      0 8px 32px rgba(0, 39, 126, 0.10),
-      0 1px 3px rgba(0, 0, 0, 0.06);
-    border-color: rgba(0, 180, 255, 0.35);
+      0 0 24px rgba(0, 100, 244, 0.10),
+      0 8px 32px rgba(0, 39, 126, 0.08),
+      0 1px 3px rgba(0, 0, 0, 0.04),
+      inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    border-color: rgba(0, 180, 255, 0.30);
   }
 
   /* Accent glow for primary buttons */
   .nr-btn-glow {
     transition: box-shadow 200ms ease, transform 150ms ease;
+    box-shadow: 0 0 12px rgba(0, 100, 244, 0.2), 0 4px 12px rgba(0, 71, 217, 0.15);
   }
   .nr-btn-glow:hover {
-    box-shadow: 0 0 16px rgba(0, 100, 244, 0.35), 0 4px 12px rgba(0, 71, 217, 0.25);
+    box-shadow: 0 0 24px rgba(0, 100, 244, 0.4), 0 8px 20px rgba(0, 71, 217, 0.3), 0 0 40px rgba(0, 214, 255, 0.15);
     transform: translateY(-1px);
   }
   .nr-btn-glow:active {
@@ -213,5 +215,20 @@
   /* Badge with subtle glow */
   .nr-badge-glow {
     box-shadow: 0 0 6px rgba(0, 100, 244, 0.15);
+  }
+
+  /* Neumorphic dropdown shadow */
+  .nr-dropdown-glow {
+    box-shadow:
+      0 12px 40px rgba(0, 39, 126, 0.12),
+      0 4px 12px rgba(0, 100, 244, 0.08),
+      0 0 0 1px rgba(0, 180, 255, 0.1);
+  }
+
+  /* Glassmorphism card */
+  .nr-glass {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.4);
   }
 }
