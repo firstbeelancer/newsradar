@@ -813,6 +813,8 @@ export const agentsApi = {
     apiPost<{ agentId: string; sourceId: string }, { sourceId: string }>(`/agents/${agentId}/sources`, { sourceId }),
   unlinkSource: (agentId: string, sourceId: string) =>
     apiDelete<void>(`/agents/${agentId}/sources/${sourceId}`),
+  toggleSource: (sourceId: string, isActive: boolean) =>
+    apiPut<BackendSource, { isActive: boolean }>(`/sources/${sourceId}`, { isActive }).then(normalizeSource),
 };
 
 // Scoring Criteria

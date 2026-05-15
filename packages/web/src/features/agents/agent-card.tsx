@@ -1,7 +1,10 @@
+import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { Card, CardContent } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
+import { Switch } from '@shared/ui/switch';
+import { Skeleton } from '@shared/ui/skeleton';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,19 +12,21 @@ import {
   DropdownMenuTrigger,
 } from '@shared/ui/dropdown-menu';
 import {
-  Bot, MoreVertical, Pencil, Trash2, Play, CircleDot, Link2,
+  Bot, MoreVertical, Pencil, Trash2, Play, CircleDot, Link2, ChevronDown, ChevronUp,
+  Rss, MessageCircle, Plus,
   Shield, Brain, Megaphone, Heart, Paintbrush, Globe, Zap, Star,
-  Eye, Search, BookOpen, Rss, MessageCircle, Target, Lightbulb,
-  Compass, Newspaper, Hammer, Wrench, type LucideIcon,
+  Eye, Search, BookOpen, Target, Lightbulb, Compass, Newspaper,
+  Hammer, Wrench, type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
-import type { Agent } from '@shared/api/client';
+import { agentsApi, type Agent, type Source } from '@shared/api/client';
 
 interface AgentCardProps {
   agent: Agent;
   onEdit: (agent: Agent) => void;
   onDelete: (agent: Agent) => void;
   onCollect: (agent: Agent) => void;
+  onSourceToggle?: (agentId: string, sourceId: string, isActive: boolean) => void;
 }
 
 const ICON_MAP: Record<string, LucideIcon> = {
@@ -55,11 +60,88 @@ function getAgentIcon(iconStr?: string): LucideIcon {
   return ICON_MAP[key] || Bot;
 }
 
+function SourceToggleList({ agentId }: { agentId: string }) {
+  const [sources, setSources] = useState<Source[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await agentsApi.sources(agentId);
+        if (!cancelled) setSources(data);
+      } catch {
+        // silent
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [agentId]);
+
+  const handleToggle = useCallback(async (sourceId: string, nextActive: boolean) => {
+    setTogglingId(sourceId);
+    try {
+      await agentsApi.toggleSource(sourceId, nextActive);
+      setSources(prev => prev.map(s => s.id === sourceId ? { ...s, is_active: nextActive } : s));
+    } catch {
+      // revert on error
+    } finally {
+      setTogglingId(null);
+    }
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="space-y-2">
+        {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-8" />)}
+      </div>
+    );
+  }
+
+  if (sources.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground text-center py-2">Нет источников</p>
+    );
+  }
+
+  return (
+    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+      {sources.map((source) => (
+        <div
+          key={source.id}
+          className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted/60 transition-colors"
+        >
+          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground">
+            {source.type === 'telegram' ? (
+              <MessageCircle className="h-3.5 w-3.5" />
+            ) : (
+              <Rss className="h-3.5 w-3.5" />
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium truncate leading-tight">{source.name}</p>
+            <p className="text-[10px] text-muted-foreground truncate">{source.url}</p>
+          </div>
+          <Switch
+            checked={source.is_active}
+            onCheckedChange={(checked) => handleToggle(source.id, checked)}
+            disabled={togglingId === source.id}
+            className="shrink-0 scale-75"
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function AgentCard({ agent, onEdit, onDelete, onCollect }: AgentCardProps) {
   const navigate = useNavigate();
   const AgentIcon = getAgentIcon(agent.icon);
   const agentColor = agent.color || '#0ea5e9';
   const isHex = agentColor.startsWith('#');
+  const [sourcesOpen, setSourcesOpen] = useState(false);
 
   return (
     <Card className="group transition-all hover:shadow-md overflow-hidden">
@@ -108,12 +190,22 @@ export function AgentCard({ agent, onEdit, onDelete, onCollect }: AgentCardProps
                 type="button"
                 onClick={(e) => {
                   e.preventDefault();
-                  navigate({ to: '/agents/$id', params: { id: agent.id } });
+                  setSourcesOpen(!sourcesOpen);
                 }}
-                className="flex items-center gap-1 hover:text-accent transition-colors cursor-pointer"
+                className={cn(
+                  'flex items-center gap-1 transition-colors cursor-pointer rounded px-1.5 py-0.5 -mx-1.5 -my-0.5',
+                  sourcesOpen
+                    ? 'text-accent bg-accent/10'
+                    : 'text-muted-foreground hover:text-accent hover:bg-accent/5'
+                )}
               >
                 <Link2 className="h-3 w-3" />
                 {agent.source_count ?? 0} источников
+                {sourcesOpen ? (
+                  <ChevronUp className="h-3 w-3" />
+                ) : (
+                  <ChevronDown className="h-3 w-3" />
+                )}
               </button>
             </div>
           </div>
@@ -143,6 +235,25 @@ export function AgentCard({ agent, onEdit, onDelete, onCollect }: AgentCardProps
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+
+        {/* Sources toggle panel */}
+        {sourcesOpen && (
+          <div className="mt-3 pt-3 border-t border-border/60">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-foreground">Источники</p>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-[10px]"
+                onClick={() => navigate({ to: '/agents/$id', params: { id: agent.id } })}
+              >
+                <Plus className="h-3 w-3 mr-0.5" />
+                Управление
+              </Button>
+            </div>
+            <SourceToggleList agentId={agent.id} />
+          </div>
+        )}
       </CardContent>
     </Card>
   );
