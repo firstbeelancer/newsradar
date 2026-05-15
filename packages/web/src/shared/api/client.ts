@@ -535,6 +535,7 @@ export interface UpdateSourceDto {
   url?: string;
   type?: SourceType;
   is_active?: boolean;
+  isActive?: boolean;
 }
 
 export interface SourceTestResult {

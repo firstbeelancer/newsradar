@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from '@tanstack/react-router';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@shared/ui/card';
 import { Button } from '@shared/ui/button';
-import { Link } from '@tanstack/react-router';
 import { useSubscriptionStore } from '@shared/stores/subscription-store';
 import { apiGet } from '@shared/api/client';
 import { BarChart3, Crown, Newspaper, Radio, TrendingUp, Calendar, AlertTriangle } from 'lucide-react';
@@ -36,6 +36,7 @@ function MetricCard({ title, value, icon: Icon }: { title: string; value: string
 }
 
 export function IBoardPage() {
+  const navigate = useNavigate();
   const { subscription, fetchSubscription, isLoading: subLoading } = useSubscriptionStore();
   const [stats, setStats] = useState<IBoardAPIStats | null>(null);
   const [statsError, setStatsError] = useState(false);
@@ -102,8 +103,8 @@ export function IBoardPage() {
             <p className="mt-1 max-w-sm text-sm text-muted-foreground">
               Базовая статистика доступна бесплатно. Для полной аналитики с графиками, лидербордом и мониторингом источников подключите Pro.
             </p>
-            <Button asChild className="mt-4" size="sm">
-              <Link to="/subscription">Открыть текущий план</Link>
+            <Button className="mt-4" size="sm" onClick={() => navigate({ to: '/subscription' })}>
+              Открыть текущий план
             </Button>
           </CardContent>
         </Card>

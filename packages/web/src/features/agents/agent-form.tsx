@@ -4,6 +4,7 @@ import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@shared/ui/dialog';
 import { Label } from '@shared/ui/label';
+import { useToast } from '@shared/ui/toast';
 import type { Agent, CreateAgentDto, UpdateAgentDto, ChipFilter } from '@shared/api/client';
 import { Shield, Brain, Megaphone, Heart, Paintbrush, Plus, X, GripVertical, Hammer, Wrench } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
@@ -51,6 +52,7 @@ interface AgentFormProps {
 }
 
 export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }: AgentFormProps) {
+  const { addToast } = useToast();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [icon, setIcon] = useState('bot');
@@ -82,7 +84,7 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
       setSystemPrompt(agent.config?.systemPrompt || '');
       setTags(agent.config?.tags || []);
       setWeights(agent.config?.scoringWeights || DEFAULT_WEIGHTS);
-      setChipFilters(agent.chipFilters || agent.config?.chipFilters || []);
+      setChipFilters(agent.chipFilters || agent.config?.chipFilters || [...DEFAULT_CHIP_FILTERS]);
     } else {
       setName(''); setDescription(''); setIcon('bot'); setColor('#3b82f6');
       setSubjectArea(''); setCustomSubjectArea(''); setTargetAudience(''); setTone('профессиональный');
@@ -148,6 +150,13 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
+
+    // Validate scoring weights sum = 1.0
+    const weightsSum = Object.values(weights).reduce((a, b) => a + b, 0);
+    if (Math.abs(weightsSum - 1.0) >= 0.02) {
+      addToast({ title: 'Ошибка', description: 'Сумма весов скоринга должна быть 100%', variant: 'danger' });
+      return;
+    }
 
     const finalSubjectArea = customSubjectArea.trim() || subjectArea || undefined;
 
@@ -363,10 +372,20 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
               })}
 
               <div className="flex items-center justify-between pt-2 border-t border-border">
-                <span className="text-xs text-muted-foreground">Сумма весов:</span>
-                <span className="text-sm font-mono tabular-nums text-accent">
-                  {(Object.values(weights).reduce((a, b) => a + b, 0) * 100).toFixed(0)}%
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Сумма весов:</span>
+                  <span className={cn(
+                    'text-sm font-mono tabular-nums font-medium',
+                    Math.abs(Object.values(weights).reduce((a, b) => a + b, 0) - 1.0) < 0.02
+                      ? 'text-green-600'
+                      : 'text-red-600'
+                  )}>
+                    {(Object.values(weights).reduce((a, b) => a + b, 0) * 100).toFixed(0)}%
+                  </span>
+                </div>
+                {Math.abs(Object.values(weights).reduce((a, b) => a + b, 0) - 1.0) >= 0.02 && (
+                  <span className="text-xs text-red-500">Сумма должна быть 100%</span>
+                )}
               </div>
 
               <div className="space-y-1.5">

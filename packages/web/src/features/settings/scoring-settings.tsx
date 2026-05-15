@@ -149,15 +149,18 @@ export function ScoringSettings() {
           })}
 
           <div className="flex items-center justify-between pt-4 border-t border-border">
-            <div className="text-sm">
-              <span className="text-muted-foreground">Сумма весов: </span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Сумма весов: </span>
               <span className={
-                Math.abs(Object.values(localWeights).reduce((a, b) => a + b, 0) - 1) < 0.01
-                  ? 'font-medium text-success'
-                  : 'font-medium text-warning'
+                Math.abs(Object.values(localWeights).reduce((a, b) => a + b, 0) - 1) < 0.02
+                  ? 'font-medium text-green-600 font-mono'
+                  : 'font-medium text-red-600 font-mono'
               }>
-                {(Object.values(localWeights).reduce((a, b) => a + b, 0) || 0).toFixed(2)}
+                {(Object.values(localWeights).reduce((a, b) => a + b, 0) * 100).toFixed(0)}%
               </span>
+              {Math.abs(Object.values(localWeights).reduce((a, b) => a + b, 0) - 1) >= 0.02 && (
+                <span className="text-xs text-red-500">Должно быть 100%</span>
+              )}
             </div>
             <div className="flex gap-2">
               <Button
@@ -169,7 +172,11 @@ export function ScoringSettings() {
                 {!isRecalculating && <RotateCcw className="h-4 w-4" />}
                 Перескорить
               </Button>
-              <Button size="sm" onClick={handleSave}>
+              <Button 
+                size="sm" 
+                onClick={handleSave}
+                disabled={Math.abs(Object.values(localWeights).reduce((a, b) => a + b, 0) - 1) >= 0.02}
+              >
                 <Save className="h-4 w-4" />
                 Сохранить
               </Button>
