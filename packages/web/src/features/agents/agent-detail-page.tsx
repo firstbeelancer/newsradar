@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@shar
 import { Badge } from '@shared/ui/badge';
 import { Skeleton } from '@shared/ui/skeleton';
 import { Input } from '@shared/ui/input';
+import { Switch } from '@shared/ui/switch';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@shared/ui/tabs';
 import { useAgentsStore } from '@shared/stores/agents-store';
 import { useSourcesStore } from '@shared/stores/sources-store';
@@ -23,6 +24,7 @@ import {
   Trash2,
   Unlink,
   X,
+  Filter,
   Shield,
   Brain,
   Megaphone,
@@ -75,8 +77,8 @@ function getAgentIcon(iconStr?: string): LucideIcon {
   const key = iconStr.toLowerCase().replace(/[^a-z]/g, '');
   return ICON_MAP[key] || Bot;
 }
-import type { CreateAgentDto, UpdateAgentDto, AgentStats } from '@shared/api/client';
-import { agentsApi, sourcesApi } from '@shared/api/client';
+import type { CreateAgentDto, UpdateAgentDto, AgentStats, ChipFilter } from '@shared/api/client';
+import { agentsApi, sourcesApi, chipFiltersApi } from '@shared/api/client';
 
 interface AgentDetailPageProps {
   agentId: string;
@@ -109,14 +111,27 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
   const [newSourceType, setNewSourceType] = useState<'rss' | 'telegram'>('rss');
   const [addingSource, setAddingSource] = useState(false);
   const [unlinkingSourceId, setUnlinkingSourceId] = useState<string | null>(null);
+  const [togglingSourceId, setTogglingSourceId] = useState<string | null>(null);
+  const [deletingSourceId, setDeletingSourceId] = useState<string | null>(null);
+  const [chipFilters, setChipFilters] = useState<ChipFilter[]>([]);
 
   useEffect(() => {
     if (id) {
       fetchAgent(id);
       fetchSourcesByAgent(id);
       loadStats(id);
+      loadChipFilters(id);
     }
   }, [id, fetchAgent, fetchSourcesByAgent]);
+
+  const loadChipFilters = async (agentId: string) => {
+    try {
+      const filters = await chipFiltersApi.list(agentId);
+      setChipFilters(filters);
+    } catch {
+      setChipFilters([]);
+    }
+  };
 
   const loadStats = async (agentId: string) => {
     setStatsLoading(true);
@@ -194,6 +209,38 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
       });
     } finally {
       setUnlinkingSourceId(null);
+    }
+  };
+
+  const handleToggleSource = async (sourceId: string, nextActive: boolean) => {
+    setTogglingSourceId(sourceId);
+    try {
+      await sourcesApi.update(sourceId, { isActive: nextActive });
+      if (id) fetchSourcesByAgent(id);
+    } catch {
+      // silent
+    } finally {
+      setTogglingSourceId(null);
+    }
+  };
+
+  const handleDeleteSource = async (sourceId: string) => {
+    setDeletingSourceId(sourceId);
+    try {
+      await sourcesApi.delete(sourceId);
+      addToast({ title: 'Источник удалён', variant: 'success' });
+      if (id) {
+        fetchSourcesByAgent(id);
+        loadStats(id);
+      }
+    } catch (err) {
+      addToast({
+        title: 'Ошибка',
+        description: err instanceof Error ? err.message : 'Не удалось удалить источник',
+        variant: 'danger',
+      });
+    } finally {
+      setDeletingSourceId(null);
     }
   };
 
@@ -329,6 +376,30 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
         </Card>
       </div>
 
+      {/* Chip Filters */}
+      {chipFilters.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Filter className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          {chipFilters.filter(cf => cf.isActive).map((cf) => (
+            <span
+              key={cf.id}
+              className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium border border-border/60 bg-muted/40 text-muted-foreground"
+            >
+              <span
+                className="h-2 w-2 rounded-full shrink-0"
+                style={{ backgroundColor: cf.color && cf.color !== 'default' ? cf.color : '#94a3b8' }}
+              />
+              {cf.label}
+              {cf.scoreModifier !== 0 && (
+                <span className={cf.scoreModifier > 0 ? 'text-green-600' : 'text-red-600'}>
+                  {cf.scoreModifier > 0 ? '+' : ''}{(cf.scoreModifier * 100).toFixed(0)}%
+                </span>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Tabs */}
       <Tabs defaultValue="sources">
         <TabsList>
@@ -411,7 +482,7 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
               ) : (
                 <div className="space-y-2">
                   {sources.map((source) => (
-                    <Card key={source.id} className="hover:bg-muted/50 transition-colors">
+                    <Card key={source.id} className="hover:bg-muted/50 transition-colors group/src">
                       <CardContent className="p-4 flex items-center justify-between gap-3">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
@@ -419,22 +490,35 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
                             <Badge variant="outline" className="text-[10px] shrink-0">
                               {source.type === 'rss' ? 'RSS' : 'Telegram'}
                             </Badge>
-                            <Badge variant={source.is_active ? 'success' : 'default'} className="text-[10px] shrink-0">
-                              {source.is_active ? 'Активен' : 'Отключен'}
-                            </Badge>
                           </div>
                           <p className="text-xs text-muted-foreground truncate mt-0.5">{source.url}</p>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => handleUnlinkSource(source.id)}
-                          disabled={unlinkingSourceId === source.id}
-                          title="Отвязать от агента"
-                          className="shrink-0"
-                        >
-                          <Unlink className="h-4 w-4 text-muted-foreground hover:text-danger" />
-                        </Button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Switch
+                            checked={source.is_active}
+                            onCheckedChange={(checked) => handleToggleSource(source.id, checked)}
+                            disabled={togglingSourceId === source.id}
+                            className="scale-75"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSource(source.id)}
+                            disabled={deletingSourceId === source.id}
+                            className="opacity-0 group-hover/src:opacity-100 transition-opacity p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                            title="Удалить источник"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => handleUnlinkSource(source.id)}
+                            disabled={unlinkingSourceId === source.id}
+                            title="Отвязать от агента"
+                          >
+                            <Unlink className="h-4 w-4 text-muted-foreground hover:text-danger" />
+                          </Button>
+                        </div>
                       </CardContent>
                     </Card>
                   ))}
