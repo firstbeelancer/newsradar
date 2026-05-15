@@ -7,7 +7,6 @@ import { Button } from '@shared/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
 import { Skeleton } from '@shared/ui/skeleton';
-import { Avatar, AvatarFallback } from '@shared/ui/avatar';
 import { AgentCollectDialog } from '@/features/agents/agent-collect-dialog';
 import { useToast } from '@shared/ui/toast';
 import {
@@ -106,15 +105,6 @@ export function DashboardPage() {
     } finally {
       setDeleteAllLoading(false);
     }
-  };
-
-  const getInitials = (name: string) => {
-    return name
-      .split(' ')
-      .map((n) => n[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
   };
 
   const activeAgents = agents.filter((a) => a.is_active);
@@ -374,23 +364,6 @@ export function DashboardPage() {
                 Все закладки
                 <ArrowRight className="h-3.5 w-3.5" />
               </Button>
-            </CardContent>
-          </Card>
-
-          {/* User card */}
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <Avatar className="h-10 w-10">
-                  <AvatarFallback className="bg-accent-light text-accent">
-                    {user?.name ? getInitials(user.name) : '?'}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{user?.name || 'Пользователь'}</p>
-                  <p className="text-xs text-muted-foreground truncate">{user?.email || ''}</p>
-                </div>
-              </div>
             </CardContent>
           </Card>
         </div>

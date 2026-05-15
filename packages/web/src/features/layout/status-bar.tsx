@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback } from 'react';
 import { operationLogsApi, type OperationLog } from '@shared/api/client';
-import { Loader2, Play, Search, Sparkles, BarChart3 } from 'lucide-react';
+import { Loader2, Play, Search, Sparkles, BarChart3, X } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 
 const OPERATION_LABELS: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   collection: { label: 'Сбор', icon: Play, color: 'text-blue-500' },
   fetch_source: { label: 'Сбор', icon: Play, color: 'text-blue-500' },
+  collect_agent: { label: 'Сбор', icon: Play, color: 'text-blue-500' },
   scoring: { label: 'Скоринг', icon: BarChart3, color: 'text-amber-500' },
   deepsearch: { label: 'Дипсерч', icon: Search, color: 'text-purple-500' },
   generation: { label: 'Генерация', icon: Sparkles, color: 'text-emerald-500' },
@@ -20,10 +21,11 @@ function getOperationInfo(type: string) {
 export function StatusBar() {
   const [activeOps, setActiveOps] = useState<OperationLog[]>([]);
   const [expanded, setExpanded] = useState(false);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   const fetchActiveOps = useCallback(async () => {
     try {
-      const result = await operationLogsApi.list(undefined, 10);
+      const result = await operationLogsApi.list(undefined, 20);
       const active = result.data.filter(
         (op) => op.status === 'running' || op.status === 'pending'
       );
@@ -38,6 +40,18 @@ export function StatusBar() {
     const interval = setInterval(fetchActiveOps, 5000);
     return () => clearInterval(interval);
   }, [fetchActiveOps]);
+
+  const handleCancel = async (opId: string) => {
+    setCancellingId(opId);
+    try {
+      await operationLogsApi.cancel(opId);
+      await fetchActiveOps();
+    } catch {
+      // Silently ignore
+    } finally {
+      setCancellingId(null);
+    }
+  };
 
   if (activeOps.length === 0) return null;
 
@@ -79,6 +93,7 @@ export function StatusBar() {
             {activeOps.map((op) => {
               const info = getOperationInfo(op.operation_type);
               const Icon = info.icon;
+              const isCancelling = cancellingId === op.id;
               return (
                 <div key={op.id} className="flex items-center gap-2 text-xs">
                   <Icon className={cn('h-3.5 w-3.5 shrink-0', info.color)} />
@@ -92,6 +107,14 @@ export function StatusBar() {
                   )}>
                     {op.status === 'running' ? 'Выполняется' : 'Ожидание'}
                   </span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleCancel(op.id); }}
+                    disabled={isCancelling}
+                    className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-danger hover:bg-danger-light transition-colors disabled:opacity-50"
+                    title="Остановить"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               );
             })}

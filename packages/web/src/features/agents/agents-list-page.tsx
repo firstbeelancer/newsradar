@@ -121,13 +121,13 @@ export function AgentsListPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold tracking-tight">Агенты</h1>
           <p className="text-muted-foreground mt-1">
             {agents.length} {agents.length === 1 ? 'агент' : agents.length < 5 ? 'агента' : 'агентов'}
           </p>
         </div>
-        <Button onClick={handleNewAgent}>
+        <Button onClick={handleNewAgent} className="shrink-0">
           <Plus className="h-4 w-4" />
           <span className="hidden sm:inline">Новый агент</span>
         </Button>

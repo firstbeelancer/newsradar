@@ -5,7 +5,7 @@ import { Input } from '@shared/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@shared/ui/dialog';
 import { Label } from '@shared/ui/label';
 import type { Agent, CreateAgentDto, UpdateAgentDto, ChipFilter } from '@shared/api/client';
-import { Shield, Brain, Megaphone, Heart, Paintbrush, Plus, X, GripVertical } from 'lucide-react';
+import { Shield, Brain, Megaphone, Heart, Paintbrush, Plus, X, GripVertical, Hammer, Wrench } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 
 const SUBJECT_AREAS = [
@@ -14,6 +14,8 @@ const SUBJECT_AREAS = [
   { id: 'marketing', label: 'Маркетинг', icon: Megaphone, color: '#f97316' },
   { id: 'medical', label: 'Медицина', icon: Heart, color: '#06b6d4' },
   { id: 'design', label: 'Графический дизайн', icon: Paintbrush, color: '#ec4899' },
+  { id: 'construction', label: 'Строительство и ремонт', icon: Hammer, color: '#f59e0b' },
+  { id: 'devops', label: 'Free DevOps & Инжиниринг', icon: Wrench, color: '#10b981' },
 ];
 
 const COLORS = [

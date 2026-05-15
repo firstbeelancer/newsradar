@@ -839,6 +839,8 @@ export const operationLogsApi = {
     apiGet<BackendCursorResponse<BackendOperationLog>>(`/operation-logs?limit=${limit}${cursor ? `&cursor=${cursor}` : ''}`).then((payload) =>
       normalizeCursorResponse(payload, normalizeOperationLog)
     ),
+  cancel: (id: string) =>
+    apiPatch<BackendOperationLog, { status: string }>(`/operation-logs/${id}`, { status: 'cancelled' }).then(normalizeOperationLog),
 };
 
 // Templates
@@ -901,6 +903,8 @@ export const generationApi = {
 
 // Scoring (workspace-level defaults)
 export const scoringApi = {
+  getConfig: () => apiGet<ScoringConfig>('/scoring/config'),
+  updateConfig: (config: ScoringConfig) => apiPut<ScoringConfig, ScoringConfig>('/scoring/config', config),
   getStats: () => apiGet<ScoringConfig & { distribution?: Record<string, number>; totalArticles?: number }>('/scoring/stats'),
   recalculate: (agentId?: string) => apiPost<{ articlesQueued: number }>('/scoring/recalculate', agentId ? { agentId } : {}),
 };

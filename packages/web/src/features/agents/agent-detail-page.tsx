@@ -136,28 +136,28 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
       </Button>
 
       {/* Agent header */}
-      <div className="flex items-start gap-4">
-        <div className={cn('flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl', colorClass)}>
-          <Bot className="h-7 w-7" />
+      <div className="flex items-start gap-3 sm:gap-4">
+        <div className={cn('flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-2xl', colorClass)}>
+          <Bot className="h-6 w-6 sm:h-7 sm:w-7" />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-xl font-bold">{currentAgent.name}</h1>
-            <Badge variant={currentAgent.is_active ? 'success' : 'default'}>
+            <h1 className="text-lg sm:text-xl font-bold truncate">{currentAgent.name}</h1>
+            <Badge variant={currentAgent.is_active ? 'success' : 'default'} className="shrink-0">
               {currentAgent.is_active ? 'Активен' : 'Пауза'}
             </Badge>
           </div>
           {currentAgent.description && (
-            <p className="text-sm text-muted-foreground mt-1">{currentAgent.description}</p>
+            <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{currentAgent.description}</p>
           )}
         </div>
-        <div className="flex gap-2 shrink-0">
+        <div className="flex gap-1.5 sm:gap-2 shrink-0">
           <Button variant="outline" size="sm" onClick={() => setFormOpen(true)}>
             <Pencil className="h-4 w-4" />
           </Button>
           <Button size="sm" onClick={handleCollect}>
             <Play className="h-4 w-4" />
-            Собрать
+            <span className="hidden sm:inline">Собрать</span>
           </Button>
         </div>
       </div>

@@ -59,7 +59,28 @@ export function ScoringSettings() {
   }, [scoringConfig]);
 
   const handleSliderChange = (key: string, value: number) => {
-    setLocalWeights((prev) => ({ ...prev, [key]: value }));
+    setLocalWeights((prev) => {
+      const updated = { ...prev, [key]: value };
+      // Auto-normalize: distribute the difference proportionally to other keys
+      const sum = Object.values(updated).reduce((a, b) => a + b, 0);
+      if (Math.abs(sum - 1.0) > 0.01 && sum > 0) {
+        const diff = 1.0 - sum;
+        const otherKeys = Object.keys(updated).filter((k) => k !== key);
+        const otherSum = otherKeys.reduce((a, k) => a + updated[k], 0);
+        if (otherSum > 0) {
+          for (const k of otherKeys) {
+            updated[k] = Math.max(0, updated[k] + (updated[k] / otherSum) * diff);
+          }
+        } else {
+          // All other weights are 0, distribute equally
+          const share = diff / otherKeys.length;
+          for (const k of otherKeys) {
+            updated[k] = Math.max(0, share);
+          }
+        }
+      }
+      return updated;
+    });
   };
 
   const handleSave = async () => {

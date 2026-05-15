@@ -5,6 +5,7 @@ import { Card, CardContent } from '@shared/ui/card';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
 import { Badge } from '@shared/ui/badge';
+import { cn } from '@shared/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -49,6 +50,7 @@ interface AIProvider {
   hasKey?: boolean;
   model: string;
   isActive: boolean;
+  assignedTo?: string[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -61,12 +63,21 @@ interface ProviderFormData {
   apiKey: string;
   model: string;
   isActive: boolean;
+  assignedTo: string[];
 }
 
 interface TestResult {
   success: boolean;
   message?: string;
 }
+
+const PROCESS_OPTIONS = [
+  { value: 'search', label: 'Сбор / Поиск' },
+  { value: 'translation', label: 'Перевод' },
+  { value: 'scoring', label: 'Скоринг' },
+  { value: 'generation', label: 'Генерация' },
+  { value: 'deepsearch', label: 'Глубокий поиск' },
+];
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -92,6 +103,7 @@ const EMPTY_FORM: ProviderFormData = {
   apiKey: '',
   model: '',
   isActive: true,
+  assignedTo: [],
 };
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -147,6 +159,7 @@ export function AIProvidersSettings() {
       apiKey: '',
       model: provider.model,
       isActive: provider.isActive,
+      assignedTo: provider.assignedTo || [],
     });
     setDialogOpen(true);
   };
@@ -190,6 +203,7 @@ export function AIProvidersSettings() {
         apiKey: form.apiKey.trim(),
         model: form.model.trim(),
         isActive: form.isActive,
+        assignedTo: form.assignedTo,
       };
 
       if (editingProvider) {
@@ -371,6 +385,18 @@ export function AIProvidersSettings() {
                             <span className="truncate">{provider.baseUrl}</span>
                           </div>
                         )}
+                        {provider.assignedTo && provider.assignedTo.length > 0 && (
+                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                            {provider.assignedTo.map((proc) => {
+                              const procOpt = PROCESS_OPTIONS.find((p) => p.value === proc);
+                              return (
+                                <span key={proc} className="inline-flex items-center rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent">
+                                  {procOpt?.label || proc}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
                         {testResult && (
                           <div className="mt-1 flex items-center gap-1">
                             {testResult.success ? (
@@ -471,6 +497,38 @@ export function AIProvidersSettings() {
                 <p className="text-xs text-muted-foreground">Включить провайдер для использования</p>
               </div>
               <Switch checked={form.isActive} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, isActive: checked }))} />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Назначить на процессы</Label>
+              <p className="text-xs text-muted-foreground">Выберите, для каких процессов использовать этого провайдера</p>
+              <div className="flex flex-wrap gap-2">
+                {PROCESS_OPTIONS.map((proc) => {
+                  const isActive = form.assignedTo.includes(proc.value);
+                  return (
+                    <button
+                      key={proc.value}
+                      type="button"
+                      onClick={() => {
+                        setForm((prev) => ({
+                          ...prev,
+                          assignedTo: isActive
+                            ? prev.assignedTo.filter((p) => p !== proc.value)
+                            : [...prev.assignedTo, proc.value],
+                        }));
+                      }}
+                      className={cn(
+                        'rounded-full border px-3 py-1.5 text-xs font-medium transition-all',
+                        isActive
+                          ? 'border-accent bg-accent-light text-accent'
+                          : 'border-border text-muted-foreground hover:bg-muted'
+                      )}
+                    >
+                      {proc.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
           <DialogFooter>

@@ -6,7 +6,6 @@ import {
   Bot,
   FileText,
   Cpu,
-  BarChart3,
   MessageSquare,
 } from 'lucide-react';
 
@@ -15,7 +14,6 @@ const settingsNav = [
   { to: '/settings/agents', label: 'Агенты', icon: Bot },
   { to: '/settings/templates', label: 'Шаблоны', icon: FileText },
   { to: '/settings/ai-providers', label: 'AI провайдеры', icon: Cpu },
-  { to: '/settings/scoring', label: 'Скоринг', icon: BarChart3 },
   { to: '/settings/prompts', label: 'Промпты', icon: MessageSquare },
 ];
 
@@ -32,13 +30,13 @@ export function SettingsLayout() {
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Sidebar */}
         <nav className="lg:w-56 shrink-0">
-          <ul className="flex lg:flex-col gap-1 overflow-x-auto pb-2 lg:pb-0">
+          <ul className="flex lg:flex-col gap-1 overflow-x-auto pb-2 lg:pb-0 scrollbar-none">
             {settingsNav.map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.to;
 
               return (
-                <li key={item.to}>
+                <li key={item.to} className="shrink-0 lg:shrink">
                   <Link
                     to={item.to}
                     className={cn(
