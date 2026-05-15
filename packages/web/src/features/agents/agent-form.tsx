@@ -7,6 +7,7 @@ import { Label } from '@shared/ui/label';
 import { Badge } from '@shared/ui/badge';
 import { useToast } from '@shared/ui/toast';
 import type { Agent, CreateAgentDto, UpdateAgentDto, ChipFilter } from '@shared/api/client';
+import { chipFiltersApi } from '@shared/api/client';
 import { Shield, Brain, Megaphone, Heart, Paintbrush, Plus, X, GripVertical, Hammer, Wrench, Bot, Globe, Zap, Star, Eye, Search, BookOpen, Rss, MessageCircle, Target, Lightbulb, Compass, Newspaper, Settings2, Sliders, Filter, MessageSquare, type LucideIcon } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 
@@ -91,6 +92,7 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
   const [systemPrompt, setSystemPrompt] = useState('');
   const [weights, setWeights] = useState(DEFAULT_WEIGHTS);
   const [chipFilters, setChipFilters] = useState<Partial<ChipFilter>[]>([]);
+  const [loadedFilterIds, setLoadedFilterIds] = useState<Set<string>>(new Set());
   const [customSubjectArea, setCustomSubjectArea] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [tab, setTab] = useState<'basic' | 'scoring' | 'filters' | 'prompts'>('basic');
@@ -110,11 +112,19 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
       setSystemPrompt(agent.config?.systemPrompt || '');
       setTags(agent.config?.tags || []);
       setWeights(agent.config?.scoringWeights || DEFAULT_WEIGHTS);
-      setChipFilters(agent.chipFilters || agent.config?.chipFilters || [...DEFAULT_CHIP_FILTERS]);
+      // Load chip filters from API
+      chipFiltersApi.list(agent.id).then((filters) => {
+        setChipFilters(filters);
+        setLoadedFilterIds(new Set(filters.map(f => f.id)));
+      }).catch(() => {
+        setChipFilters(agent.chipFilters?.length ? agent.chipFilters : (agent.config?.chipFilters || [...DEFAULT_CHIP_FILTERS]));
+        setLoadedFilterIds(new Set());
+      });
     } else {
       setName(''); setDescription(''); setIcon('bot'); setColor('#3b82f6');
       setSubjectArea(''); setCustomSubjectArea(''); setTargetAudience(''); setTone('профессиональный');
       setSystemPrompt(''); setTags([]); setWeights(DEFAULT_WEIGHTS); setChipFilters([...DEFAULT_CHIP_FILTERS]);
+      setLoadedFilterIds(new Set());
     }
     setErrors({}); setTab('basic');
   }, [agent, open]);
@@ -198,11 +208,56 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
         systemPrompt: systemPrompt.trim() || undefined,
         tags: tags.length > 0 ? tags : undefined,
         scoringWeights: weights,
-        chipFilters: chipFilters.length > 0 ? chipFilters : undefined,
+        // chipFilters NOT sent in config — saved separately via API
       },
     };
 
     await onSubmit(agent ? { ...data } : data);
+
+    // Save chip filters via dedicated API if we have an agent ID
+    const agentId = agent?.id;
+    if (agentId) {
+      try {
+        // Determine which filters to create, update, delete
+        const currentIds = new Set(chipFilters.filter(f => f.id).map(f => f.id!));
+        const toDelete = [...loadedFilterIds].filter(id => !currentIds.has(id));
+
+        for (const cf of chipFilters) {
+          if (cf.id && loadedFilterIds.has(cf.id)) {
+            // Update existing
+            await chipFiltersApi.update(cf.id, {
+              key: cf.key,
+              label: cf.label,
+              pattern: cf.pattern,
+              operator: cf.operator,
+              scoreModifier: cf.scoreModifier,
+              color: cf.color,
+              icon: cf.icon,
+              isActive: cf.isActive,
+            });
+          } else {
+            // Create new
+            await chipFiltersApi.create(agentId, {
+              key: cf.key || `filter_${Date.now()}`,
+              label: cf.label || 'Фильтр',
+              pattern: cf.pattern,
+              operator: cf.operator || 'contains',
+              scoreModifier: cf.scoreModifier ?? 0,
+              color: cf.color || 'default',
+              icon: cf.icon,
+              isActive: cf.isActive ?? true,
+            });
+          }
+        }
+
+        for (const id of toDelete) {
+          await chipFiltersApi.delete(id);
+        }
+      } catch (err) {
+        console.error('Failed to save chip filters:', err);
+      }
+    }
+
     onOpenChange(false);
   };
 
