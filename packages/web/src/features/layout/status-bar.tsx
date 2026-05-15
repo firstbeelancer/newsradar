@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { operationLogsApi, type OperationLog } from '@shared/api/client';
-import { Loader2, Play, Search, Sparkles, BarChart3, X } from 'lucide-react';
+import { Loader2, Play, Search, Sparkles, BarChart3, X, Square } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 
 const OPERATION_LABELS: Record<string, { label: string; icon: React.ElementType; color: string }> = {
@@ -22,6 +22,7 @@ export function StatusBar() {
   const [activeOps, setActiveOps] = useState<OperationLog[]>([]);
   const [expanded, setExpanded] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [cancellingAll, setCancellingAll] = useState(false);
 
   const fetchActiveOps = useCallback(async () => {
     try {
@@ -50,6 +51,18 @@ export function StatusBar() {
       // Silently ignore
     } finally {
       setCancellingId(null);
+    }
+  };
+
+  const handleCancelAll = async () => {
+    setCancellingAll(true);
+    try {
+      await Promise.all(activeOps.map((op) => operationLogsApi.cancel(op.id)));
+      await fetchActiveOps();
+    } catch {
+      // Silently ignore
+    } finally {
+      setCancellingAll(false);
     }
   };
 
@@ -86,6 +99,15 @@ export function StatusBar() {
             ))}
             <span className="text-xs text-muted-foreground">— выполняется</span>
           </div>
+          <button
+            onClick={(e) => { e.stopPropagation(); handleCancelAll(); }}
+            disabled={cancellingAll}
+            className="ml-auto shrink-0 inline-flex items-center gap-1 rounded-lg bg-red-500/90 px-2.5 py-1 text-xs font-semibold text-white hover:bg-red-600 transition-colors disabled:opacity-50"
+            title="Остановить все операции"
+          >
+            <Square className="h-3 w-3" />
+            Стоп всё
+          </button>
         </div>
 
         {expanded && (

@@ -4,6 +4,7 @@ import { Button } from '@shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
 import { Skeleton } from '@shared/ui/skeleton';
+import { Input } from '@shared/ui/input';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@shared/ui/tabs';
 import { useAgentsStore } from '@shared/stores/agents-store';
 import { useSourcesStore } from '@shared/stores/sources-store';
@@ -18,10 +19,14 @@ import {
   Link2,
   BarChart3,
   CircleDot,
+  Plus,
+  Trash2,
+  Unlink,
+  X,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import type { CreateAgentDto, UpdateAgentDto, AgentStats } from '@shared/api/client';
-import { agentsApi } from '@shared/api/client';
+import { agentsApi, sourcesApi } from '@shared/api/client';
 
 const colorMap: Record<string, string> = {
   blue: 'bg-blue-50 text-blue-600',
@@ -57,6 +62,12 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
   const [formOpen, setFormOpen] = useState(false);
   const [stats, setStats] = useState<AgentStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
+  const [addSourceOpen, setAddSourceOpen] = useState(false);
+  const [newSourceName, setNewSourceName] = useState('');
+  const [newSourceUrl, setNewSourceUrl] = useState('');
+  const [newSourceType, setNewSourceType] = useState<'rss' | 'telegram'>('rss');
+  const [addingSource, setAddingSource] = useState(false);
+  const [unlinkingSourceId, setUnlinkingSourceId] = useState<string | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -95,6 +106,53 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
       addToast({ title: 'Сбор запущен', description: 'Агент собирает новости', variant: 'success' });
     } catch {
       // Error handled by store
+    }
+  };
+
+  const handleAddSource = async () => {
+    if (!id || !newSourceName.trim() || !newSourceUrl.trim()) return;
+    setAddingSource(true);
+    try {
+      // Create source
+      const source = await sourcesApi.create({
+        agent_id: id,
+        name: newSourceName.trim(),
+        url: newSourceUrl.trim(),
+        type: newSourceType,
+      });
+      // Link source to agent
+      await agentsApi.linkSource(id, source.id);
+      addToast({ title: 'Источник добавлен', description: newSourceName.trim(), variant: 'success' });
+      setNewSourceName('');
+      setNewSourceUrl('');
+      setAddSourceOpen(false);
+      fetchSourcesByAgent(id);
+    } catch (err) {
+      addToast({
+        title: 'Ошибка',
+        description: err instanceof Error ? err.message : 'Не удалось добавить источник',
+        variant: 'danger',
+      });
+    } finally {
+      setAddingSource(false);
+    }
+  };
+
+  const handleUnlinkSource = async (sourceId: string) => {
+    if (!id) return;
+    setUnlinkSourceId(sourceId);
+    try {
+      await agentsApi.unlinkSource(id, sourceId);
+      addToast({ title: 'Источник отвязан', variant: 'success' });
+      fetchSourcesByAgent(id);
+    } catch (err) {
+      addToast({
+        title: 'Ошибка',
+        description: err instanceof Error ? err.message : 'Не удалось отвязать источник',
+        variant: 'danger',
+      });
+    } finally {
+      setUnlinkingSourceId(null);
     }
   };
 
@@ -249,31 +307,91 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
                 <Skeleton key={i} className="h-16" />
               ))}
             </div>
-          ) : sources.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center py-12">
-                <Link2 className="h-8 w-8 text-muted-foreground mb-3" />
-                <p className="text-sm text-muted-foreground">Нет источников</p>
-                <Button variant="link" size="sm" onClick={() => navigate({ to: '/sources' })}>
-                  Перейти к источникам
-                </Button>
-              </CardContent>
-            </Card>
           ) : (
-            <div className="space-y-2">
-              {sources.map((source) => (
-                <Card key={source.id} className="hover:bg-muted/50 transition-colors">
-                  <CardContent className="p-4 flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium">{source.name}</p>
-                      <p className="text-xs text-muted-foreground">{source.url}</p>
+            <div className="space-y-3">
+              {/* Add source button */}
+              {addSourceOpen ? (
+                <Card>
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium">Новый источник</p>
+                      <Button variant="ghost" size="icon-sm" onClick={() => setAddSourceOpen(false)}>
+                        <X className="h-4 w-4" />
+                      </Button>
                     </div>
-                    <Badge variant={source.is_active ? 'success' : 'default'}>
-                      {source.is_active ? 'Активен' : 'Отключен'}
-                    </Badge>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <Input
+                        placeholder="Название"
+                        value={newSourceName}
+                        onChange={(e) => setNewSourceName(e.target.value)}
+                      />
+                      <select
+                        value={newSourceType}
+                        onChange={(e) => setNewSourceType(e.target.value as 'rss' | 'telegram')}
+                        className="rounded-md border border-border bg-card px-3 py-2 text-sm"
+                      >
+                        <option value="rss">RSS</option>
+                        <option value="telegram">Telegram</option>
+                      </select>
+                    </div>
+                    <Input
+                      placeholder={newSourceType === 'rss' ? 'https://example.com/feed' : 'https://t.me/channel'}
+                      value={newSourceUrl}
+                      onChange={(e) => setNewSourceUrl(e.target.value)}
+                    />
+                    <Button size="sm" onClick={handleAddSource} disabled={addingSource || !newSourceName.trim() || !newSourceUrl.trim()}>
+                      <Plus className="h-4 w-4 mr-1" />
+                      {addingSource ? 'Добавление...' : 'Добавить'}
+                    </Button>
                   </CardContent>
                 </Card>
-              ))}
+              ) : (
+                <Button variant="outline" size="sm" onClick={() => setAddSourceOpen(true)}>
+                  <Plus className="h-4 w-4 mr-1" />
+                  Добавить источник
+                </Button>
+              )}
+
+              {/* Sources list */}
+              {sources.length === 0 ? (
+                <Card>
+                  <CardContent className="flex flex-col items-center py-12">
+                    <Link2 className="h-8 w-8 text-muted-foreground mb-3" />
+                    <p className="text-sm text-muted-foreground">Нет источников</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-2">
+                  {sources.map((source) => (
+                    <Card key={source.id} className="hover:bg-muted/50 transition-colors">
+                      <CardContent className="p-4 flex items-center justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-sm font-medium truncate">{source.name}</p>
+                            <Badge variant="outline" className="text-[10px] shrink-0">
+                              {source.type === 'rss' ? 'RSS' : 'Telegram'}
+                            </Badge>
+                            <Badge variant={source.is_active ? 'success' : 'default'} className="text-[10px] shrink-0">
+                              {source.is_active ? 'Активен' : 'Отключен'}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate mt-0.5">{source.url}</p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => handleUnlinkSource(source.id)}
+                          disabled={unlinkingSourceId === source.id}
+                          title="Отвязать от агента"
+                          className="shrink-0"
+                        >
+                          <Unlink className="h-4 w-4 text-muted-foreground hover:text-danger" />
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </TabsContent>

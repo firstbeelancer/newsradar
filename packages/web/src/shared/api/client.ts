@@ -765,6 +765,10 @@ export const agentsApi = {
     op_id: payload.op_id ?? payload.operationId ?? '',
   })),
   sources: (id: string) => apiGet<Source[]>(`/agents/${id}/sources`),
+  linkSource: (agentId: string, sourceId: string) =>
+    apiPost<{ agentId: string; sourceId: string }, { sourceId: string }>(`/agents/${agentId}/sources`, { sourceId }),
+  unlinkSource: (agentId: string, sourceId: string) =>
+    apiDelete<void>(`/agents/${agentId}/sources/${sourceId}`),
 };
 
 // Scoring Criteria
