@@ -11,7 +11,7 @@
 import { db } from "../db/index.js";
 import { articles } from "../db/schema.js";
 import { eq } from "drizzle-orm";
-import { findSemanticDuplicates, assignSemanticGroup } from "../lib/dedup.js";
+import { findSemanticDuplicates, assignSemanticGroup, type SemanticMatch } from "../lib/dedup.js";
 import { scoreArticleQueue } from "../connection/redis.js";
 import type { Job } from "bullmq";
 import type { Logger } from "pino";
@@ -59,14 +59,22 @@ export async function processSemanticDedup(
     return { status: "deduped", matches: 1, groupId: article.semanticGroupId };
   }
 
-  // Find semantically similar articles
-  const matches = await findSemanticDuplicates(
-    articleId,
-    article.title,
-    0.7,
-    article.workspaceId,
-    article.agentId
-  );
+  let matches: SemanticMatch[] = [];
+  try {
+    matches = await findSemanticDuplicates(
+      articleId,
+      article.title,
+      0.7,
+      article.workspaceId,
+      article.agentId
+    );
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    logger.warn(
+      { articleId, err: errorMessage },
+      "Semantic dedup failed, falling back to scoring"
+    );
+  }
 
   if (matches.length > 0) {
     // Found similar articles — use the first match's group or create one
