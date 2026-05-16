@@ -52,6 +52,7 @@ export function createWorker<T = unknown, R = unknown>(
   return new Worker<T, R>(name, processor, {
     connection: redis,
     concurrency: DEFAULT_CONCURRENCY,
+    useWorkerThreads: false,
     ...opts,
   });
 }
