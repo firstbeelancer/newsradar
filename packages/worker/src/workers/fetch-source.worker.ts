@@ -9,7 +9,7 @@
  */
 
 import { db } from "../db/index.js";
-import { sources, articles, agents, agentSources } from "../db/schema.js";
+import { sources, articles, agents, agentSources, operationLogs } from "../db/schema.js";
 import { eq, and, sql } from "drizzle-orm";
 import { parseRssFeed } from "../lib/rss-parser.js";
 import { parseTelegramChannel } from "../lib/telegram-parser.js";
@@ -20,6 +20,7 @@ import type { Logger } from "pino";
 
 export interface FetchSourceJob {
   sourceId: string;
+  operationId?: string;
 }
 
 /**
@@ -48,9 +49,9 @@ export async function processFetchSource(
   job: Job<FetchSourceJob>,
   logger: Logger
 ): Promise<{ fetched: number; newArticles: number; duplicates: number }> {
-  const { sourceId } = job.data;
+  const { sourceId, operationId } = job.data;
 
-  logger.info({ sourceId, jobId: job.id }, "Fetching source");
+  logger.info({ sourceId, jobId: job.id, operationId }, "Fetching source");
 
   // Load source
   const sourceResult = await db
@@ -199,6 +200,35 @@ export async function processFetchSource(
       "Source fetch complete"
     );
 
+    // Update operation log with progress
+    if (operationId) {
+      try {
+        const existingLog = await db
+          .select({ metadata: operationLogs.metadata })
+          .from(operationLogs)
+          .where(eq(operationLogs.id, operationId))
+          .limit(1);
+        const existingMeta = (existingLog[0]?.metadata as Record<string, unknown>) ?? {};
+        const results = (existingMeta.results as Array<Record<string, unknown>>) ?? [];
+        results.push({
+          sourceId,
+          sourceName: source.name,
+          fetched: fetchedCount,
+          new: newCount,
+          duplicates: dupCount,
+          status: "success",
+        });
+        await db
+          .update(operationLogs)
+          .set({
+            metadata: { ...existingMeta, results },
+          })
+          .where(eq(operationLogs.id, operationId));
+      } catch (logErr) {
+        logger.warn({ err: String(logErr), operationId }, "Failed to update operation log");
+      }
+    }
+
     return {
       fetched: fetchedCount,
       newArticles: newCount,
@@ -218,6 +248,33 @@ export async function processFetchSource(
         updatedAt: new Date(),
       })
       .where(eq(sources.id, sourceId));
+
+    // Update operation log with error
+    if (operationId) {
+      try {
+        const existingLog = await db
+          .select({ metadata: operationLogs.metadata })
+          .from(operationLogs)
+          .where(eq(operationLogs.id, operationId))
+          .limit(1);
+        const existingMeta = (existingLog[0]?.metadata as Record<string, unknown>) ?? {};
+        const results = (existingMeta.results as Array<Record<string, unknown>>) ?? [];
+        results.push({
+          sourceId,
+          sourceName: source?.name ?? "unknown",
+          status: "error",
+          error: errorMessage,
+        });
+        await db
+          .update(operationLogs)
+          .set({
+            metadata: { ...existingMeta, results },
+          })
+          .where(eq(operationLogs.id, operationId));
+      } catch (logErr) {
+        logger.warn({ err: String(logErr), operationId }, "Failed to update operation log on error");
+      }
+    }
 
     throw err;
   }

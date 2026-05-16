@@ -522,12 +522,23 @@ export async function triggerCollection(agentId: string, workspaceId: string, us
       for (const source of activeSources) {
         await fetchQueue.add("fetch-source", {
           sourceId: source.id,
+          operationId: log.id,
         }, {
           attempts: 3,
           backoff: { type: "exponential", delay: 5000 },
         });
         queuedCount++;
       }
+
+      // Add a delayed finalization job to mark operation as complete
+      await fetchQueue.add("finalize-collection", {
+        operationId: log.id,
+        expectedCount: queuedCount,
+      }, {
+        delay: 60_000, // 60 seconds after last fetch job
+        attempts: 1,
+        removeOnComplete: true,
+      });
     } catch (err) {
       queueError = err instanceof Error ? err.message : String(err);
       console.error("[agents] Failed to queue collection jobs:", queueError);

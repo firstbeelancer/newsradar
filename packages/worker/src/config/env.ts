@@ -10,7 +10,7 @@ const envSchema = z.object({
     .default("development"),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   REDIS_URL: z.string().min(1, "REDIS_URL is required"),
-  JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters"),
+  JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters").optional().default("worker-does-not-need-jwt-secret-placeholder-32ch"),
 
   // AI Platform Provider (shared across all workspaces)
   PLATFORM_AI_PROVIDER: z

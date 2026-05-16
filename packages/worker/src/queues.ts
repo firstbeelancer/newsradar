@@ -33,8 +33,11 @@ import { processGenerateDigest, type GenerateDigestJob } from "./workers/generat
 import { processCleanup, type CleanupJob } from "./workers/cleanup.worker.js";
 import { processFavoritesCleanup, type FavoritesCleanupJob } from "./workers/favorites-cleanup.worker.js";
 import { processPostsCleanup, type PostsCleanupJob } from "./workers/posts-cleanup.worker.js";
+import { db } from "./db/index.js";
+import { operationLogs } from "./db/schema.js";
+import { eq } from "drizzle-orm";
 import type { Logger } from "pino";
-import type { Worker } from "bullmq";
+import type { Worker, Job } from "bullmq";
 
 /* ─── Queue declarations ─── */
 
@@ -112,7 +115,41 @@ export function registerWorkers(logger: Logger): Worker[] {
   /* 1. fetch-source */
   const fetchSourceWorker = createWorker<FetchSourceJob>(
     "fetch-source",
-    async (job) => processFetchSource(job, logger),
+    async (job) => {
+      // Handle finalize-collection jobs
+      if (job.name === "finalize-collection") {
+        const { operationId, expectedCount } = job.data as unknown as { operationId: string; expectedCount: number };
+        logger.info({ operationId, expectedCount }, "Finalizing collection operation");
+        try {
+          const existingLog = await db
+            .select({ metadata: operationLogs.metadata, status: operationLogs.status })
+            .from(operationLogs)
+            .where(eq(operationLogs.id, operationId))
+            .limit(1);
+          if (existingLog[0]) {
+            const meta = (existingLog[0].metadata as Record<string, unknown>) ?? {};
+            const results = (meta.results as Array<Record<string, unknown>>) ?? [];
+            const successCount = results.filter(r => r.status === "success").length;
+            const errorCount = results.filter(r => r.status === "error").length;
+            const newStatus = errorCount > 0 && successCount > 0 ? "partial" : errorCount > 0 ? "failed" : "success";
+            const totalNew = results.reduce((sum, r) => sum + ((r.new as number) ?? 0), 0);
+            await db
+              .update(operationLogs)
+              .set({
+                status: newStatus,
+                message: `Сбор завершён: ${successCount} источников обработано, ${errorCount} ошибок, ${totalNew} новых статей`,
+                finishedAt: new Date(),
+              })
+              .where(eq(operationLogs.id, operationId));
+            logger.info({ operationId, newStatus, successCount, errorCount, totalNew }, "Collection operation finalized");
+          }
+        } catch (err) {
+          logger.error({ err: String(err), operationId }, "Failed to finalize collection");
+        }
+        return { finalized: true };
+      }
+      return processFetchSource(job as Job<FetchSourceJob>, logger);
+    },
     { concurrency: 3 }
   );
   attachWorkerLogging(fetchSourceWorker, logger);
