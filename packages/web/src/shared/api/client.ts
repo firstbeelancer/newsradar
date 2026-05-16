@@ -56,6 +56,24 @@ interface BackendAgent {
   chipFilters?: unknown[];
 }
 
+interface BackendChipFilter {
+  id: string;
+  agentId?: string;
+  agent_id?: string;
+  key: string;
+  label: string;
+  description?: string | null;
+  pattern?: string | null;
+  operator: ChipFilter["operator"];
+  scoreModifier?: string | number | null;
+  score_modifier?: string | number | null;
+  color?: string | null;
+  icon?: string | null;
+  isActive?: boolean;
+  is_active?: boolean;
+  position?: number | null;
+}
+
 interface BackendArticle {
   id: string;
   title: string;
@@ -141,6 +159,28 @@ function normalizeCursorResponse<TInput, TOutput>(
   };
 }
 
+function normalizeChipFilter(raw: BackendChipFilter): ChipFilter {
+  return {
+    id: raw.id,
+    agentId: raw.agent_id ?? raw.agentId ?? '',
+    key: raw.key,
+    label: raw.label,
+    description: raw.description ?? null,
+    pattern: raw.pattern ?? null,
+    operator: raw.operator,
+    scoreModifier:
+      typeof raw.scoreModifier === 'number'
+        ? raw.scoreModifier
+        : typeof raw.score_modifier === 'number'
+          ? raw.score_modifier
+          : Number(raw.scoreModifier ?? raw.score_modifier ?? 0),
+    color: raw.color ?? 'default',
+    icon: raw.icon ?? null,
+    isActive: raw.is_active ?? raw.isActive ?? true,
+    position: raw.position ?? 0,
+  };
+}
+
 export function normalizeAgent(raw: BackendAgent): Agent {
   return {
     id: raw.id,
@@ -155,7 +195,9 @@ export function normalizeAgent(raw: BackendAgent): Agent {
     subjectArea: raw.subject_area ?? raw.subjectArea ?? null,
     config: (raw.config as Agent['config']) ?? {},
     scoringCriteria: raw.scoringCriteria as Agent['scoringCriteria'] ?? undefined,
-    chipFilters: raw.chipFilters as Agent['chipFilters'] ?? undefined,
+    chipFilters: Array.isArray(raw.chipFilters)
+      ? raw.chipFilters.map((filter) => normalizeChipFilter(filter as BackendChipFilter))
+      : undefined,
     created_at: raw.created_at ?? raw.createdAt ?? new Date(0).toISOString(),
     updated_at: raw.updated_at ?? raw.updatedAt ?? new Date(0).toISOString(),
   };
@@ -834,14 +876,18 @@ export const scoringCriteriaApi = {
 
 // Chip Filters
 export const chipFiltersApi = {
-  list: (agentId: string) => apiGet<ChipFilter[]>(`/chip-filters/agents/${agentId}`),
+  list: (agentId: string) => apiGet<BackendChipFilter[]>(`/chip-filters/agents/${agentId}`).then((filters) =>
+    filters.map(normalizeChipFilter)
+  ),
   create: (agentId: string, data: Omit<ChipFilter, 'id' | 'agentId' | 'position'>) =>
-    apiPost<ChipFilter>(`/chip-filters/agents/${agentId}`, data),
+    apiPost<BackendChipFilter>(`/chip-filters/agents/${agentId}`, data).then(normalizeChipFilter),
   update: (filterId: string, data: Partial<ChipFilter>) =>
-    apiPatch<ChipFilter>(`/chip-filters/${filterId}`, data),
+    apiPatch<BackendChipFilter>(`/chip-filters/${filterId}`, data).then(normalizeChipFilter),
   delete: (filterId: string) => apiDelete<void>(`/chip-filters/${filterId}`),
   reorder: (agentId: string, orderedIds: string[]) =>
-    apiPost<ChipFilter[]>(`/chip-filters/agents/${agentId}/reorder`, { orderedIds }),
+    apiPost<BackendChipFilter[]>(`/chip-filters/agents/${agentId}/reorder`, { orderedIds }).then((filters) =>
+      filters.map(normalizeChipFilter)
+    ),
 };
 
 // Sources

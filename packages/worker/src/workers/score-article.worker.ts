@@ -123,6 +123,16 @@ export async function processScoreArticle(
       hybrid: { ai: 0.55, keyword: 0.2, freshness: 0.15, sourceTrust: 0.1 },
     } as unknown as Record<string, unknown>,
     chips: scoreResult.chips,
+    scoreDetail: {
+      aiScore: scoreResult.aiScore,
+      keywordScore: scoreResult.keywordScore,
+      freshnessScore: scoreResult.freshnessScore,
+      sourceTrustScore: scoreResult.sourceTrustScore,
+      baseScore: scoreResult.baseScore,
+      chipModifierTotal: scoreResult.chipModifierTotal,
+      weightedScore: scoreResult.weightedScore,
+      triggeredChips: scoreResult.triggeredChips,
+    } as Record<string, unknown>,
     scoredAt,
   };
 
@@ -155,6 +165,8 @@ export async function processScoreArticle(
       keywordScore: scoreResult.keywordScore,
       freshnessScore: scoreResult.freshnessScore,
       sourceTrustScore: scoreResult.sourceTrustScore,
+      baseScore: scoreResult.baseScore,
+      chipModifierTotal: scoreResult.chipModifierTotal,
       weightedScore: scoreResult.weightedScore,
       chips: scoreResult.chips,
     },

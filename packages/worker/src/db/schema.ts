@@ -250,6 +250,7 @@ export const articleScores = pgTable(
     weightedScore: decimal("weighted_score", { precision: 5, scale: 3 }).default("0.000").notNull(),
     weightsSnapshot: jsonb("weights_snapshot"),
     chips: jsonb("chips").default("[]").notNull(),
+    scoreDetail: jsonb("score_detail").default({}).notNull(),
     scoredAt: timestamp("scored_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -257,6 +258,35 @@ export const articleScores = pgTable(
     uniqueIndex("article_scores_article_id_idx").on(table.articleId),
     index("article_scores_overall_idx").on(table.overallScore),
     index("article_scores_weighted_idx").on(table.weightedScore),
+  ]
+);
+
+export const chipFilters = pgTable(
+  "chip_filters",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agentId: uuid("agent_id")
+      .references(() => agents.id, { onDelete: "cascade" })
+      .notNull(),
+    key: varchar("key", { length: 50 }).notNull(),
+    label: varchar("label", { length: 100 }).notNull(),
+    description: text("description"),
+    pattern: text("pattern"),
+    operator: varchar("operator", { length: 20 }).default("contains").notNull(),
+    scoreModifier: decimal("score_modifier", { precision: 5, scale: 4 }).default("0.0000").notNull(),
+    color: varchar("color", { length: 20 }).default("default").notNull(),
+    icon: varchar("icon", { length: 50 }),
+    threshold: decimal("threshold", { precision: 5, scale: 4 }),
+    isActive: boolean("is_active").default(true).notNull(),
+    position: integer("position").default(0).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("chip_filters_agent_id_idx").on(table.agentId),
+    index("chip_filters_key_idx").on(table.key),
+    uniqueIndex("chip_filters_agent_key_unique_idx").on(table.agentId, table.key),
+    check("chip_filters_operator_check", sql`${table.operator} IN ('contains', 'not_contains', 'equals', 'starts_with', 'regex', 'in', 'gt', 'lt', 'gte', 'lte')`),
   ]
 );
 

@@ -2,7 +2,6 @@ import { Router } from "express";
 import { z } from "zod";
 import { authMiddleware } from "../../middleware/auth.js";
 import { workspaceAuth } from "../../middleware/workspace-auth.js";
-import { AppError } from "../../middleware/error-handler.js";
 import { paginationQuerySchema } from "../../lib/pagination.js";
 import {
   createAgent,
@@ -41,7 +40,7 @@ const chipFilterSchema = z.object({
   description: z.string().optional(),
   pattern: z.string().optional(),
   operator: z.enum(["contains", "not_contains", "equals", "starts_with", "regex", "in", "gt", "lt", "gte", "lte"]).default("contains"),
-  scoreModifier: z.number().min(-1).max(1).default(0),
+  scoreModifier: z.number().min(-100).max(100).default(0),
   color: z.string().max(20).default("default"),
   icon: z.string().max(50).optional(),
   isActive: z.boolean().default(true),
@@ -77,10 +76,6 @@ const updateSchema = z.object({
   position: z.coerce.number().int().optional(),
   subjectArea: z.string().max(50).optional(),
   config: agentConfigSchema.optional(),
-});
-
-const workspaceQuerySchema = z.object({
-  workspaceId: z.string().uuid(),
 });
 
 // ─── Routes (all protected with workspaceAuth) ───

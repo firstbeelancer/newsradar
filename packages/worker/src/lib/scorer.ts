@@ -19,7 +19,7 @@
  */
 
 import { db } from "../db/index.js";
-import { sources, articles, agents } from "../db/schema.js";
+import { sources, articles, agents, chipFilters } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import { complete } from "./ai-client.js";
 import type { Logger } from "pino";
@@ -65,8 +65,17 @@ export interface ScoreResult {
   freshnessScore: number;
   sourceTrustScore: number;
   overallScore: number;
+  baseScore: number;
+  chipModifierTotal: number;
   weightedScore: number;
   chips: string[];
+  triggeredChips: Array<{
+    key: string;
+    label: string;
+    scoreModifier: number;
+    operator: string;
+    pattern: string | null;
+  }>;
 }
 
 /* ─── 1. AI Scoring (5 criteria) ─── */
@@ -137,6 +146,18 @@ function clampInt(val: unknown, fallback: number): number {
   const n = typeof val === "number" ? val : parseInt(String(val), 10);
   if (isNaN(n)) return fallback;
   return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+function clampScore(val: number): number {
+  return Math.max(0, Math.min(100, Math.round(val * 10) / 10));
+}
+
+function parseDecimal(val: unknown, fallback = 0): number {
+  if (typeof val === "number" && Number.isFinite(val)) {
+    return val;
+  }
+  const parsed = Number.parseFloat(String(val ?? ""));
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 /**
@@ -329,6 +350,133 @@ export async function determineChips(
   return chips;
 }
 
+type ChipFilterRow = {
+  id: string;
+  key: string;
+  label: string;
+  pattern: string | null;
+  operator: string;
+  scoreModifier: unknown;
+};
+
+function splitChipPattern(pattern: string | null): string[] {
+  return (pattern ?? "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function matchesChipFilter(
+  filter: ChipFilterRow,
+  text: string,
+  title: string,
+  baseScore: number
+): boolean {
+  const pattern = filter.pattern ?? "";
+  const values = splitChipPattern(pattern);
+
+  switch (filter.operator) {
+    case "contains":
+      return values.some((value) => text.includes(value.toLowerCase()));
+    case "not_contains":
+      return values.length > 0 && values.every((value) => !text.includes(value.toLowerCase()));
+    case "equals":
+      return pattern.length > 0 && title === pattern.toLowerCase();
+    case "starts_with":
+      return pattern.length > 0 && title.startsWith(pattern.toLowerCase());
+    case "regex":
+      if (!pattern) return false;
+      try {
+        return new RegExp(pattern, "i").test(text);
+      } catch {
+        return false;
+      }
+    case "in":
+      return values.some((value) => value.toLowerCase() === title || text.includes(value.toLowerCase()));
+    case "gt":
+      return baseScore > parseDecimal(filter.pattern);
+    case "gte":
+      return baseScore >= parseDecimal(filter.pattern);
+    case "lt":
+      return baseScore < parseDecimal(filter.pattern);
+    case "lte":
+      return baseScore <= parseDecimal(filter.pattern);
+    default:
+      return false;
+  }
+}
+
+async function loadAgentChipFilters(agentId: string): Promise<ChipFilterRow[]> {
+  return db
+    .select({
+      id: chipFilters.id,
+      key: chipFilters.key,
+      label: chipFilters.label,
+      pattern: chipFilters.pattern,
+      operator: chipFilters.operator,
+      scoreModifier: chipFilters.scoreModifier,
+    })
+    .from(chipFilters)
+    .where(and(eq(chipFilters.agentId, agentId), eq(chipFilters.isActive, true)))
+    .orderBy(chipFilters.position);
+}
+
+async function resolveChipScoring(
+  article: {
+    agentId: string;
+    title: string;
+    description: string | null;
+  },
+  baseScore: number,
+  sourceTrustScore: number
+): Promise<{
+  chips: string[];
+  triggeredChips: ScoreResult["triggeredChips"];
+  chipModifierTotal: number;
+}> {
+  const activeFilters = await loadAgentChipFilters(article.agentId);
+
+  if (activeFilters.length === 0) {
+    const fallbackChips = await determineChips(
+      article.title,
+      article.description ?? "",
+      sourceTrustScore
+    );
+
+    return {
+      chips: fallbackChips,
+      triggeredChips: fallbackChips.map((chip) => ({
+        key: chip,
+        label: chip,
+        scoreModifier: 0,
+        operator: "legacy",
+        pattern: null,
+      })),
+      chipModifierTotal: 0,
+    };
+  }
+
+  const normalizedTitle = article.title.toLowerCase();
+  const normalizedText = `${article.title} ${article.description ?? ""}`.toLowerCase();
+  const triggeredChips = activeFilters
+    .filter((filter) => matchesChipFilter(filter, normalizedText, normalizedTitle, baseScore))
+    .map((filter) => ({
+      key: filter.key,
+      label: filter.label,
+      scoreModifier: parseDecimal(filter.scoreModifier),
+      operator: filter.operator,
+      pattern: filter.pattern,
+    }));
+
+  return {
+    chips: triggeredChips.map((chip) => chip.key),
+    triggeredChips,
+    chipModifierTotal: Math.round(
+      triggeredChips.reduce((sum, chip) => sum + chip.scoreModifier, 0) * 10
+    ) / 10,
+  };
+}
+
 /* ─── Composite scoring ─── */
 
 /**
@@ -348,7 +496,7 @@ export function calculateHybridScore(
     freshnessScore * HYBRID_WEIGHTS.freshness +
     sourceTrustScore * HYBRID_WEIGHTS.sourceTrust;
 
-  return Math.round(raw * 10) / 10;
+  return clampScore(raw);
 }
 
 /**
@@ -439,20 +587,24 @@ export async function scoreArticle(
   // AI composite from 5 criteria
   const aiScore = calculateAIScore(aiScores, weights);
 
-  // Hybrid final score
-  const weightedScore = calculateHybridScore(
+  const baseScore = calculateHybridScore(
     aiScore,
     keywordScore,
     freshnessScore,
     sourceTrustScore
   );
 
-  // Chips
-  const chips = await determineChips(
-    article.title,
-    article.description ?? "",
+  const { chips, triggeredChips, chipModifierTotal } = await resolveChipScoring(
+    {
+      agentId: article.agentId,
+      title: article.title,
+      description: article.description,
+    },
+    baseScore,
     sourceTrustScore
   );
+
+  const weightedScore = clampScore(baseScore + chipModifierTotal);
 
   // Overall = simple average for reference
   const overallScore =
@@ -465,7 +617,10 @@ export async function scoreArticle(
     freshnessScore,
     sourceTrustScore,
     overallScore,
+    baseScore,
+    chipModifierTotal,
     weightedScore,
     chips,
+    triggeredChips,
   };
 }

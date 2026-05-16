@@ -1,6 +1,6 @@
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { db } from "../../db/index.js";
-import { agents, articles, articleScores, scoringCriteria } from "../../db/schema.js";
+import { agents, articles, scoringCriteria } from "../../db/schema.js";
 import { AppError } from "../../middleware/error-handler.js";
 
 // ─── Scoring Criteria CRUD ───
@@ -200,11 +200,11 @@ export async function recalculateAgentScores(agentId: string, workspaceId: strin
 
 export async function getScoringStats(workspaceId: string) {
   const scoreRanges = [
-    { label: "unscored", min: 0, max: 0 },
-    { label: "0.0-0.3", min: 0.001, max: 0.3 },
-    { label: "0.3-0.6", min: 0.3, max: 0.6 },
-    { label: "0.6-0.8", min: 0.6, max: 0.8 },
-    { label: "0.8-1.0", min: 0.8, max: 1.0 },
+    { label: "unscored", query: sql`${articles.score} <= 0` },
+    { label: "0-24", query: sql`${articles.score} > 0 AND ${articles.score} < 25` },
+    { label: "25-49", query: sql`${articles.score} >= 25 AND ${articles.score} < 50` },
+    { label: "50-74", query: sql`${articles.score} >= 50 AND ${articles.score} < 75` },
+    { label: "75-100", query: sql`${articles.score} >= 75` },
   ];
 
   const distribution: Record<string, number> = {};
@@ -216,9 +216,7 @@ export async function getScoringStats(workspaceId: string) {
       .where(
         and(
           eq(articles.workspaceId, workspaceId),
-          range.label === "unscored"
-            ? sql`${articles.score} = 0`
-            : sql`${articles.score} > ${range.min} AND ${articles.score} <= ${range.max}`
+          range.query
         )
       );
     distribution[range.label] = Number(countResult[0]?.count ?? 0);
