@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { pool } from "../../db/index.js";
 import { env } from "../../config/env.js";
+import { getRedisConnection } from "../../lib/redis.js";
 
 const router = Router();
 
@@ -17,11 +18,13 @@ router.get("/", (_req, res) => {
   });
 });
 
-// Deep health check with DB + Redis
+// Deep health check with DB + Redis + Worker
 router.get("/deep", async (_req, res) => {
   const checks: Record<string, "ok" | "error"> = {
     api: "ok",
     database: "error",
+    redis: "error",
+    worker: "error",
   };
 
   try {
@@ -29,6 +32,21 @@ router.get("/deep", async (_req, res) => {
     checks.database = "ok";
   } catch {
     checks.database = "error";
+  }
+
+  try {
+    const redis = getRedisConnection();
+    await redis.ping();
+    checks.redis = "ok";
+
+    // Check worker heartbeat
+    const heartbeat = await redis.get("newsradar:worker:heartbeat");
+    if (heartbeat) {
+      const age = Date.now() - parseInt(heartbeat, 10);
+      checks.worker = age < 120_000 ? "ok" : "error"; // 2 min threshold
+    }
+  } catch {
+    checks.redis = "error";
   }
 
   const allOk = Object.values(checks).every((v) => v === "ok");
