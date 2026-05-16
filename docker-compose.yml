@@ -106,6 +106,9 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
+      DB_USER: ${DB_USER:-newsradar}
+      DB_PASS: ${DB_PASS}
+      DB_NAME: ${DB_NAME:-newsradar}
       DATABASE_URL: postgresql://${DB_USER:-newsradar}:${DB_PASS}@newsradar-db:5432/${DB_NAME:-newsradar}
       REDIS_URL: redis://newsradar-redis:6379/0
       JWT_SECRET: ${JWT_SECRET}
