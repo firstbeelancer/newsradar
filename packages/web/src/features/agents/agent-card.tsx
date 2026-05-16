@@ -158,7 +158,7 @@ function SourceToggleList({ agentId, onSourceDeleted }: { agentId: string; onSou
             type="button"
             onClick={() => handleDelete(source.id)}
             disabled={deletingId === source.id}
-            className="shrink-0 opacity-0 group-hover/src:opacity-100 transition-opacity p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+            className="shrink-0 opacity-100 sm:opacity-0 sm:group-hover/src:opacity-100 transition-opacity p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
             title="Удалить источник"
           >
             <Trash2 className="h-3 w-3" />
@@ -320,7 +320,7 @@ export function AgentCard({ agent, onEdit, onDelete, onCollect }: AgentCardProps
                 <Link2 className="h-3.5 w-3.5 text-accent" />
                 <p className="text-xs font-semibold text-foreground">Источники</p>
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                  {sources.length}
+                  {agent.source_count ?? 0}
                 </Badge>
               </div>
               <Button

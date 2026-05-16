@@ -504,7 +504,7 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
                             type="button"
                             onClick={() => handleDeleteSource(source.id)}
                             disabled={deletingSourceId === source.id}
-                            className="opacity-0 group-hover/src:opacity-100 transition-opacity p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                            className="opacity-100 sm:opacity-0 sm:group-hover/src:opacity-100 transition-opacity p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
                             title="Удалить источник"
                           >
                             <Trash2 className="h-4 w-4" />

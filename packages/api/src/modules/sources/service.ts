@@ -168,20 +168,32 @@ export async function triggerFetch(id: string, workspaceId: string) {
     throw new AppError(400, "Cannot fetch from inactive source", "SOURCE_INACTIVE");
   }
 
-  // Update fetch state
-  await db
-    .update(sources)
-    .set({
-      fetchCount: sql`${sources.fetchCount} + 1`,
-      lastFetchAt: new Date(),
-      fetchStatus: "success",
-      updatedAt: new Date(),
-    })
-    .where(eq(sources.id, id));
+  // Resolve the agent linked to this source
+  const agentRef = await db
+    .select({ agentId: agentSources.agentId })
+    .from(agentSources)
+    .where(eq(agentSources.sourceId, id))
+    .limit(1);
+
+  if (!agentRef[0]) {
+    throw new AppError(400, "Source is not linked to any agent", "SOURCE_NO_AGENT");
+  }
+
+  // Queue a real BullMQ job
+  const { getFetchSourceQueue } = await import("../../lib/queues.js");
+  const fetchQueue = getFetchSourceQueue();
+
+  const job = await fetchQueue.add("fetch-source", {
+    sourceId: id,
+  }, {
+    attempts: 3,
+    backoff: { type: "exponential", delay: 5000 },
+  });
 
   const operationId = crypto.randomUUID();
   return {
     operationId,
+    jobId: job.id,
     sourceId: id,
     status: "queued",
     message: "Manual fetch queued",

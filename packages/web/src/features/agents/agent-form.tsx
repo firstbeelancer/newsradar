@@ -268,31 +268,37 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto p-0">
-        <DialogHeader className="px-6 pt-6 pb-0">
-          <DialogTitle className="text-xl font-bold tracking-tight">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto p-0 w-[95vw] sm:w-auto">
+        <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-0">
+          <DialogTitle className="text-lg sm:text-xl font-bold tracking-tight">
             {agent ? 'Редактировать агента' : 'Новый агент'}
           </DialogTitle>
         </DialogHeader>
 
         {/* Tabs */}
-        <div className="flex gap-1 border-b border-border/60 bg-muted/40 backdrop-blur-sm px-4 py-0 mx-6 rounded-t-xl">
+        <div className="flex gap-0.5 sm:gap-1 border-b border-border/60 bg-muted/40 backdrop-blur-sm px-2 sm:px-4 py-0 mx-3 sm:mx-6 rounded-t-xl overflow-x-auto">
           {tabs.map(t => {
             const TabIcon = t.icon;
+            const mobileLabels: Record<string, string> = {
+              basic: 'Основное',
+              scoring: 'Скоринг',
+              filters: 'Фильтры',
+              prompts: 'Промпт',
+            };
             return (
               <button
                 key={t.key}
                 type="button"
                 onClick={() => setTab(t.key)}
                 className={cn(
-                  'flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium transition-all relative',
+                  'flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2.5 text-xs sm:text-sm font-medium transition-all relative whitespace-nowrap',
                   tab === t.key
                     ? 'text-accent'
                     : 'text-muted-foreground hover:text-foreground hover:bg-muted/40 rounded-t-lg'
                 )}
               >
-                <TabIcon className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">{t.label}</span>
+                <TabIcon className="h-3.5 w-3.5 shrink-0" />
+                <span>{mobileLabels[t.key] ?? t.label}</span>
                 {tab === t.key && (
                   <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-accent rounded-full" />
                 )}
@@ -301,7 +307,7 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
           })}
         </div>
 
-        <form onSubmit={handleSubmit} className="px-6 pb-6 space-y-5">
+        <form onSubmit={handleSubmit} className="px-4 sm:px-6 pb-4 sm:pb-6 space-y-5">
           {/* === TAB: Basic === */}
           {tab === 'basic' && (
             <>
@@ -404,7 +410,7 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
               {/* Icon */}
               <div className="space-y-2">
                 <Label>Иконка</Label>
-                <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
+                <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-10 gap-2">
                   {ICON_OPTIONS.map((opt) => {
                     const Icon = opt.icon;
                     return (

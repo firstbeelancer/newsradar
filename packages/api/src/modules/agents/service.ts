@@ -511,35 +511,50 @@ export async function triggerCollection(agentId: string, workspaceId: string, us
     .returning();
 
   // Queue actual BullMQ jobs for each active source
+  let queuedCount = 0;
+  let queueError: string | null = null;
+
   if (activeSources.length > 0) {
     try {
       const { getFetchSourceQueue } = await import("../../lib/queues.js");
       const fetchQueue = getFetchSourceQueue();
-      
+
       for (const source of activeSources) {
         await fetchQueue.add("fetch-source", {
           sourceId: source.id,
-          agentId,
-          workspaceId,
-          userId,
-          operationLogId: log.id,
         }, {
           attempts: 3,
           backoff: { type: "exponential", delay: 5000 },
         });
+        queuedCount++;
       }
     } catch (err) {
-      // If queue is not available (e.g. in dev), log but don't fail
-      console.warn("[agents] BullMQ queue not available, collection logged but not queued:", (err as Error).message);
+      queueError = err instanceof Error ? err.message : String(err);
+      console.error("[agents] Failed to queue collection jobs:", queueError);
+
+      // Update operation log with error
+      await db
+        .update(operationLogs)
+        .set({
+          status: "failed",
+          message: `Ошибка очереди: ${queueError}`,
+          finishedAt: new Date(),
+        })
+        .where(eq(operationLogs.id, log.id));
+
+      throw new AppError(500, `Ошибка очереди сбора: ${queueError}`, "QUEUE_ERROR");
     }
   }
 
   return {
     operationId: log.id,
     op_id: log.id,
-    status: log.status,
-    message: log.message,
+    status: queuedCount > 0 ? "running" : log.status,
+    message: queuedCount > 0
+      ? `Сбор запущен: ${queuedCount} задач в очереди`
+      : log.message,
     sourceCount: linkedSources.length,
     activeSourceCount: activeSources.length,
+    queuedCount,
   };
 }
