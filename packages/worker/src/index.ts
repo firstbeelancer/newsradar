@@ -27,17 +27,16 @@ let isShuttingDown = false;
  * Graceful shutdown handler.
  *
  * Sequence:
- *   1. Stop accepting new jobs (pause queues)
- *   2. Stop heartbeat
- *   3. Close all workers (drain active jobs)
- *   4. Close BullMQ queues
- *   5. Close Redis connection
- *   6. Close PostgreSQL pool
- *   7. Exit process
+ *   1. Stop heartbeat
+ *   2. Close all workers (drain active jobs)
+ *   3. Close BullMQ queues
+ *   4. Close Redis connection
+ *   5. Close PostgreSQL pool
+ *   6. Exit process
  */
 async function gracefulShutdown(signal: string): Promise<void> {
   if (isShuttingDown) {
-    logger.warn("Shutdown already in progress — forcing exit");
+    logger.warn("Shutdown already in progress, forcing exit");
     process.exit(1);
   }
   isShuttingDown = true;
@@ -45,32 +44,25 @@ async function gracefulShutdown(signal: string): Promise<void> {
   logger.info({ signal }, "Graceful shutdown initiated");
 
   try {
-    // 1. Pause all queues — stop accepting new jobs
-    logger.info("Pausing queues...");
-    await Promise.all(allQueues.map((q) => q.pause()));
-
-    // 2. Stop heartbeat timer
     logger.info("Stopping heartbeat...");
     stopHeartbeat(logger);
 
-    // 3. Close all workers — wait for active jobs to finish
+    // queue.pause() persists in Redis and can leave ingestion globally paused
+    // after deploys, so shutdown should rely on worker.close() instead.
     logger.info("Closing workers...");
     await closeWorkers();
 
-    // 4. Close all queues
     logger.info("Closing queues...");
     await Promise.all(allQueues.map((q) => q.close()));
 
-    // 5. Close Redis
     logger.info("Closing Redis connection...");
     const { closeRedis } = await import("./connection/redis.js");
     await closeRedis();
 
-    // 6. Close PostgreSQL pool
     logger.info("Closing database pool...");
     await closeDb();
 
-    logger.info("Shutdown complete — exiting");
+    logger.info("Shutdown complete, exiting");
     process.exit(0);
   } catch (err) {
     logger.error(
@@ -128,13 +120,17 @@ async function main(): Promise<void> {
   // 3. Start heartbeat
   startHeartbeat(redis, logger);
 
-  // 4. Register all worker processors
+  // 4. Recover from any persisted BullMQ pause left by previous deploys/restarts.
+  logger.info("Resuming queues...");
+  await Promise.all(allQueues.map((q) => q.resume()));
+
+  // 5. Register all worker processors
   logger.info("Registering workers...");
   registerWorkers(logger);
 
   logger.info(
     { queues: allQueues.map((q) => q.name) },
-    "Newsradar worker ready — %d queues registered",
+    "Newsradar worker ready, %d queues registered",
     allQueues.length
   );
 }
