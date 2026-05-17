@@ -112,12 +112,12 @@ export async function processScoreArticle(
     .limit(1);
 
   const scoreData = {
-    aiRelevance: scoreResult.aiScores.relevance.toFixed(0),
-    keywordMatch: scoreResult.keywordScore.toFixed(0),
-    freshness: scoreResult.freshnessScore.toFixed(0),
-    sourceTrust: scoreResult.sourceTrustScore.toFixed(0),
-    overallScore: scoreResult.overallScore.toFixed(1),
-    weightedScore: scoreResult.weightedScore.toFixed(1),
+    aiRelevance: scoreResult.aiScores.relevance.toFixed(1),
+    keywordMatch: scoreResult.keywordScore.toFixed(1),
+    freshness: scoreResult.freshnessScore.toFixed(1),
+    sourceTrust: scoreResult.sourceTrustScore.toFixed(1),
+    overallScore: scoreResult.overallScore.toFixed(3),
+    weightedScore: scoreResult.weightedScore.toFixed(3),
     weightsSnapshot: {
       aiWeights: weights,
       hybrid: { ai: 0.55, keyword: 0.2, freshness: 0.15, sourceTrust: 0.1 },

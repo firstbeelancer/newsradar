@@ -1,6 +1,6 @@
 import { and, count, desc, eq } from "drizzle-orm";
 import { db } from "../../db/index.js";
-import { agents, articles, operationLogs, workspaces } from "../../db/schema.js";
+import { agents, articles, operationLogs, workspaces, agentSources, sources } from "../../db/schema.js";
 import { AppError } from "../../middleware/error-handler.js";
 
 async function assertWorkspaceOwner(params: { userId: string; workspaceId: string }) {
@@ -133,19 +133,76 @@ export async function collectAllAgents(params: { userId: string; workspaceId: st
       metadata: {
         agentCount: activeAgents.length,
         agents: activeAgents.map((agent) => ({ id: agent.id, name: agent.name })),
-        note: "Фоновая очередь сбора будет подключена следующим слоем ремонта",
       },
       startedAt: new Date(),
       finishedAt: activeAgents.length > 0 ? null : new Date(),
     })
     .returning();
 
+  // Queue fetch-source jobs for each agent's active sources
+  let totalQueued = 0;
+  if (activeAgents.length > 0) {
+    try {
+      const { getFetchSourceQueue } = await import("../../lib/queues.js");
+      const fetchQueue = getFetchSourceQueue();
+
+      for (const agent of activeAgents) {
+        const linkedSources = await db
+          .select({ id: sources.id, name: sources.name })
+          .from(agentSources)
+          .innerJoin(sources, eq(agentSources.sourceId, sources.id))
+          .where(and(eq(agentSources.agentId, agent.id), eq(sources.isActive, true)));
+
+        for (const source of linkedSources) {
+          await fetchQueue.add("fetch-source", {
+            sourceId: source.id,
+            operationId: log.id,
+          }, {
+            attempts: 3,
+            backoff: { type: "exponential", delay: 5000 },
+          });
+          totalQueued++;
+        }
+      }
+
+      // Add delayed finalization job
+      if (totalQueued > 0) {
+        await fetchQueue.add("finalize-collection", {
+          operationId: log.id,
+          expectedCount: totalQueued,
+        }, {
+          delay: 120_000, // 2 minutes — enough for all sources
+          attempts: 1,
+          removeOnComplete: true,
+        });
+      }
+    } catch (err) {
+      const queueError = err instanceof Error ? err.message : String(err);
+      console.error("[dashboard] Failed to queue collection jobs:", queueError);
+
+      await db
+        .update(operationLogs)
+        .set({
+          status: "failed",
+          message: `Ошибка очереди: ${queueError}`,
+          finishedAt: new Date(),
+        })
+        .where(eq(operationLogs.id, log.id));
+
+      throw new AppError(500, `Ошибка очереди сбора: ${queueError}`, "QUEUE_ERROR");
+    }
+  }
+
   return {
     operationId: log.id,
     op_id: log.id,
-    status: log.status,
-    message: log.message,
+    status: totalQueued > 0 ? "running" : log.status,
+    message: totalQueued > 0
+      ? `Сбор запущен: ${totalQueued} задач в очереди для ${activeAgents.length} агентов`
+      : log.message,
     agentCount: activeAgents.length,
     agent_count: activeAgents.length,
+    queuedCount: totalQueued,
+    queued_count: totalQueued,
   };
 }

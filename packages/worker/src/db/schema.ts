@@ -242,12 +242,12 @@ export const articleScores = pgTable(
     articleId: uuid("article_id")
       .references(() => articles.id, { onDelete: "cascade" })
       .notNull(),
-    aiRelevance: decimal("ai_relevance", { precision: 5, scale: 1 }),
-    keywordMatch: decimal("keyword_match", { precision: 5, scale: 1 }),
-    freshness: decimal("freshness", { precision: 5, scale: 1 }),
-    sourceTrust: decimal("source_trust", { precision: 5, scale: 1 }),
-    overallScore: decimal("overall_score", { precision: 5, scale: 3 }).default("0.000").notNull(),
-    weightedScore: decimal("weighted_score", { precision: 5, scale: 3 }).default("0.000").notNull(),
+    aiRelevance: decimal("ai_relevance", { precision: 6, scale: 2 }),
+    keywordMatch: decimal("keyword_match", { precision: 6, scale: 2 }),
+    freshness: decimal("freshness", { precision: 6, scale: 2 }),
+    sourceTrust: decimal("source_trust", { precision: 6, scale: 2 }),
+    overallScore: decimal("overall_score", { precision: 6, scale: 3 }).default("0.000").notNull(),
+    weightedScore: decimal("weighted_score", { precision: 6, scale: 3 }).default("0.000").notNull(),
     weightsSnapshot: jsonb("weights_snapshot"),
     chips: jsonb("chips").default("[]").notNull(),
     scoreDetail: jsonb("score_detail").default({}).notNull(),
