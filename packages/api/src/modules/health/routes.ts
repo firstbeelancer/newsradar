@@ -26,6 +26,7 @@ router.get("/deep", async (_req, res) => {
     redis: "error",
     worker: "error",
   };
+  let workerMeta: { build?: string; timestamp?: number; pid?: number } | null = null;
 
   try {
     await pool.query("SELECT 1");
@@ -41,6 +42,14 @@ router.get("/deep", async (_req, res) => {
 
     // Check worker heartbeat
     const heartbeat = await redis.get("newsradar:worker:heartbeat");
+    const rawMeta = await redis.get("newsradar:worker:meta");
+    if (rawMeta) {
+      try {
+        workerMeta = JSON.parse(rawMeta) as { build?: string; timestamp?: number; pid?: number };
+      } catch {
+        workerMeta = { build: "unparseable-meta" };
+      }
+    }
     if (heartbeat) {
       const age = Date.now() - parseInt(heartbeat, 10);
       checks.worker = age < 120_000 ? "ok" : "error"; // 2 min threshold
@@ -56,6 +65,7 @@ router.get("/deep", async (_req, res) => {
     data: {
       status: allOk ? "healthy" : "unhealthy",
       checks,
+      workerMeta,
       timestamp: new Date().toISOString(),
     },
   });

@@ -15,8 +15,10 @@ const state: HeartbeatState = {
 };
 
 const HEARTBEAT_KEY = "newsradar:worker:heartbeat";
+const HEARTBEAT_META_KEY = "newsradar:worker:meta";
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const HEARTBEAT_TTL_S = 120;
+const WORKER_BUILD_MARKER = "2026-05-17-translate-worker-meta-v1";
 
 /**
  * Start the heartbeat loop.
@@ -39,8 +41,23 @@ export function startHeartbeat(redis: Redis, logger: pino.Logger): void {
   const tick = async (): Promise<void> => {
     try {
       const now = Date.now();
-      await redis.set(HEARTBEAT_KEY, now.toString(), "EX", HEARTBEAT_TTL_S);
-      logger.debug({ key: HEARTBEAT_KEY, ttl: HEARTBEAT_TTL_S }, "Heartbeat written");
+      await Promise.all([
+        redis.set(HEARTBEAT_KEY, now.toString(), "EX", HEARTBEAT_TTL_S),
+        redis.set(
+          HEARTBEAT_META_KEY,
+          JSON.stringify({
+            build: WORKER_BUILD_MARKER,
+            timestamp: now,
+            pid: process.pid,
+          }),
+          "EX",
+          HEARTBEAT_TTL_S
+        ),
+      ]);
+      logger.debug(
+        { key: HEARTBEAT_KEY, metaKey: HEARTBEAT_META_KEY, ttl: HEARTBEAT_TTL_S, build: WORKER_BUILD_MARKER },
+        "Heartbeat written"
+      );
     } catch (err) {
       logger.error(
         { err: err instanceof Error ? err.message : String(err) },
@@ -57,7 +74,7 @@ export function startHeartbeat(redis: Redis, logger: pino.Logger): void {
   }, HEARTBEAT_INTERVAL_MS);
 
   logger.info(
-    { intervalMs: HEARTBEAT_INTERVAL_MS, ttl: HEARTBEAT_TTL_S },
+    { intervalMs: HEARTBEAT_INTERVAL_MS, ttl: HEARTBEAT_TTL_S, build: WORKER_BUILD_MARKER },
     "Heartbeat started"
   );
 }
