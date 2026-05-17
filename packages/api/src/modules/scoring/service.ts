@@ -155,9 +155,11 @@ export async function recalculateAgentScores(agentId: string, workspaceId: strin
       and(
         eq(articles.agentId, agentId),
         eq(articles.workspaceId, workspaceId),
-        sql`${articles.status} IN ('analyzed', 'translated', 'new')`
+        sql`${articles.status} IN ('analyzed', 'translated', 'new')`,
+        sql`${articles.score} <= 0`
       )
     )
+    .orderBy(sql`${articles.createdAt} DESC`)
     .limit(500);
 
   // Queue scoring jobs instead of doing Math.random()
