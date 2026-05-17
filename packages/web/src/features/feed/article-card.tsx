@@ -3,7 +3,7 @@ import { Card, CardContent } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
 import { Bookmark, ExternalLink, Calendar } from 'lucide-react';
-import { cn, truncate, formatDateTime, stripHtml } from '@shared/lib/utils';
+import { cn, truncate, formatDateTime, cleanArticleText } from '@shared/lib/utils';
 import type { Article } from '@shared/api/client';
 
 interface ArticleCardProps {
@@ -15,13 +15,14 @@ interface ArticleCardProps {
 }
 
 const scoreColor = (score: number): string => {
-  if (score >= 0.8) return 'bg-success-light text-success';
-  if (score >= 0.5) return 'bg-warning-light text-warning';
+  if (score >= 75) return 'bg-success-light text-success';
+  if (score >= 50) return 'bg-warning-light text-warning';
   return 'bg-muted text-muted-foreground';
 };
 
 export function ArticleCard({ article, onToggleFavorite, isSelected, onSelect, selectable }: ArticleCardProps) {
-  const scorePercent = Math.round(article.score * 100);
+  const scorePercent = Math.round(article.score);
+  const preview = cleanArticleText(article.description);
 
   return (
     <Card
@@ -48,9 +49,9 @@ export function ArticleCard({ article, onToggleFavorite, isSelected, onSelect, s
               </Badge>
             </div>
 
-            {article.description && (
+            {preview && (
               <p className="mt-1.5 text-xs text-muted-foreground line-clamp-2">
-                {truncate(stripHtml(article.description), 180)}
+                {truncate(preview, 180)}
               </p>
             )}
 

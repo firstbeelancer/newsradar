@@ -47,6 +47,7 @@ import {
   Wrench,
   type LucideIcon,
 } from 'lucide-react';
+import { cleanArticleText } from '@shared/lib/utils';
 
 // Map agent.icon string to Lucide icon component
 const ICON_MAP: Record<string, LucideIcon> = {
@@ -81,7 +82,6 @@ function getAgentIcon(iconStr?: string): LucideIcon {
 }
 import type { CreateAgentDto, UpdateAgentDto, AgentStats, ChipFilter } from '@shared/api/client';
 import { agentsApi, sourcesApi, chipFiltersApi, articlesApi, type Article } from '@shared/api/client';
-import { useQuery } from '@tanstack/react-query';
 
 // ─── Inline articles list for agent detail ───────────────────────────────────
 
@@ -142,8 +142,10 @@ function AgentArticlesList({ agentId }: { agentId: string }) {
             <div className="flex items-start gap-3">
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium leading-snug line-clamp-2">{article.title}</p>
-                {article.description && (
-                  <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{article.description}</p>
+                {cleanArticleText(article.description) && (
+                  <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                    {cleanArticleText(article.description)}
+                  </p>
                 )}
                 <div className="mt-2 flex items-center gap-3 text-[11px] text-muted-foreground">
                   <span className="font-medium">{article.source_name}</span>
@@ -158,7 +160,7 @@ function AgentArticlesList({ agentId }: { agentId: string }) {
                 </div>
               </div>
               <Badge className="shrink-0 text-[10px]">
-                {Math.round(article.score * 100)}
+                {Math.round(article.score)}
               </Badge>
             </div>
           </CardContent>
@@ -295,7 +297,7 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
 
   const handleUnlinkSource = async (sourceId: string) => {
     if (!id) return;
-    setUnlinkSourceId(sourceId);
+    setUnlinkingSourceId(sourceId);
     try {
       await agentsApi.unlinkSource(id, sourceId);
       addToast({ title: 'Источник отвязан', variant: 'success' });

@@ -34,7 +34,6 @@ import {
   Target,
   Lightbulb,
   Compass,
-  BarChart3,
   Hammer,
   Wrench,
   type LucideIcon,
@@ -163,7 +162,7 @@ export function DashboardPage() {
   // Stats
   const stats = {
     agents: agents.length,
-    articles: agents.reduce((acc, a) => acc + (a.article_count ?? 0), 0),
+    articles: agents.reduce((acc, a) => acc + Number(a.article_count ?? 0), 0),
     generations: 0, // Placeholder - would need dedicated endpoint
     favorites: favoritesCount,
   };

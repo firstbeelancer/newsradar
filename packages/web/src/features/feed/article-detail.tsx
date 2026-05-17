@@ -13,15 +13,15 @@ import {
   Bot,
   BarChart3,
 } from 'lucide-react';
-import { cn, formatDateTime, stripHtml } from '@shared/lib/utils';
+import { cn, formatDateTime, cleanArticleText } from '@shared/lib/utils';
 
 interface ArticleDetailProps {
   articleId: string;
 }
 
 const scoreColor = (score: number): string => {
-  if (score >= 0.8) return 'bg-success-light text-success';
-  if (score >= 0.5) return 'bg-warning-light text-warning';
+  if (score >= 75) return 'bg-success-light text-success';
+  if (score >= 50) return 'bg-warning-light text-warning';
   return 'bg-muted text-muted-foreground';
 };
 
@@ -59,7 +59,9 @@ export function ArticleDetail({ articleId }: ArticleDetailProps) {
     );
   }
 
-  const scorePercent = Math.round(currentArticle.score * 100);
+  const scorePercent = Math.round(currentArticle.score);
+  const description = cleanArticleText(currentArticle.description);
+  const content = cleanArticleText(currentArticle.content ?? '');
 
   return (
     <div className="space-y-6">
@@ -104,21 +106,21 @@ export function ArticleDetail({ articleId }: ArticleDetailProps) {
         </CardHeader>
 
         <CardContent className="space-y-4">
-          {currentArticle.description && (
+          {description && (
             <p className="text-sm leading-relaxed text-foreground">
-              {stripHtml(currentArticle.description)}
+              {description}
             </p>
           )}
 
-          {currentArticle.content && (
+          {content && (
             <div className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
-              {stripHtml(currentArticle.content)}
+              {content}
             </div>
           )}
 
           <div className="flex items-center gap-2 pt-4 border-t border-border">
             <Button
-              variant={currentArticle.is_favorite ? 'warning' : 'outline'}
+              variant={currentArticle.is_favorite ? 'primary' : 'outline'}
               size="sm"
               onClick={() => toggleFavorite(currentArticle.id)}
             >
