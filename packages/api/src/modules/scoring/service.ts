@@ -141,10 +141,6 @@ export async function recalculateAgentScores(agentId: string, workspaceId: strin
     .where(and(eq(scoringCriteria.agentId, agentId), eq(scoringCriteria.isActive, true)))
     .orderBy(scoringCriteria.position);
 
-  if (criteria.length === 0) {
-    throw new AppError(400, "No active scoring criteria for this agent", "NO_CRITERIA");
-  }
-
   // Build weights map
   const weights: Record<string, number> = {};
   for (const c of criteria) {
@@ -190,6 +186,7 @@ export async function recalculateAgentScores(agentId: string, workspaceId: strin
   return {
     agentId,
     criteriaCount: criteria.length,
+    usedFallbackWeights: criteria.length === 0,
     articlesQueued: queuedCount,
     weights,
     triggeredAt: new Date().toISOString(),
