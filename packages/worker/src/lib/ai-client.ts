@@ -157,6 +157,87 @@ function buildUrl(provider: string, baseUrl: string, stream: boolean): string {
   return `${baseUrl}/chat/completions`;
 }
 
+function shouldRetryOpenRouterWithAuto(
+  provider: string,
+  model: string,
+  status: number,
+  errorText: string
+): boolean {
+  if (provider !== "openrouter" || model === "openrouter/auto") {
+    return false;
+  }
+
+  if (status >= 500) {
+    return true;
+  }
+
+  const normalized = errorText.toLowerCase();
+  return (
+    normalized.includes("no endpoints found") ||
+    normalized.includes("model not found") ||
+    normalized.includes("provider returned error") ||
+    normalized.includes("is not a valid model id") ||
+    normalized.includes("does not exist") ||
+    normalized.includes("temporarily unavailable")
+  );
+}
+
+async function postCompletionRequest(opts: {
+  provider: "openai" | "anthropic" | "openrouter" | "google";
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  messages: AiMessage[];
+  temperature: number;
+  maxTokens: number;
+  signal: AbortSignal;
+}): Promise<string> {
+  const url = buildUrl(opts.provider, opts.baseUrl, false);
+  const headers = getHeaders(opts.provider, opts.apiKey);
+  const body = buildRequestBody(
+    opts.provider,
+    opts.model,
+    opts.messages,
+    opts.temperature,
+    opts.maxTokens,
+    false
+  );
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+    signal: opts.signal,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    const trimmedError = errorText.slice(0, 500);
+
+    if (
+      shouldRetryOpenRouterWithAuto(
+        opts.provider,
+        opts.model,
+        response.status,
+        trimmedError
+      )
+    ) {
+      return postCompletionRequest({
+        ...opts,
+        model: "openrouter/auto",
+      });
+    }
+
+    aiTelemetry.lastError = `AI provider error ${response.status}: ${trimmedError}`;
+    throw new Error(`AI provider error ${response.status}: ${trimmedError}`);
+  }
+
+  const data = (await response.json()) as unknown;
+  aiTelemetry.lastError = null;
+  aiTelemetry.lastSuccessAt = Date.now();
+  return parseNonStreamingResponse(opts.provider, data);
+}
+
 /* ─── Response parsers ─── */
 
 function parseNonStreamingResponse(
@@ -216,25 +297,16 @@ export async function complete(opts: AiCompleteOptions): Promise<string> {
   const timeout = setTimeout(() => controller.abort(), 120_000);
 
   try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
+    return await postCompletionRequest({
+      provider,
+      baseUrl,
+      apiKey,
+      model,
+      messages: opts.messages,
+      temperature,
+      maxTokens,
       signal: controller.signal,
     });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      aiTelemetry.lastError = `AI provider error ${response.status}: ${errorText.slice(0, 500)}`;
-      throw new Error(
-        `AI provider error ${response.status}: ${errorText.slice(0, 500)}`
-      );
-    }
-
-    const data = (await response.json()) as unknown;
-    aiTelemetry.lastError = null;
-    aiTelemetry.lastSuccessAt = Date.now();
-    return parseNonStreamingResponse(provider, data);
   } catch (error) {
     if (error instanceof Error && !aiTelemetry.lastError) {
       aiTelemetry.lastError = error.message;

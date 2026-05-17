@@ -220,6 +220,28 @@ export async function removeFromFavorite(id: string, workspaceId: string) {
   return updated;
 }
 
+export async function ensureArticleExists(id: string, workspaceId: string) {
+  const result = await db
+    .select({
+      id: articles.id,
+      title: articles.title,
+      language: articles.language,
+      detectedLang: articles.detectedLang,
+      needsTranslation: articles.needsTranslation,
+      status: articles.status,
+    })
+    .from(articles)
+    .where(and(eq(articles.id, id), eq(articles.workspaceId, workspaceId)))
+    .limit(1);
+
+  const article = result[0];
+  if (!article) {
+    throw new AppError(404, "Article not found", "ARTICLE_NOT_FOUND");
+  }
+
+  return article;
+}
+
 export async function listFavorites(
   workspaceId: string,
   params: { limit: number; cursor?: string | null }

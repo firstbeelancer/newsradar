@@ -11,8 +11,10 @@ import {
   removeFromFavorite,
   getArticleWithScore,
   deleteAllArticles,
+  ensureArticleExists,
 } from "./service.js";
 import { createOperationLog } from "../operation-logs/service.js";
+import { getTranslateQueue } from "../../lib/queues.js";
 
 const router = Router();
 
@@ -146,6 +148,38 @@ router.delete("/:id/favorite", authMiddleware, async (req, res, next) => {
 
     const article = await removeFromFavorite(req.params.id, workspaceId);
     res.json({ success: true, data: article });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/:id/retranslate", authMiddleware, async (req, res, next) => {
+  try {
+    const workspaceId = req.query.workspaceId as string;
+    if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
+
+    const article = await ensureArticleExists(req.params.id, workspaceId);
+    const translateQueue = getTranslateQueue();
+    const jobId = `retranslate-${article.id}-${Date.now()}`;
+
+    await translateQueue.add(
+      jobId,
+      { articleId: article.id },
+      { jobId, removeOnComplete: { count: 100 }, removeOnFail: { count: 50 } }
+    );
+
+    res.json({
+      success: true,
+      data: {
+        articleId: article.id,
+        queued: true,
+        jobId,
+        status: article.status,
+        language: article.language,
+        detectedLang: article.detectedLang,
+        needsTranslation: article.needsTranslation,
+      },
+    });
   } catch (err) {
     next(err);
   }
