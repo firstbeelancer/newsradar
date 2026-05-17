@@ -68,6 +68,17 @@ function resolveProvider(
   return { provider, baseUrl, apiKey };
 }
 
+function sanitizeApiKey(apiKey: string): string {
+  const trimmed = apiKey.trim();
+  const withoutQuotes =
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+      ? trimmed.slice(1, -1).trim()
+      : trimmed;
+
+  return withoutQuotes.replace(/^Bearer\s+/i, "").trim();
+}
+
 function resolveModel(opts?: Pick<AiCompleteOptions, "model">): string {
   return opts?.model ?? env.PLATFORM_AI_MODEL;
 }
@@ -274,24 +285,14 @@ function parseNonStreamingResponse(
  */
 export async function complete(opts: AiCompleteOptions): Promise<string> {
   const { provider, baseUrl, apiKey } = resolveProvider(opts);
+  const sanitizedApiKey = sanitizeApiKey(apiKey);
   const model = resolveModel(opts);
   const temperature = opts.temperature ?? 0.7;
   const maxTokens = opts.maxTokens ?? 4_000;
 
-  if (!apiKey) {
+  if (!sanitizedApiKey) {
     throw new Error("No API key provided for AI completion");
   }
-
-  const url = buildUrl(provider, baseUrl, false);
-  const headers = getHeaders(provider, apiKey);
-  const body = buildRequestBody(
-    provider,
-    model,
-    opts.messages,
-    temperature,
-    maxTokens,
-    false
-  );
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 120_000);
@@ -300,7 +301,7 @@ export async function complete(opts: AiCompleteOptions): Promise<string> {
     return await postCompletionRequest({
       provider,
       baseUrl,
-      apiKey,
+      apiKey: sanitizedApiKey,
       model,
       messages: opts.messages,
       temperature,
@@ -325,11 +326,12 @@ export async function complete(opts: AiCompleteOptions): Promise<string> {
  */
 export async function streamComplete(opts: AiStreamOptions): Promise<string> {
   const { provider, baseUrl, apiKey } = resolveProvider(opts);
+  const sanitizedApiKey = sanitizeApiKey(apiKey);
   const model = resolveModel(opts);
   const temperature = opts.temperature ?? 0.7;
   const maxTokens = opts.maxTokens ?? 4_000;
 
-  if (!apiKey) {
+  if (!sanitizedApiKey) {
     throw new Error("No API key provided for AI streaming completion");
   }
 
@@ -341,7 +343,7 @@ export async function streamComplete(opts: AiStreamOptions): Promise<string> {
   }
 
   const url = buildUrl(provider, baseUrl, true);
-  const headers = getHeaders(provider, apiKey);
+  const headers = getHeaders(provider, sanitizedApiKey);
   const body = buildRequestBody(
     provider,
     model,
