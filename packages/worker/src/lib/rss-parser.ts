@@ -1,6 +1,8 @@
+import { cleanArticleText } from "./text-cleaner.js";
+
 /**
  * ------------------------------------------------------------------
- * RSS Parser — fetch RSS feeds and parse XML into article items
+ * RSS Parser - fetch RSS feeds and parse XML into article items
  * ------------------------------------------------------------------
  */
 
@@ -27,12 +29,11 @@ interface XmlNode {
 
 /**
  * Ultra-lightweight XML parser for RSS/Atom feeds.
- * No external dependencies — uses regex-based parsing for speed.
+ * No external dependencies - uses regex-based parsing for speed.
  */
 function parseXml(xml: string): Record<string, unknown> {
   const result: Record<string, unknown> = {};
 
-  // Extract channel-level metadata
   const channelMatch = xml.match(/<channel[^>]*>([\s\S]*?)<\/channel>/i);
   if (channelMatch) {
     const channelContent = channelMatch[1];
@@ -40,15 +41,12 @@ function parseXml(xml: string): Record<string, unknown> {
     result.description = extractTag(channelContent, "description");
   }
 
-  // Extract feed title for Atom
   if (!result.title) {
     result.title = extractTag(xml, "title");
   }
 
-  // Parse items (<item> for RSS, <entry> for Atom)
   const items: Array<Record<string, unknown>> = [];
 
-  // Try RSS 2.0 items
   const itemRegex = /<item[\s\S]*?<\/item>/gi;
   let match: RegExpExecArray | null;
   while ((match = itemRegex.exec(xml)) !== null) {
@@ -68,7 +66,6 @@ function parseXml(xml: string): Record<string, unknown> {
     });
   }
 
-  // If no RSS items found, try Atom entries
   if (items.length === 0) {
     const entryRegex = /<entry[\s\S]*?<\/entry>/gi;
     while ((match = entryRegex.exec(xml)) !== null) {
@@ -94,7 +91,6 @@ function parseXml(xml: string): Record<string, unknown> {
   return result;
 }
 
-/** Extract text content of a tag (handles CDATA). */
 function extractTag(xml: string, tag: string): string {
   const regex = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i");
   const match = regex.exec(xml);
@@ -102,7 +98,6 @@ function extractTag(xml: string, tag: string): string {
   return decodeXmlEntities(stripCdata(match[1].trim()));
 }
 
-/** Extract an attribute value from a tag. */
 function extractAttribute(
   xml: string,
   tag: string,
@@ -113,43 +108,18 @@ function extractAttribute(
   return match?.[1] ?? "";
 }
 
-/** Extract Atom author name. */
 function extractAtomAuthor(entryXml: string): string | null {
   const authorMatch = /<author[\s\S]*?<\/author>/i.exec(entryXml);
   if (!authorMatch) return null;
   return extractTag(authorMatch[0], "name") || null;
 }
 
-/** Strip CDATA wrapper. */
 function stripCdata(text: string): string {
   return text
     .replace(/^<!\[CDATA\[/, "")
     .replace(/\]\]>$/, "");
 }
 
-/** Strip HTML tags and normalize whitespace. */
-function stripHtml(text: string): string {
-  if (!text) return "";
-  return text
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/p>/gi, "\n")
-    .replace(/<\/div>/gi, "\n")
-    .replace(/<\/li>/gi, "\n")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&mdash;/g, "—")
-    .replace(/&ndash;/g, "–")
-    .replace(/&laquo;/g, "«")
-    .replace(/&raquo;/g, "»")
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&amp;/g, "&")
-    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-/** Decode common XML entities. */
 function decodeXmlEntities(text: string): string {
   return text
     .replace(/&lt;/g, "<")
@@ -160,19 +130,12 @@ function decodeXmlEntities(text: string): string {
     .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)));
 }
 
-/** Parse various date formats. */
 function parseDate(dateStr: string): Date | null {
   if (!dateStr) return null;
   const date = new Date(dateStr);
   return isNaN(date.getTime()) ? null : date;
 }
 
-/**
- * Fetch and parse an RSS/Atom feed.
- *
- * @param url — RSS feed URL
- * @returns Parsed feed with items
- */
 export async function parseRssFeed(url: string): Promise<RssParseResult> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30_000);
@@ -212,14 +175,13 @@ export async function parseRssFeed(url: string): Promise<RssParseResult> {
     const items: RssItem[] = rawItems
       .map((raw) => ({
         title: String(raw.title ?? "").trim(),
-        description: stripHtml(String(raw.description ?? "").trim()),
-        content: stripHtml(String(raw.content ?? "").trim()),
+        description: cleanArticleText(String(raw.description ?? "").trim()),
+        content: cleanArticleText(String(raw.content ?? "").trim()),
         link: String(raw.link ?? "").trim(),
         guid: String(raw.guid ?? raw.link ?? "").trim(),
         pubDate: raw.pubDate instanceof Date ? raw.pubDate : null,
         author: raw.author ? String(raw.author) : null,
       }))
-      // Filter out items without title or link
       .filter((item) => item.title && item.link);
 
     return {

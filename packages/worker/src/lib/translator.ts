@@ -7,6 +7,7 @@
  */
 
 import { complete } from "./ai-client.js";
+import { cleanArticleText } from "./text-cleaner.js";
 
 /**
  * Quick heuristic language detection.
@@ -109,23 +110,26 @@ export async function translateArticle(
   language: string;
 }> {
   const detectedLang = detectLanguage(title);
+  const normalizedDescription = cleanArticleText(description ?? "");
 
   if (detectedLang === "ru") {
     return {
       title,
-      description: description ?? "",
+      description: normalizedDescription,
       language: "ru",
     };
   }
 
   const [translatedTitle, translatedDescription] = await Promise.all([
     translateToRussian(title, detectedLang),
-    description ? translateToRussian(description, detectedLang) : Promise.resolve(""),
+    normalizedDescription
+      ? translateToRussian(normalizedDescription, detectedLang)
+      : Promise.resolve(""),
   ]);
 
   return {
     title: translatedTitle || title,
-    description: translatedDescription || (description ?? ""),
+    description: translatedDescription || normalizedDescription,
     language: "ru",
   };
 }
