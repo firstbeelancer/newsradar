@@ -2,7 +2,7 @@ import { Redis } from "ioredis";
 import { Queue } from "bullmq";
 import { env } from "../config/env.js";
 
-export const FETCH_SOURCE_QUEUE_NAME = "fetch-source";
+export const FETCH_SOURCE_QUEUE_NAME = "fetch-source-v2";
 export const RAW_DEDUP_QUEUE_NAME = "raw-dedup-v2";
 export const TRANSLATE_QUEUE_NAME = "translate-v2";
 export const SEMANTIC_DEDUP_QUEUE_NAME = "semantic-dedup";

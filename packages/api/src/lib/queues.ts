@@ -6,6 +6,8 @@
 import { Queue } from "bullmq";
 import { getRedisConnection } from "./redis.js";
 
+const FETCH_SOURCE_QUEUE_NAME = "fetch-source-v2";
+
 let _fetchSourceQueue: Queue | null = null;
 let _rawDedupQueue: Queue | null = null;
 let _translateQueue: Queue | null = null;
@@ -25,7 +27,7 @@ function createQueue(name: string): Queue {
 }
 
 export function getFetchSourceQueue(): Queue {
-  if (!_fetchSourceQueue) _fetchSourceQueue = createQueue("fetch-source");
+  if (!_fetchSourceQueue) _fetchSourceQueue = createQueue(FETCH_SOURCE_QUEUE_NAME);
   return _fetchSourceQueue;
 }
 
