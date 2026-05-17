@@ -7,6 +7,11 @@ import { Queue } from "bullmq";
 import { getRedisConnection } from "./redis.js";
 
 const FETCH_SOURCE_QUEUE_NAME = "fetch-source-v2";
+const RAW_DEDUP_QUEUE_NAME = "raw-dedup-v2";
+const TRANSLATE_QUEUE_NAME = "translate-v2";
+const SEMANTIC_DEDUP_QUEUE_NAME = "semantic-dedup-v2";
+const INGEST_ANALYSIS_QUEUE_NAME = "ingest-analysis-v2";
+const SCORE_ARTICLE_QUEUE_NAME = "score-article-v2";
 
 let _fetchSourceQueue: Queue | null = null;
 let _rawDedupQueue: Queue | null = null;
@@ -32,27 +37,27 @@ export function getFetchSourceQueue(): Queue {
 }
 
 export function getRawDedupQueue(): Queue {
-  if (!_rawDedupQueue) _rawDedupQueue = createQueue("raw-dedup");
+  if (!_rawDedupQueue) _rawDedupQueue = createQueue(RAW_DEDUP_QUEUE_NAME);
   return _rawDedupQueue;
 }
 
 export function getTranslateQueue(): Queue {
-  if (!_translateQueue) _translateQueue = createQueue("translate");
+  if (!_translateQueue) _translateQueue = createQueue(TRANSLATE_QUEUE_NAME);
   return _translateQueue;
 }
 
 export function getSemanticDedupQueue(): Queue {
-  if (!_semanticDedupQueue) _semanticDedupQueue = createQueue("semantic-dedup");
+  if (!_semanticDedupQueue) _semanticDedupQueue = createQueue(SEMANTIC_DEDUP_QUEUE_NAME);
   return _semanticDedupQueue;
 }
 
 export function getIngestAnalysisQueue(): Queue {
-  if (!_ingestAnalysisQueue) _ingestAnalysisQueue = createQueue("ingest-analysis");
+  if (!_ingestAnalysisQueue) _ingestAnalysisQueue = createQueue(INGEST_ANALYSIS_QUEUE_NAME);
   return _ingestAnalysisQueue;
 }
 
 export function getScoreArticleQueue(): Queue {
-  if (!_scoreArticleQueue) _scoreArticleQueue = createQueue("score-article");
+  if (!_scoreArticleQueue) _scoreArticleQueue = createQueue(SCORE_ARTICLE_QUEUE_NAME);
   return _scoreArticleQueue;
 }
 

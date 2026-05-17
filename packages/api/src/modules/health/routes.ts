@@ -2,6 +2,7 @@ import { Router } from "express";
 import { pool } from "../../db/index.js";
 import { env } from "../../config/env.js";
 import { getRedisConnection } from "../../lib/redis.js";
+import { getAllQueues } from "../../lib/queues.js";
 
 const router = Router();
 
@@ -27,6 +28,7 @@ router.get("/deep", async (_req, res) => {
     worker: "error",
   };
   let workerMeta: { build?: string; timestamp?: number; pid?: number } | null = null;
+  let queueStats: Record<string, Record<string, number>> = {};
 
   try {
     await pool.query("SELECT 1");
@@ -54,6 +56,22 @@ router.get("/deep", async (_req, res) => {
       const age = Date.now() - parseInt(heartbeat, 10);
       checks.worker = age < 120_000 ? "ok" : "error"; // 2 min threshold
     }
+
+    const queues = getAllQueues();
+    const stats = await Promise.all(
+      queues.map(async (queue) => {
+        const counts = await queue.getJobCounts(
+          "active",
+          "waiting",
+          "delayed",
+          "completed",
+          "failed",
+          "paused"
+        );
+        return [queue.name, counts] as const;
+      })
+    );
+    queueStats = Object.fromEntries(stats);
   } catch {
     checks.redis = "error";
   }
@@ -66,6 +84,7 @@ router.get("/deep", async (_req, res) => {
       status: allOk ? "healthy" : "unhealthy",
       checks,
       workerMeta,
+      queueStats,
       timestamp: new Date().toISOString(),
     },
   });
