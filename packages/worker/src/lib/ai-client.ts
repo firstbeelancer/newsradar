@@ -30,6 +30,20 @@ export interface AiStreamOptions extends AiCompleteOptions {
   onChunk: (chunk: string) => void | Promise<void>;
 }
 
+interface AiTelemetry {
+  lastError: string | null;
+  lastSuccessAt: number | null;
+}
+
+const aiTelemetry: AiTelemetry = {
+  lastError: null,
+  lastSuccessAt: null,
+};
+
+export function getAiTelemetry(): AiTelemetry {
+  return { ...aiTelemetry };
+}
+
 /* ─── Provider helpers ─── */
 
 function resolveProvider(
@@ -211,13 +225,21 @@ export async function complete(opts: AiCompleteOptions): Promise<string> {
 
     if (!response.ok) {
       const errorText = await response.text();
+      aiTelemetry.lastError = `AI provider error ${response.status}: ${errorText.slice(0, 500)}`;
       throw new Error(
         `AI provider error ${response.status}: ${errorText.slice(0, 500)}`
       );
     }
 
     const data = (await response.json()) as unknown;
+    aiTelemetry.lastError = null;
+    aiTelemetry.lastSuccessAt = Date.now();
     return parseNonStreamingResponse(provider, data);
+  } catch (error) {
+    if (error instanceof Error && !aiTelemetry.lastError) {
+      aiTelemetry.lastError = error.message;
+    }
+    throw error;
   } finally {
     clearTimeout(timeout);
   }
@@ -270,6 +292,7 @@ export async function streamComplete(opts: AiStreamOptions): Promise<string> {
 
     if (!response.ok) {
       const errorText = await response.text();
+      aiTelemetry.lastError = `AI provider error ${response.status}: ${errorText.slice(0, 500)}`;
       throw new Error(
         `AI provider error ${response.status}: ${errorText.slice(0, 500)}`
       );
@@ -329,7 +352,14 @@ export async function streamComplete(opts: AiStreamOptions): Promise<string> {
       }
     }
 
+    aiTelemetry.lastError = null;
+    aiTelemetry.lastSuccessAt = Date.now();
     return fullText;
+  } catch (error) {
+    if (error instanceof Error && !aiTelemetry.lastError) {
+      aiTelemetry.lastError = error.message;
+    }
+    throw error;
   } finally {
     clearTimeout(timeout);
   }

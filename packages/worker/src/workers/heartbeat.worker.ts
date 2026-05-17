@@ -1,6 +1,7 @@
 import type { Redis } from "ioredis";
 import type pino from "pino";
 import { env } from "../config/env.js";
+import { getAiTelemetry } from "../lib/ai-client.js";
 
 /**
  * Heartbeat worker state.
@@ -42,6 +43,7 @@ export function startHeartbeat(redis: Redis, logger: pino.Logger): void {
   const tick = async (): Promise<void> => {
     try {
       const now = Date.now();
+      const aiTelemetry = getAiTelemetry();
       await Promise.all([
         redis.set(HEARTBEAT_KEY, now.toString(), "EX", HEARTBEAT_TTL_S),
         redis.set(
@@ -54,6 +56,8 @@ export function startHeartbeat(redis: Redis, logger: pino.Logger): void {
             aiModel: env.PLATFORM_AI_MODEL,
             aiBaseUrl: env.PLATFORM_AI_BASE_URL,
             hasAiKey: Boolean(env.PLATFORM_AI_API_KEY),
+            lastAiError: aiTelemetry.lastError,
+            lastAiSuccessAt: aiTelemetry.lastSuccessAt,
           }),
           "EX",
           HEARTBEAT_TTL_S
