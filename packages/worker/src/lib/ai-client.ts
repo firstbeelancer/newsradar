@@ -44,6 +44,10 @@ export function getAiTelemetry(): AiTelemetry {
   return { ...aiTelemetry };
 }
 
+export function setAiTelemetryError(message: string): void {
+  aiTelemetry.lastError = message;
+}
+
 /* ─── Provider helpers ─── */
 
 function resolveProvider(

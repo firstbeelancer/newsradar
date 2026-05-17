@@ -11,6 +11,7 @@ import { db } from "../db/index.js";
 import { articles } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import { detectLanguage, translateArticle } from "../lib/translator.js";
+import { setAiTelemetryError } from "../lib/ai-client.js";
 import { ingestAnalysisQueue } from "../connection/redis.js";
 import type { Job } from "bullmq";
 import type { Logger } from "pino";
@@ -115,6 +116,7 @@ export async function processTranslate(
     return { translated: true, originalLanguage: detectedLang };
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
+    setAiTelemetryError(`Translation pipeline fallback: ${errorMessage}`);
     logger.error({ articleId, err: errorMessage }, "Translation failed");
 
     // Even on failure, continue pipeline with original text
