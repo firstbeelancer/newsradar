@@ -127,6 +127,28 @@ function stripCdata(text: string): string {
     .replace(/\]\]>$/, "");
 }
 
+/** Strip HTML tags and normalize whitespace. */
+function stripHtml(text: string): string {
+  if (!text) return "";
+  return text
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<\/div>/gi, "\n")
+    .replace(/<\/li>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&mdash;/g, "—")
+    .replace(/&ndash;/g, "–")
+    .replace(/&laquo;/g, "«")
+    .replace(/&raquo;/g, "»")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /** Decode common XML entities. */
 function decodeXmlEntities(text: string): string {
   return text
@@ -190,8 +212,8 @@ export async function parseRssFeed(url: string): Promise<RssParseResult> {
     const items: RssItem[] = rawItems
       .map((raw) => ({
         title: String(raw.title ?? "").trim(),
-        description: String(raw.description ?? "").trim(),
-        content: String(raw.content ?? "").trim(),
+        description: stripHtml(String(raw.description ?? "").trim()),
+        content: stripHtml(String(raw.content ?? "").trim()),
         link: String(raw.link ?? "").trim(),
         guid: String(raw.guid ?? raw.link ?? "").trim(),
         pubDate: raw.pubDate instanceof Date ? raw.pubDate : null,

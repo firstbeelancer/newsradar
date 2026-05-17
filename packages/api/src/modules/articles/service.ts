@@ -1,6 +1,6 @@
 import { eq, and, desc, sql, type SQL } from "drizzle-orm";
 import { db } from "../../db/index.js";
-import { articles, articleScores } from "../../db/schema.js";
+import { articles, articleScores, sources } from "../../db/schema.js";
 import { AppError } from "../../middleware/error-handler.js";
 import type { PaginatedResult, Cursor } from "../../lib/pagination.js";
 import { encodeCursor, decodeCursor } from "../../lib/pagination.js";
@@ -23,13 +23,20 @@ export interface ArticleFilters {
 // ─── CRUD ───
 
 export async function getArticleById(id: string, workspaceId: string) {
-  const article = await db.query.articles.findFirst({
-    where: and(eq(articles.id, id), eq(articles.workspaceId, workspaceId)),
-  });
-  if (!article) {
+  const result = await db
+    .select({
+      articles: articles,
+      sourceName: sources.name,
+    })
+    .from(articles)
+    .leftJoin(sources, eq(articles.sourceId, sources.id))
+    .where(and(eq(articles.id, id), eq(articles.workspaceId, workspaceId)))
+    .limit(1);
+
+  if (!result[0]) {
     throw new AppError(404, "Article not found", "ARTICLE_NOT_FOUND");
   }
-  return article;
+  return { ...result[0].articles, source_name: result[0].sourceName };
 }
 
 // ─── Cursor-based list with filters ───
@@ -73,8 +80,12 @@ export async function listArticles(
   }
 
   let query = db
-    .select()
+    .select({
+      articles: articles,
+      sourceName: sources.name,
+    })
     .from(articles)
+    .leftJoin(sources, eq(articles.sourceId, sources.id))
     .where(and(...conditions))
     .orderBy(desc(articles.publishedAt ?? articles.createdAt), desc(articles.id))
     .limit(filters.limit + 1);
@@ -87,8 +98,12 @@ export async function listArticles(
         sql`(${articles.publishedAt} IS NOT NULL AND ${articles.publishedAt} < ${cursorDate}) OR (${articles.publishedAt} IS NULL AND ${articles.createdAt} < ${cursorDate})`
       );
       query = db
-        .select()
+        .select({
+          articles: articles,
+          sourceName: sources.name,
+        })
         .from(articles)
+        .leftJoin(sources, eq(articles.sourceId, sources.id))
         .where(and(...conditions))
         .orderBy(desc(articles.publishedAt ?? articles.createdAt), desc(articles.id))
         .limit(filters.limit + 1);
@@ -103,12 +118,12 @@ export async function listArticles(
   const nextCursor: string | null =
     hasMore && lastItem
       ? encodeCursor({
-          id: lastItem.id,
-          sortValue: (lastItem.publishedAt ?? lastItem.createdAt).toISOString(),
+          id: lastItem.articles.id,
+          sortValue: (lastItem.articles.publishedAt ?? lastItem.articles.createdAt).toISOString(),
         } as Cursor)
       : null;
 
-  return { data, nextCursor, hasMore };
+  return { data: data.map((r) => ({ ...r.articles, source_name: r.sourceName })), nextCursor, hasMore };
 }
 
 // ─── Full-text search (dedicated endpoint) ───
@@ -134,8 +149,12 @@ export async function searchArticles(
   ];
 
   let query = db
-    .select()
+    .select({
+      articles: articles,
+      sourceName: sources.name,
+    })
     .from(articles)
+    .leftJoin(sources, eq(articles.sourceId, sources.id))
     .where(and(...conditions))
     .orderBy(desc(articles.score), desc(articles.publishedAt ?? articles.createdAt))
     .limit(params.limit + 1);
@@ -147,8 +166,12 @@ export async function searchArticles(
         sql`${articles.score} < ${decoded.sortValue}`
       );
       query = db
-        .select()
+        .select({
+          articles: articles,
+          sourceName: sources.name,
+        })
         .from(articles)
+        .leftJoin(sources, eq(articles.sourceId, sources.id))
         .where(and(...conditions))
         .orderBy(desc(articles.score), desc(articles.publishedAt ?? articles.createdAt))
         .limit(params.limit + 1);
@@ -163,12 +186,12 @@ export async function searchArticles(
   const nextCursor: string | null =
     hasMore && lastItem
       ? encodeCursor({
-          id: lastItem.id,
-          sortValue: lastItem.score.toString(),
+          id: lastItem.articles.id,
+          sortValue: lastItem.articles.score.toString(),
         } as Cursor)
       : null;
 
-  return { data, nextCursor, hasMore };
+  return { data: data.map((r) => ({ ...r.articles, source_name: r.sourceName })), nextCursor, hasMore };
 }
 
 // ─── Favorites ───

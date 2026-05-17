@@ -119,6 +119,7 @@ export async function processFetchSource(
             workspaceId: agentRef.workspaceId,
             status: "fetched",
             language: "auto",
+            needsTranslation: true,
             rawHash: hash,
           })
           .returning();
@@ -167,6 +168,7 @@ export async function processFetchSource(
             workspaceId: agentRef.workspaceId,
             status: "fetched",
             language: "auto",
+            needsTranslation: true,
             rawHash: hash,
           })
           .returning();

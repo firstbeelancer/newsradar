@@ -13,7 +13,7 @@ import {
   Bot,
   BarChart3,
 } from 'lucide-react';
-import { cn, formatDateTime } from '@shared/lib/utils';
+import { cn, formatDateTime, stripHtml } from '@shared/lib/utils';
 
 interface ArticleDetailProps {
   articleId: string;
@@ -106,13 +106,13 @@ export function ArticleDetail({ articleId }: ArticleDetailProps) {
         <CardContent className="space-y-4">
           {currentArticle.description && (
             <p className="text-sm leading-relaxed text-foreground">
-              {currentArticle.description}
+              {stripHtml(currentArticle.description)}
             </p>
           )}
 
           {currentArticle.content && (
             <div className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
-              {currentArticle.content}
+              {stripHtml(currentArticle.content)}
             </div>
           )}
 

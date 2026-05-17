@@ -59,6 +59,8 @@ export async function processTranslate(
       .update(articles)
       .set({
         language: "ru",
+        detectedLang: "ru",
+        needsTranslation: false,
         status: "translated",
         updatedAt: new Date(),
       })
@@ -74,6 +76,10 @@ export async function processTranslate(
     return { translated: false, originalLanguage: "ru" };
   }
 
+  // Save original fields before translation
+  const originalTitle = article.title;
+  const originalDescription = article.description;
+
   // Translate to Russian
   logger.info({ articleId, from: detectedLang }, "Translating article to Russian");
 
@@ -88,7 +94,11 @@ export async function processTranslate(
       .set({
         title: translated.title,
         description: translated.description,
+        originalTitle: originalTitle,
+        originalDescription: originalDescription,
         language: "ru",
+        detectedLang: detectedLang,
+        needsTranslation: false,
         status: "translated",
         updatedAt: new Date(),
       })
@@ -112,6 +122,10 @@ export async function processTranslate(
       .update(articles)
       .set({
         language: detectedLang,
+        detectedLang: detectedLang,
+        needsTranslation: true,
+        originalTitle: originalTitle,
+        originalDescription: originalDescription,
         status: "translated",
         updatedAt: new Date(),
       })

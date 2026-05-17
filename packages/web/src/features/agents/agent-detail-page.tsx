@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from '@tanstack/react-router';
+import { useQuery } from '@tanstack/react-query';
 import { Button } from '@shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
@@ -13,6 +14,7 @@ import { useToast } from '@shared/ui/toast';
 import { AgentForm } from './agent-form';
 import {
   ArrowLeft,
+  ArrowRight,
   Bot,
   Pencil,
   Play,
@@ -78,7 +80,103 @@ function getAgentIcon(iconStr?: string): LucideIcon {
   return ICON_MAP[key] || Bot;
 }
 import type { CreateAgentDto, UpdateAgentDto, AgentStats, ChipFilter } from '@shared/api/client';
-import { agentsApi, sourcesApi, chipFiltersApi } from '@shared/api/client';
+import { agentsApi, sourcesApi, chipFiltersApi, articlesApi, type Article } from '@shared/api/client';
+import { useQuery } from '@tanstack/react-query';
+
+// ─── Inline articles list for agent detail ───────────────────────────────────
+
+function AgentArticlesList({ agentId }: { agentId: string }) {
+  const navigate = useNavigate();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['agent-articles', agentId],
+    queryFn: async () => {
+      const result = await articlesApi.list({ agent_id: agentId }, undefined, 20);
+      return result.data;
+    },
+    staleTime: 30_000,
+  });
+
+  const articles: Article[] = data ?? [];
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Skeleton key={i} className="h-20" />
+        ))}
+      </div>
+    );
+  }
+
+  if (articles.length === 0) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center py-12">
+          <Newspaper className="h-8 w-8 text-muted-foreground mb-3" />
+          <p className="text-sm text-muted-foreground mb-4">Нет новостей для этого агента</p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate({
+              to: '/feed/$agentId',
+              params: { agentId },
+            })}
+          >
+            Открыть ленту
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {articles.map((article) => (
+        <Card
+          key={article.id}
+          className="cursor-pointer hover:bg-muted/50 transition-colors"
+          onClick={() => navigate({ to: '/feed/article/$id', params: { id: article.id } })}
+        >
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium leading-snug line-clamp-2">{article.title}</p>
+                {article.description && (
+                  <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{article.description}</p>
+                )}
+                <div className="mt-2 flex items-center gap-3 text-[11px] text-muted-foreground">
+                  <span className="font-medium">{article.source_name}</span>
+                  <span>
+                    {new Date(article.published_at).toLocaleDateString('ru-RU', {
+                      day: 'numeric',
+                      month: 'short',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                </div>
+              </div>
+              <Badge className="shrink-0 text-[10px]">
+                {Math.round(article.score * 100)}
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+      <div className="flex justify-center pt-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate({ to: '/feed/$agentId', params: { agentId } })}
+        >
+          Все новости агента
+          <ArrowRight className="h-3.5 w-3.5 ml-1" />
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 interface AgentDetailPageProps {
   agentId: string;
@@ -529,21 +627,7 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
         </TabsContent>
 
         <TabsContent value="articles" className="mt-4">
-          <Card>
-            <CardContent className="flex flex-col items-center py-12">
-              <Newspaper className="h-8 w-8 text-muted-foreground mb-3" />
-              <p className="text-sm text-muted-foreground mb-4">Просмотр новостей этого агента</p>
-              <Button
-                onClick={() => navigate({
-                  to: '/feed/$agentId',
-                  params: { agentId: currentAgent.id },
-                })}
-              >
-                <Newspaper className="h-4 w-4 mr-2" />
-                Открыть ленту
-              </Button>
-            </CardContent>
-          </Card>
+          <AgentArticlesList agentId={currentAgent.id} />
         </TabsContent>
 
         <TabsContent value="stats" className="mt-4">

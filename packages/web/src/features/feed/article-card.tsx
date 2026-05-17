@@ -3,7 +3,7 @@ import { Card, CardContent } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
 import { Bookmark, ExternalLink, Calendar } from 'lucide-react';
-import { cn, truncate, formatDateTime } from '@shared/lib/utils';
+import { cn, truncate, formatDateTime, stripHtml } from '@shared/lib/utils';
 import type { Article } from '@shared/api/client';
 
 interface ArticleCardProps {
@@ -50,7 +50,7 @@ export function ArticleCard({ article, onToggleFavorite, isSelected, onSelect, s
 
             {article.description && (
               <p className="mt-1.5 text-xs text-muted-foreground line-clamp-2">
-                {truncate(article.description, 180)}
+                {truncate(stripHtml(article.description), 180)}
               </p>
             )}
 
