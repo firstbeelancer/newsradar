@@ -258,7 +258,6 @@ export const articleScores = pgTable(
     weightedScore: decimal("weighted_score", { precision: 6, scale: 3 }).default("0.000").notNull(),
     weightsSnapshot: jsonb("weights_snapshot"),
     chips: jsonb("chips").default("[]").notNull(),
-    scoreDetail: jsonb("score_detail").default({}).notNull(),
     scoredAt: timestamp("scored_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
