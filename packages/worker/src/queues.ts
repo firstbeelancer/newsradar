@@ -23,6 +23,20 @@
  */
 
 import { createQueue, createWorker, attachWorkerLogging } from "./connection/bullmq.js";
+import {
+  CLEANUP_QUEUE_NAME,
+  DEEPSEARCH_QUEUE_NAME,
+  FAVORITES_CLEANUP_QUEUE_NAME,
+  FETCH_SOURCE_QUEUE_NAME,
+  GENERATE_DIGEST_QUEUE_NAME,
+  GENERATE_POST_QUEUE_NAME,
+  INGEST_ANALYSIS_QUEUE_NAME,
+  POSTS_CLEANUP_QUEUE_NAME,
+  RAW_DEDUP_QUEUE_NAME,
+  SCORE_ARTICLE_QUEUE_NAME,
+  SEMANTIC_DEDUP_QUEUE_NAME,
+  TRANSLATE_QUEUE_NAME,
+} from "./connection/redis.js";
 import { processFetchSource, type FetchSourceJob } from "./workers/fetch-source.worker.js";
 import { processRawDedup, type RawDedupJob } from "./workers/raw-dedup.worker.js";
 import { processTranslate, type TranslateJob } from "./workers/translate.worker.js";
@@ -42,40 +56,40 @@ import type { Worker, Job } from "bullmq";
 /* ─── Queue declarations ─── */
 
 /** 1. Fetch raw content from RSS feeds and external APIs. */
-export const fetchSourceQueue = createQueue("fetch-source");
+export const fetchSourceQueue = createQueue(FETCH_SOURCE_QUEUE_NAME);
 
 /** 2. Deduplicate articles by raw URL / content hash. */
-export const rawDedupQueue = createQueue("raw-dedup");
+export const rawDedupQueue = createQueue(RAW_DEDUP_QUEUE_NAME);
 
 /** 3. Translate article content to Russian when needed. */
-export const translateQueue = createQueue("translate");
+export const translateQueue = createQueue(TRANSLATE_QUEUE_NAME);
 
 /** 4. Semantic deduplication using vector embeddings. */
-export const semanticDedupQueue = createQueue("semantic-dedup");
+export const semanticDedupQueue = createQueue(SEMANTIC_DEDUP_QUEUE_NAME);
 
 /** 5. Persist article to DB and trigger NLP enrichment. */
-export const ingestAnalysisQueue = createQueue("ingest-analysis");
+export const ingestAnalysisQueue = createQueue(INGEST_ANALYSIS_QUEUE_NAME);
 
 /** 6. AI-powered scoring of article relevance & quality. */
-export const scoreArticleQueue = createQueue("score-article");
+export const scoreArticleQueue = createQueue(SCORE_ARTICLE_QUEUE_NAME);
 
 /** 7. Generate social-media post from scored article. */
-export const generatePostQueue = createQueue("generate-post");
+export const generatePostQueue = createQueue(GENERATE_POST_QUEUE_NAME);
 
 /** 8. Compile daily / weekly digest of top articles. */
-export const generateDigestQueue = createQueue("generate-digest");
+export const generateDigestQueue = createQueue(GENERATE_DIGEST_QUEUE_NAME);
 
 /** 9. Deep research background jobs. */
-export const deepsearchQueue = createQueue("deepsearch");
+export const deepsearchQueue = createQueue(DEEPSEARCH_QUEUE_NAME);
 
 /** 10. General cleanup of expired jobs and temporary data. */
-export const cleanupQueue = createQueue("cleanup");
+export const cleanupQueue = createQueue(CLEANUP_QUEUE_NAME);
 
 /** 11. Cleanup of stale favorite references. */
-export const favoritesCleanupQueue = createQueue("favorites-cleanup");
+export const favoritesCleanupQueue = createQueue(FAVORITES_CLEANUP_QUEUE_NAME);
 
 /** 12. Cleanup of old generated posts. */
-export const postsCleanupQueue = createQueue("posts-cleanup");
+export const postsCleanupQueue = createQueue(POSTS_CLEANUP_QUEUE_NAME);
 
 /**
  * All queues as an array — useful for bulk operations (pause, resume, close).
@@ -114,7 +128,7 @@ export function registerWorkers(logger: Logger): Worker[] {
 
   /* 1. fetch-source */
   const fetchSourceWorker = createWorker<FetchSourceJob>(
-    "fetch-source",
+    FETCH_SOURCE_QUEUE_NAME,
     async (job) => {
       // Handle finalize-collection jobs
       if (job.name === "finalize-collection") {
@@ -156,7 +170,7 @@ export function registerWorkers(logger: Logger): Worker[] {
 
   /* 2. raw-dedup */
   const rawDedupWorker = createWorker<RawDedupJob>(
-    "raw-dedup",
+    RAW_DEDUP_QUEUE_NAME,
     async (job) => processRawDedup(job, logger),
     { concurrency: 5 }
   );
@@ -164,7 +178,7 @@ export function registerWorkers(logger: Logger): Worker[] {
 
   /* 3. translate */
   const translateWorker = createWorker<TranslateJob>(
-    "translate",
+    TRANSLATE_QUEUE_NAME,
     async (job) => processTranslate(job, logger),
     { concurrency: 3 }
   );
@@ -172,7 +186,7 @@ export function registerWorkers(logger: Logger): Worker[] {
 
   /* 4. semantic-dedup */
   const semanticDedupWorker = createWorker<SemanticDedupJob>(
-    "semantic-dedup",
+    SEMANTIC_DEDUP_QUEUE_NAME,
     async (job) => processSemanticDedup(job, logger),
     { concurrency: 3 }
   );
@@ -180,7 +194,7 @@ export function registerWorkers(logger: Logger): Worker[] {
 
   /* 5. ingest-analysis — passthrough to semantic-dedup for now */
   const ingestAnalysisWorker = createWorker(
-    "ingest-analysis",
+    INGEST_ANALYSIS_QUEUE_NAME,
     async (job) => {
       const { articleId } = job.data as { articleId: string };
       logger.debug({ articleId, jobId: job.id }, "Ingest analysis → semantic dedup");
@@ -196,7 +210,7 @@ export function registerWorkers(logger: Logger): Worker[] {
 
   /* 6. score-article */
   const scoreArticleWorker = createWorker<ScoreArticleJob>(
-    "score-article",
+    SCORE_ARTICLE_QUEUE_NAME,
     async (job) => processScoreArticle(job, logger),
     { concurrency: 3 }
   );
@@ -204,7 +218,7 @@ export function registerWorkers(logger: Logger): Worker[] {
 
   /* 7. generate-post */
   const generatePostWorker = createWorker<GeneratePostJob>(
-    "generate-post",
+    GENERATE_POST_QUEUE_NAME,
     async (job) => processGeneratePost(job, logger),
     { concurrency: 2 }
   );
@@ -212,7 +226,7 @@ export function registerWorkers(logger: Logger): Worker[] {
 
   /* 8. generate-digest */
   const generateDigestWorker = createWorker<GenerateDigestJob>(
-    "generate-digest",
+    GENERATE_DIGEST_QUEUE_NAME,
     async (job) => processGenerateDigest(job, logger),
     { concurrency: 2 }
   );
@@ -220,7 +234,7 @@ export function registerWorkers(logger: Logger): Worker[] {
 
   /* 9. deepsearch — stub (not in Layer 2-4 scope) */
   const deepsearchWorker = createWorker(
-    "deepsearch",
+    DEEPSEARCH_QUEUE_NAME,
     async (job) => {
       logger.debug({ jobId: job.id }, "Deepsearch job received (stub)");
       return { status: "skipped" };
@@ -231,7 +245,7 @@ export function registerWorkers(logger: Logger): Worker[] {
 
   /* 10. cleanup */
   const cleanupWorker = createWorker<CleanupJob>(
-    "cleanup",
+    CLEANUP_QUEUE_NAME,
     async (job) => processCleanup(job, logger),
     { concurrency: 1 }
   );
@@ -239,7 +253,7 @@ export function registerWorkers(logger: Logger): Worker[] {
 
   /* 11. favorites-cleanup */
   const favoritesCleanupWorker = createWorker<FavoritesCleanupJob>(
-    "favorites-cleanup",
+    FAVORITES_CLEANUP_QUEUE_NAME,
     async (job) => processFavoritesCleanup(job, logger),
     { concurrency: 2 }
   );
@@ -247,7 +261,7 @@ export function registerWorkers(logger: Logger): Worker[] {
 
   /* 12. posts-cleanup */
   const postsCleanupWorker = createWorker<PostsCleanupJob>(
-    "posts-cleanup",
+    POSTS_CLEANUP_QUEUE_NAME,
     async (job) => processPostsCleanup(job, logger),
     { concurrency: 1 }
   );

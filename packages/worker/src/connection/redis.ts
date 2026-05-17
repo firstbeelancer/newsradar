@@ -2,6 +2,19 @@ import { Redis } from "ioredis";
 import { Queue } from "bullmq";
 import { env } from "../config/env.js";
 
+export const FETCH_SOURCE_QUEUE_NAME = "fetch-source";
+export const RAW_DEDUP_QUEUE_NAME = "raw-dedup-v2";
+export const TRANSLATE_QUEUE_NAME = "translate-v2";
+export const SEMANTIC_DEDUP_QUEUE_NAME = "semantic-dedup";
+export const INGEST_ANALYSIS_QUEUE_NAME = "ingest-analysis";
+export const SCORE_ARTICLE_QUEUE_NAME = "score-article";
+export const GENERATE_POST_QUEUE_NAME = "generate-post";
+export const GENERATE_DIGEST_QUEUE_NAME = "generate-digest";
+export const DEEPSEARCH_QUEUE_NAME = "deepsearch";
+export const CLEANUP_QUEUE_NAME = "cleanup";
+export const FAVORITES_CLEANUP_QUEUE_NAME = "favorites-cleanup";
+export const POSTS_CLEANUP_QUEUE_NAME = "posts-cleanup";
+
 /**
  * Redis connection singleton reused across all BullMQ queues and workers.
  *
@@ -34,7 +47,7 @@ redis.on("error", (err: Error) => {
  */
 
 /** 1. Fetch raw content from RSS feeds and external APIs. */
-export const fetchSourceQueue = new Queue("fetch-source", {
+export const fetchSourceQueue = new Queue(FETCH_SOURCE_QUEUE_NAME, {
   connection: redis,
   defaultJobOptions: {
     attempts: 3,
@@ -45,7 +58,7 @@ export const fetchSourceQueue = new Queue("fetch-source", {
 });
 
 /** 2. Deduplicate articles by raw URL / content hash. */
-export const rawDedupQueue = new Queue("raw-dedup", {
+export const rawDedupQueue = new Queue(RAW_DEDUP_QUEUE_NAME, {
   connection: redis,
   defaultJobOptions: {
     attempts: 3,
@@ -56,7 +69,7 @@ export const rawDedupQueue = new Queue("raw-dedup", {
 });
 
 /** 3. Translate article content to Russian when needed. */
-export const translateQueue = new Queue("translate", {
+export const translateQueue = new Queue(TRANSLATE_QUEUE_NAME, {
   connection: redis,
   defaultJobOptions: {
     attempts: 3,
@@ -67,7 +80,7 @@ export const translateQueue = new Queue("translate", {
 });
 
 /** 4. Semantic deduplication using vector embeddings. */
-export const semanticDedupQueue = new Queue("semantic-dedup", {
+export const semanticDedupQueue = new Queue(SEMANTIC_DEDUP_QUEUE_NAME, {
   connection: redis,
   defaultJobOptions: {
     attempts: 3,
@@ -78,7 +91,7 @@ export const semanticDedupQueue = new Queue("semantic-dedup", {
 });
 
 /** 5. Persist article to DB and trigger NLP enrichment. */
-export const ingestAnalysisQueue = new Queue("ingest-analysis", {
+export const ingestAnalysisQueue = new Queue(INGEST_ANALYSIS_QUEUE_NAME, {
   connection: redis,
   defaultJobOptions: {
     attempts: 3,
@@ -89,7 +102,7 @@ export const ingestAnalysisQueue = new Queue("ingest-analysis", {
 });
 
 /** 6. AI-powered scoring of article relevance & quality. */
-export const scoreArticleQueue = new Queue("score-article", {
+export const scoreArticleQueue = new Queue(SCORE_ARTICLE_QUEUE_NAME, {
   connection: redis,
   defaultJobOptions: {
     attempts: 3,
@@ -100,7 +113,7 @@ export const scoreArticleQueue = new Queue("score-article", {
 });
 
 /** 7. Generate social-media post from scored article. */
-export const generatePostQueue = new Queue("generate-post", {
+export const generatePostQueue = new Queue(GENERATE_POST_QUEUE_NAME, {
   connection: redis,
   defaultJobOptions: {
     attempts: 3,
@@ -111,7 +124,7 @@ export const generatePostQueue = new Queue("generate-post", {
 });
 
 /** 8. Compile daily / weekly digest of top articles. */
-export const generateDigestQueue = new Queue("generate-digest", {
+export const generateDigestQueue = new Queue(GENERATE_DIGEST_QUEUE_NAME, {
   connection: redis,
   defaultJobOptions: {
     attempts: 3,
@@ -122,7 +135,7 @@ export const generateDigestQueue = new Queue("generate-digest", {
 });
 
 /** 9. Deep research background jobs. */
-export const deepsearchQueue = new Queue("deepsearch", {
+export const deepsearchQueue = new Queue(DEEPSEARCH_QUEUE_NAME, {
   connection: redis,
   defaultJobOptions: {
     attempts: 3,
@@ -133,7 +146,7 @@ export const deepsearchQueue = new Queue("deepsearch", {
 });
 
 /** 10. General cleanup of expired jobs and temporary data. */
-export const cleanupQueue = new Queue("cleanup", {
+export const cleanupQueue = new Queue(CLEANUP_QUEUE_NAME, {
   connection: redis,
   defaultJobOptions: {
     attempts: 3,
@@ -144,7 +157,7 @@ export const cleanupQueue = new Queue("cleanup", {
 });
 
 /** 11. Cleanup of stale favorite references. */
-export const favoritesCleanupQueue = new Queue("favorites-cleanup", {
+export const favoritesCleanupQueue = new Queue(FAVORITES_CLEANUP_QUEUE_NAME, {
   connection: redis,
   defaultJobOptions: {
     attempts: 3,
@@ -155,7 +168,7 @@ export const favoritesCleanupQueue = new Queue("favorites-cleanup", {
 });
 
 /** 12. Cleanup of old generated posts. */
-export const postsCleanupQueue = new Queue("posts-cleanup", {
+export const postsCleanupQueue = new Queue(POSTS_CLEANUP_QUEUE_NAME, {
   connection: redis,
   defaultJobOptions: {
     attempts: 3,
