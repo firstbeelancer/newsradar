@@ -76,12 +76,15 @@ router.get("/deep", async (_req, res) => {
 
     const failures = await Promise.all(
       queues.map(async (queue) => {
-        const failedJobs = await queue.getJobs(["failed"], 0, 2, true);
+        const failedCount = await queue.getJobCountByTypes("failed");
+        const failedJobs = failedCount > 0
+          ? await queue.getJobs(["failed"], 0, failedCount - 1, true)
+          : [];
         const summary = failedJobs.map((job) => ({
           id: String(job.id ?? ""),
           name: job.name,
           failedReason: job.failedReason ?? "unknown",
-        }));
+        })).slice(-3);
         return [queue.name, summary] as const;
       })
     );

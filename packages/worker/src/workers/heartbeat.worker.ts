@@ -18,7 +18,7 @@ const HEARTBEAT_KEY = "newsradar:worker:heartbeat";
 const HEARTBEAT_META_KEY = "newsradar:worker:meta";
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const HEARTBEAT_TTL_S = 120;
-const WORKER_BUILD_MARKER = "2026-05-17-translate-worker-meta-v1";
+const WORKER_BUILD_MARKER = "2026-05-17-score-fix-v1";
 
 /**
  * Start the heartbeat loop.
