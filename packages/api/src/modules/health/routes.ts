@@ -29,6 +29,7 @@ router.get("/deep", async (_req, res) => {
   };
   let workerMeta: { build?: string; timestamp?: number; pid?: number } | null = null;
   let queueStats: Record<string, Record<string, number>> = {};
+  let queueFailures: Record<string, Array<{ id: string; name: string; failedReason: string }>> = {};
 
   try {
     await pool.query("SELECT 1");
@@ -72,6 +73,21 @@ router.get("/deep", async (_req, res) => {
       })
     );
     queueStats = Object.fromEntries(stats);
+
+    const failures = await Promise.all(
+      queues.map(async (queue) => {
+        const failedJobs = await queue.getJobs(["failed"], 0, 2, true);
+        const summary = failedJobs.map((job) => ({
+          id: String(job.id ?? ""),
+          name: job.name,
+          failedReason: job.failedReason ?? "unknown",
+        }));
+        return [queue.name, summary] as const;
+      })
+    );
+    queueFailures = Object.fromEntries(
+      failures.filter(([, failedJobs]) => failedJobs.length > 0)
+    );
   } catch {
     checks.redis = "error";
   }
@@ -85,6 +101,7 @@ router.get("/deep", async (_req, res) => {
       checks,
       workerMeta,
       queueStats,
+      queueFailures,
       timestamp: new Date().toISOString(),
     },
   });
