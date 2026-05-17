@@ -1,5 +1,6 @@
 import type { Redis } from "ioredis";
 import type pino from "pino";
+import { env } from "../config/env.js";
 
 /**
  * Heartbeat worker state.
@@ -49,6 +50,10 @@ export function startHeartbeat(redis: Redis, logger: pino.Logger): void {
             build: WORKER_BUILD_MARKER,
             timestamp: now,
             pid: process.pid,
+            aiProvider: env.PLATFORM_AI_PROVIDER,
+            aiModel: env.PLATFORM_AI_MODEL,
+            aiBaseUrl: env.PLATFORM_AI_BASE_URL,
+            hasAiKey: Boolean(env.PLATFORM_AI_API_KEY),
           }),
           "EX",
           HEARTBEAT_TTL_S
