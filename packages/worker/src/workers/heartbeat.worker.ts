@@ -20,7 +20,7 @@ const HEARTBEAT_KEY = "newsradar:worker:heartbeat";
 const HEARTBEAT_META_KEY = "newsradar:worker:meta";
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const HEARTBEAT_TTL_S = 120;
-const WORKER_BUILD_MARKER = "2026-05-17-score-fix-v1";
+const WORKER_BUILD_MARKER = "2026-05-18-translate-debug-v2";
 
 /**
  * Start the heartbeat loop.
@@ -55,7 +55,7 @@ export function startHeartbeat(redis: Redis, logger: pino.Logger): void {
             aiProvider: env.PLATFORM_AI_PROVIDER,
             aiModel: env.PLATFORM_AI_MODEL,
             aiBaseUrl: env.PLATFORM_AI_BASE_URL,
-            hasAiKey: Boolean(env.PLATFORM_AI_API_KEY),
+            hasAiKey: Boolean(env.OPENROUTER_API_KEY || env.PLATFORM_AI_API_KEY),
             lastAiError: aiTelemetry.lastError,
             lastAiSuccessAt: aiTelemetry.lastSuccessAt,
           }),

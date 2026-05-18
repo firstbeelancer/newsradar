@@ -65,9 +65,13 @@ function resolveProvider(
       : provider === "anthropic"
         ? "https://api.anthropic.com/v1"
         : provider === "google"
-          ? "https://generativelanguage.googleapis.com/v1"
+        ? "https://generativelanguage.googleapis.com/v1"
           : env.PLATFORM_AI_BASE_URL);
-  const apiKey = opts?.apiKey ?? env.PLATFORM_AI_API_KEY ?? "";
+  const apiKey =
+    opts?.apiKey ??
+    (provider === "openrouter"
+      ? env.OPENROUTER_API_KEY ?? env.PLATFORM_AI_API_KEY ?? ""
+      : env.PLATFORM_AI_API_KEY ?? "");
 
   return { provider, baseUrl, apiKey };
 }
