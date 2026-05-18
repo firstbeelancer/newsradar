@@ -79,6 +79,8 @@ interface BackendArticle {
   title: string;
   description?: string | null;
   content?: string | null;
+  originalDescription?: string | null;
+  original_description?: string | null;
   link?: string;
   url?: string;
   publishedAt?: string | null;
@@ -91,6 +93,7 @@ interface BackendArticle {
   isFavorite?: boolean;
   is_favorite?: boolean;
   status?: string | null;
+  language?: string | null;
   sourceId?: string;
   source_id?: string;
   sourceName?: string | null;
@@ -213,6 +216,7 @@ export function normalizeArticle(raw: BackendArticle): Article {
     title: raw.title,
     description: raw.description ?? '',
     content: raw.content ?? undefined,
+    original_description: raw.original_description ?? raw.originalDescription ?? undefined,
     url: raw.url ?? raw.link ?? '',
     source_name: raw.source_name ?? raw.sourceName ?? raw.source_id ?? raw.sourceId ?? 'Источник',
     source_url: raw.source_url ?? raw.sourceUrl ?? undefined,
@@ -223,6 +227,7 @@ export function normalizeArticle(raw: BackendArticle): Article {
     score: typeof raw.score === 'number' ? raw.score : Number(raw.score ?? 0),
     is_favorite: raw.is_favorite ?? raw.isFavorite ?? false,
     status: (raw.status as Article['status']) ?? 'new',
+    language: raw.language ?? undefined,
     metadata: raw.metadata,
   };
 }
@@ -637,6 +642,7 @@ export interface Article {
   title: string;
   description: string;
   content?: string;
+  original_description?: string;
   url: string;
   source_name: string;
   source_url?: string;
@@ -647,6 +653,7 @@ export interface Article {
   score: number;
   is_favorite: boolean;
   status: 'new' | 'read' | 'archived' | 'fetched' | 'translated' | 'analyzed' | 'scored' | 'deduped' | 'published';
+  language?: string;
   metadata?: Record<string, unknown>;
 }
 

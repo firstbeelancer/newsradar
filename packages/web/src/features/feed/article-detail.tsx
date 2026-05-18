@@ -62,6 +62,16 @@ export function ArticleDetail({ articleId }: ArticleDetailProps) {
   const scorePercent = Math.round(currentArticle.score);
   const description = cleanArticleText(currentArticle.description);
   const content = cleanArticleText(currentArticle.content ?? '');
+  const originalDescription = cleanArticleText(currentArticle.original_description ?? '');
+  const shouldShowContent =
+    Boolean(content) &&
+    content !== description &&
+    !(
+      currentArticle.language === 'ru' &&
+      Boolean(description) &&
+      Boolean(originalDescription) &&
+      content === originalDescription
+    );
 
   return (
     <div className="space-y-6">
@@ -112,7 +122,7 @@ export function ArticleDetail({ articleId }: ArticleDetailProps) {
             </p>
           )}
 
-          {content && (
+          {shouldShowContent && (
             <div className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
               {content}
             </div>
