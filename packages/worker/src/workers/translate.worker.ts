@@ -40,6 +40,7 @@ export async function processTranslate(
       id: articles.id,
       title: articles.title,
       description: articles.description,
+      content: articles.content,
       language: articles.language,
     })
     .from(articles)
@@ -87,7 +88,8 @@ export async function processTranslate(
   try {
     const translated = await translateArticle(
       article.title,
-      article.description ?? undefined
+      article.description ?? undefined,
+      article.content ?? undefined
     );
 
     await db
@@ -95,6 +97,7 @@ export async function processTranslate(
       .set({
         title: translated.title,
         description: translated.description,
+        content: translated.content || null,
         originalTitle: originalTitle,
         originalDescription: originalDescription,
         language: "ru",

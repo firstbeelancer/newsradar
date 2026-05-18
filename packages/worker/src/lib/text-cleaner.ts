@@ -5,6 +5,8 @@ const ARTICLE_META_LINE_PATTERNS = [
   /^# Comments:/i,
 ];
 
+const INLINE_META_MARKERS = /\s+(Article URL:|Comments URL:|Points:|# Comments:)/gi;
+
 export function stripHtml(text: string): string {
   if (!text) return "";
 
@@ -33,7 +35,9 @@ export function cleanArticleText(text: string): string {
   const stripped = stripHtml(text);
   if (!stripped) return "";
 
-  const lines = stripped
+  const normalized = stripped.replace(INLINE_META_MARKERS, "\n$1");
+
+  const lines = normalized
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);

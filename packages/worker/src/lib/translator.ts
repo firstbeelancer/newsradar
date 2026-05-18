@@ -134,33 +134,39 @@ export async function translateToRussian(
  */
 export async function translateArticle(
   title: string,
-  description?: string
+  description?: string,
+  content?: string
 ): Promise<{
   title: string;
   description: string;
+  content: string;
   language: string;
 }> {
   const detectedLang = detectLanguage(title);
   const normalizedDescription = cleanArticleText(description ?? "");
+  const normalizedContent = cleanArticleText(content ?? "");
+  const sourceBody = normalizedDescription || normalizedContent;
 
   if (detectedLang === "ru") {
     return {
       title,
-      description: normalizedDescription,
+      description: normalizedDescription || normalizedContent,
+      content: normalizedContent,
       language: "ru",
     };
   }
 
-  const [translatedTitle, translatedDescription] = await Promise.all([
+  const [translatedTitle, translatedBody] = await Promise.all([
     translateToRussian(title, detectedLang),
-    normalizedDescription
-      ? translateToRussian(normalizedDescription, detectedLang)
+    sourceBody
+      ? translateToRussian(sourceBody, detectedLang)
       : Promise.resolve(""),
   ]);
 
   return {
     title: translatedTitle || title,
-    description: translatedDescription || normalizedDescription,
+    description: translatedBody || sourceBody,
+    content: translatedBody || normalizedContent,
     language: "ru",
   };
 }
