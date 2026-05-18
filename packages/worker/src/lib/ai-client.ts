@@ -79,8 +79,8 @@ function sanitizeApiKey(apiKey: string): string {
     (trimmed.startsWith("'") && trimmed.endsWith("'"))
       ? trimmed.slice(1, -1).trim()
       : trimmed;
-
-  return withoutQuotes.replace(/^Bearer\s+/i, "").trim();
+  const withoutBearer = withoutQuotes.replace(/^Bearer\s+/i, "").trim();
+  return withoutBearer.replace(/\s+/g, "");
 }
 
 function resolveModel(opts?: Pick<AiCompleteOptions, "model">): string {
