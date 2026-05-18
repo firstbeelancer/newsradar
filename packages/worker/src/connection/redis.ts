@@ -4,7 +4,7 @@ import { env } from "../config/env.js";
 
 export const FETCH_SOURCE_QUEUE_NAME = "fetch-source-v2";
 export const RAW_DEDUP_QUEUE_NAME = "raw-dedup-v2";
-export const TRANSLATE_QUEUE_NAME = "translate-v2";
+export const TRANSLATE_QUEUE_NAME = "translate-v3";
 export const SEMANTIC_DEDUP_QUEUE_NAME = "semantic-dedup-v2";
 export const INGEST_ANALYSIS_QUEUE_NAME = "ingest-analysis-v2";
 export const SCORE_ARTICLE_QUEUE_NAME = "score-article-v2";

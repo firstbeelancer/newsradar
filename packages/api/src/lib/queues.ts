@@ -8,7 +8,7 @@ import { getRedisConnection } from "./redis.js";
 
 const FETCH_SOURCE_QUEUE_NAME = "fetch-source-v2";
 const RAW_DEDUP_QUEUE_NAME = "raw-dedup-v2";
-const TRANSLATE_QUEUE_NAME = "translate-v2";
+const TRANSLATE_QUEUE_NAME = "translate-v3";
 const SEMANTIC_DEDUP_QUEUE_NAME = "semantic-dedup-v2";
 const INGEST_ANALYSIS_QUEUE_NAME = "ingest-analysis-v2";
 const SCORE_ARTICLE_QUEUE_NAME = "score-article-v2";
