@@ -22,6 +22,7 @@ import { db } from "../db/index.js";
 import { sources, articles, agents, chipFilters } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import { complete } from "./ai-client.js";
+import { cleanArticleText } from "./text-cleaner.js";
 import type { Logger } from "pino";
 
 /* ─── Types ─── */
@@ -69,6 +70,8 @@ export interface ScoreResult {
   chipModifierTotal: number;
   weightedScore: number;
   chips: string[];
+  aiFallbackUsed: boolean;
+  aiFallbackReason?: string;
   triggeredChips: Array<{
     key: string;
     label: string;
@@ -87,17 +90,23 @@ export interface ScoreResult {
 export async function scoreWithAI(
   title: string,
   description: string,
+  content: string,
   agentTopic?: string,
-  agentTone?: string
-): Promise<AIScores> {
+  agentTone?: string,
+  logger?: Logger
+): Promise<{ scores: AIScores; fallbackUsed: boolean; fallbackReason?: string }> {
   const topic = agentTopic ?? "news and current events";
   const tone = agentTone ?? "professional";
+  const body = buildScoringBody(description, content);
 
   const prompt = `You are a news scoring assistant for a "${topic}" channel.
 Evaluate the following article on 5 criteria, each 0–100.
 
 Article title: ${title}
-Article description: ${description || "N/A"}
+Article body:
+${body || "N/A"}
+
+Channel tone: ${tone}
 
 Scoring criteria:
 1. relevance — How well does this match the topic "${topic}" and its audience?
@@ -130,15 +139,23 @@ Each value must be an integer 0–100.`;
     const parsed = JSON.parse(cleaned);
 
     return {
-      relevance: clampInt(parsed.relevance, 50),
-      novelty: clampInt(parsed.novelty, 50),
-      hype: clampInt(parsed.hype, 50),
-      practical: clampInt(parsed.practical, 50),
-      local: clampInt(parsed.local, 50),
+      scores: {
+        relevance: clampInt(parsed.relevance, 50),
+        novelty: clampInt(parsed.novelty, 50),
+        hype: clampInt(parsed.hype, 50),
+        practical: clampInt(parsed.practical, 50),
+        local: clampInt(parsed.local, 50),
+      },
+      fallbackUsed: false,
     };
-  } catch {
-    // Fallback: neutral scores
-    return { relevance: 50, novelty: 50, hype: 50, practical: 50, local: 50 };
+  } catch (error) {
+    const fallbackReason = error instanceof Error ? error.message : "unknown scoring error";
+    logger?.warn({ fallbackReason, title }, "AI scoring fallback used");
+    return {
+      scores: { relevance: 50, novelty: 50, hype: 50, practical: 50, local: 50 },
+      fallbackUsed: true,
+      fallbackReason,
+    };
   }
 }
 
@@ -158,6 +175,28 @@ function parseDecimal(val: unknown, fallback = 0): number {
   }
   const parsed = Number.parseFloat(String(val ?? ""));
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function buildScoringBody(description: string, content: string): string {
+  const cleanedDescription = cleanArticleText(description ?? "");
+  const cleanedContent = cleanArticleText(content ?? "");
+
+  if (cleanedDescription && cleanedContent) {
+    if (cleanedContent.includes(cleanedDescription)) {
+      return cleanedContent.slice(0, 4_000);
+    }
+    return `${cleanedDescription}\n\n${cleanedContent}`.slice(0, 4_000);
+  }
+
+  return (cleanedDescription || cleanedContent).slice(0, 4_000);
+}
+
+function normalizeChipModifier(val: unknown): number {
+  const parsed = parseDecimal(val);
+  if (Math.abs(parsed) <= 1) {
+    return parsed * 100;
+  }
+  return parsed;
 }
 
 /**
@@ -188,11 +227,12 @@ export function calculateAIScore(scores: AIScores, weights: AIWeights): number {
 export function scoreKeywordMatch(
   title: string,
   description: string,
+  content: string,
   keywords: string[]
 ): number {
   if (!keywords.length) return 50;
 
-  const text = `${title} ${description || ""}`.toLowerCase();
+  const text = `${title} ${buildScoringBody(description, content)}`.toLowerCase();
   const totalKeywords = keywords.length;
   let matchedCount = 0;
 
@@ -426,6 +466,7 @@ async function resolveChipScoring(
     agentId: string;
     title: string;
     description: string | null;
+    content: string | null;
   },
   baseScore: number,
   sourceTrustScore: number
@@ -457,13 +498,13 @@ async function resolveChipScoring(
   }
 
   const normalizedTitle = article.title.toLowerCase();
-  const normalizedText = `${article.title} ${article.description ?? ""}`.toLowerCase();
+  const normalizedText = `${article.title} ${buildScoringBody(article.description ?? "", article.content ?? "")}`.toLowerCase();
   const triggeredChips = activeFilters
     .filter((filter) => matchesChipFilter(filter, normalizedText, normalizedTitle, baseScore))
     .map((filter) => ({
       key: filter.key,
       label: filter.label,
-      scoreModifier: parseDecimal(filter.scoreModifier),
+      scoreModifier: normalizeChipModifier(filter.scoreModifier),
       operator: filter.operator,
       pattern: filter.pattern,
     }));
@@ -544,6 +585,7 @@ export async function scoreArticle(
     .select({
       title: articles.title,
       description: articles.description,
+      content: articles.content,
       publishedAt: articles.publishedAt,
       sourceId: articles.sourceId,
       agentId: articles.agentId,
@@ -566,12 +608,14 @@ export async function scoreArticle(
     (options.agentTopic ? extractKeywords(options.agentTopic) : []);
 
   // Run scoring in parallel
-  const [aiScores, sourceTrustScore] = await Promise.all([
+  const [{ scores: aiScores, fallbackUsed: aiFallbackUsed, fallbackReason: aiFallbackReason }, sourceTrustScore] = await Promise.all([
     scoreWithAI(
       article.title,
       article.description ?? "",
+      article.content ?? "",
       options.agentTopic,
-      options.agentTone
+      options.agentTone,
+      options.logger
     ),
     scoreSourceTrust(article.sourceId),
   ]);
@@ -579,6 +623,7 @@ export async function scoreArticle(
   const keywordScore = scoreKeywordMatch(
     article.title,
     article.description ?? "",
+    article.content ?? "",
     keywords
   );
 
@@ -599,6 +644,7 @@ export async function scoreArticle(
       agentId: article.agentId,
       title: article.title,
       description: article.description,
+      content: article.content,
     },
     baseScore,
     sourceTrustScore
@@ -621,6 +667,8 @@ export async function scoreArticle(
     chipModifierTotal,
     weightedScore,
     chips,
+    aiFallbackUsed,
+    aiFallbackReason,
     triggeredChips,
   };
 }

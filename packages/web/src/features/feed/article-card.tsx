@@ -22,7 +22,7 @@ const scoreColor = (score: number): string => {
 
 export function ArticleCard({ article, onToggleFavorite, isSelected, onSelect, selectable }: ArticleCardProps) {
   const scorePercent = Math.round(article.score);
-  const preview = cleanArticleText(article.description);
+  const preview = cleanArticleText(article.description || article.content || '');
 
   return (
     <Card

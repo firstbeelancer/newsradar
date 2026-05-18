@@ -32,7 +32,10 @@ function useArticlesInfinite(filters: ArticleFilters, searchQuery: string) {
       return lastPage.has_more ? (lastPage.next_cursor ?? undefined) : undefined;
     },
     initialPageParam: undefined as string | undefined,
-    staleTime: 2 * 60 * 1000,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 }
 

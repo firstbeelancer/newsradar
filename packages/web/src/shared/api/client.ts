@@ -929,7 +929,7 @@ export const articlesApi = {
     params.set('q', q);
     params.set('limit', String(limit));
     if (cursor) params.set('cursor', cursor);
-    return apiGet<BackendCursorResponse<BackendArticle>>(`/search/articles?${params.toString()}`).then((payload) =>
+    return apiGet<BackendCursorResponse<BackendArticle>>(`/articles/search?${params.toString()}`).then((payload) =>
       normalizeCursorResponse(payload, normalizeArticle)
     );
   },

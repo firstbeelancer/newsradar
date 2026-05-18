@@ -134,6 +134,8 @@ export async function processScoreArticle(
     baseScore: scoreResult.baseScore,
     chipModifierTotal: scoreResult.chipModifierTotal,
     weightedScore: scoreResult.weightedScore,
+    aiFallbackUsed: scoreResult.aiFallbackUsed,
+    aiFallbackReason: scoreResult.aiFallbackReason,
     triggeredChips: scoreResult.triggeredChips,
   } as Record<string, unknown>;
 
@@ -170,6 +172,8 @@ export async function processScoreArticle(
       baseScore: scoreResult.baseScore,
       chipModifierTotal: scoreResult.chipModifierTotal,
       weightedScore: scoreResult.weightedScore,
+      aiFallbackUsed: scoreResult.aiFallbackUsed,
+      aiFallbackReason: scoreResult.aiFallbackReason,
       chips: scoreResult.chips,
     },
     "Article scored (hybrid v2)"
