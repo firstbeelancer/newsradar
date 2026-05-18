@@ -164,7 +164,7 @@ router.post("/:id/retranslate", authMiddleware, async (req, res, next) => {
 
     await translateQueue.add(
       jobId,
-      { articleId: article.id },
+      { articleId: article.id, force: true },
       { jobId, removeOnComplete: { count: 100 }, removeOnFail: { count: 50 } }
     );
 

@@ -18,6 +18,7 @@ import type { Logger } from "pino";
 
 export interface TranslateJob {
   articleId: string;
+  force?: boolean;
 }
 
 /**
@@ -31,6 +32,7 @@ export async function processTranslate(
   originalLanguage: string;
 }> {
   const { articleId } = job.data;
+  const force = job.data.force === true;
 
   logger.debug({ articleId, jobId: job.id }, "Processing translation");
 
@@ -41,6 +43,8 @@ export async function processTranslate(
       title: articles.title,
       description: articles.description,
       content: articles.content,
+      originalTitle: articles.originalTitle,
+      originalDescription: articles.originalDescription,
       language: articles.language,
     })
     .from(articles)
@@ -53,10 +57,13 @@ export async function processTranslate(
   }
 
   // Detect language from content
-  const detectedLang = detectLanguage(article.title);
+  const sourceTitle = force ? article.originalTitle ?? article.title : article.title;
+  const sourceDescription = force ? article.originalDescription ?? article.description : article.description;
+  const sourceContent = article.content;
+  const detectedLang = detectLanguage(sourceTitle);
 
   // If already Russian or detection says Russian, skip translation
-  if (detectedLang === "ru" || article.language === "ru") {
+  if (!force && (detectedLang === "ru" || article.language === "ru")) {
     await db
       .update(articles)
       .set({
@@ -79,17 +86,17 @@ export async function processTranslate(
   }
 
   // Save original fields before translation
-  const originalTitle = article.title;
-  const originalDescription = article.description;
+  const originalTitle = article.originalTitle ?? article.title;
+  const originalDescription = article.originalDescription ?? article.description;
 
   // Translate to Russian
   logger.info({ articleId, from: detectedLang }, "Translating article to Russian");
 
   try {
     const translated = await translateArticle(
-      article.title,
-      article.description ?? undefined,
-      article.content ?? undefined
+      sourceTitle,
+      sourceDescription ?? undefined,
+      sourceContent ?? undefined
     );
 
     await db
