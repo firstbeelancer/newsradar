@@ -7,7 +7,8 @@ import { Skeleton } from '@shared/ui/skeleton';
 import { Input } from '@shared/ui/input';
 import { useAgentsStore } from '@shared/stores/agents-store';
 import { useArticlesStore } from '@shared/stores/articles-store';
-import { articlesApi, type Article, type ArticleFilters } from '@shared/api/client';
+import { useToast } from '@shared/ui/toast';
+import { articlesApi, deepsearchApi, type Article, type ArticleFilters } from '@shared/api/client';
 import { ArticleCard } from './article-card';
 import { FeedFilters, type FeedFiltersState } from './feed-filters';
 import {
@@ -46,6 +47,7 @@ export function FeedPage() {
 
   const { agents, fetchAgents } = useAgentsStore();
   const { toggleFavorite } = useArticlesStore();
+  const { addToast } = useToast();
 
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<FeedFiltersState>({
@@ -103,6 +105,26 @@ export function FeedPage() {
   );
 
   const agentName = agents.find((a) => a.id === filters.agentId)?.name;
+
+  const handleDeepSearch = useCallback(async (article: Article) => {
+    try {
+      const result = await deepsearchApi.start({
+        article_id: article.id,
+        agent_id: article.agent_id || undefined,
+      });
+      addToast({
+        title: 'DeepSearch запущен',
+        description: `Операция ${result.op_id} уже в работе. Смотри статус-бар и раздел генерации.`,
+        variant: 'success',
+      });
+    } catch (error) {
+      addToast({
+        title: 'Ошибка DeepSearch',
+        description: error instanceof Error ? error.message : 'Не удалось запустить DeepSearch',
+        variant: 'danger',
+      });
+    }
+  }, [addToast]);
 
   return (
     <div className="space-y-6">
@@ -175,6 +197,7 @@ export function FeedPage() {
               key={article.id}
               article={article}
               onToggleFavorite={toggleFavorite}
+              onDeepSearch={handleDeepSearch}
             />
           ))}
 

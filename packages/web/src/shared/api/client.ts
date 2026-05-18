@@ -78,6 +78,8 @@ interface BackendArticle {
   id: string;
   title: string;
   description?: string | null;
+  aiSummary?: string | null;
+  ai_summary?: string | null;
   content?: string | null;
   originalDescription?: string | null;
   original_description?: string | null;
@@ -215,6 +217,7 @@ export function normalizeArticle(raw: BackendArticle): Article {
     id: raw.id,
     title: raw.title,
     description: raw.description ?? '',
+    ai_summary: raw.ai_summary ?? raw.aiSummary ?? undefined,
     content: raw.content ?? undefined,
     original_description: raw.original_description ?? raw.originalDescription ?? undefined,
     url: raw.url ?? raw.link ?? '',
@@ -641,6 +644,7 @@ export interface Article {
   id: string;
   title: string;
   description: string;
+  ai_summary?: string;
   content?: string;
   original_description?: string;
   url: string;
@@ -701,6 +705,12 @@ export interface GenerateDigestDto {
   template_id?: string;
   provider?: string;
   model?: string;
+}
+
+export interface StartDeepSearchDto {
+  article_id: string;
+  agent_id?: string;
+  custom_prompt?: string;
 }
 
 export interface GenerationResult {
@@ -1004,6 +1014,19 @@ export const generationApi = {
     ),
   updatePost: (id: string, content: string) =>
     apiPut<BackendGeneratedPost, { content: string }>(`/generation/posts/${id}`, { content }).then(normalizeGeneratedPost),
+};
+
+export const deepsearchApi = {
+  start: (data: StartDeepSearchDto) =>
+    apiPost<{ operationId?: string; op_id?: string; status?: string; content?: string; error?: string }, {
+      articleId: string;
+      agentId?: string;
+      customPrompt?: string;
+    }>('/deepsearch', {
+      articleId: data.article_id,
+      agentId: data.agent_id,
+      customPrompt: data.custom_prompt,
+    }).then(normalizeGenerationResult),
 };
 
 // Scoring (workspace-level defaults)

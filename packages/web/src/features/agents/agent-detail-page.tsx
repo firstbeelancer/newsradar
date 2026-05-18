@@ -142,9 +142,9 @@ function AgentArticlesList({ agentId }: { agentId: string }) {
             <div className="flex items-start gap-3">
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium leading-snug line-clamp-2">{article.title}</p>
-                {cleanArticleText(article.description) && (
+                {cleanArticleText(article.description || article.ai_summary || article.content || article.original_description || '') && (
                   <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
-                    {cleanArticleText(article.description)}
+                    {cleanArticleText(article.description || article.ai_summary || article.content || article.original_description || '')}
                   </p>
                 )}
                 <div className="mt-2 flex items-center gap-3 text-[11px] text-muted-foreground">

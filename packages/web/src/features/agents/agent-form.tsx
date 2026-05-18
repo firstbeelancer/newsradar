@@ -5,7 +5,6 @@ import { Input } from '@shared/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@shared/ui/dialog';
 import { Label } from '@shared/ui/label';
 import { Badge } from '@shared/ui/badge';
-import { useToast } from '@shared/ui/toast';
 import type { Agent, CreateAgentDto, UpdateAgentDto, ChipFilter } from '@shared/api/client';
 import { chipFiltersApi } from '@shared/api/client';
 import { Shield, Brain, Megaphone, Heart, Paintbrush, Plus, X, GripVertical, Hammer, Wrench, Bot, Globe, Zap, Star, Eye, Search, BookOpen, Rss, MessageCircle, Target, Lightbulb, Compass, Newspaper, Settings2, Sliders, Filter, MessageSquare, type LucideIcon } from 'lucide-react';
@@ -58,11 +57,11 @@ const DEFAULT_WEIGHTS = {
 };
 
 const DEFAULT_CHIP_FILTERS: Partial<ChipFilter>[] = [
-  { key: 'breaking', label: 'Срочное', operator: 'contains', pattern: 'срочно,экстренно,breaking,urgent', scoreModifier: 0.15, color: '#ef4444', icon: 'zap', isActive: true },
-  { key: 'exclusive', label: 'Эксклюзив', operator: 'contains', pattern: 'эксклюзив,exclusive,первоисточник', scoreModifier: 0.10, color: '#8b5cf6', icon: 'star', isActive: true },
-  { key: 'trending', label: 'Тренд', operator: 'contains', pattern: 'тренд,хайп,viral,популярн', scoreModifier: 0.08, color: '#f97316', icon: 'trending-up', isActive: true },
-  { key: 'actionable', label: 'Actionable', operator: 'contains', pattern: 'как,пошагов,instruction,руководство,гайд', scoreModifier: 0.05, color: '#06b6d4', icon: 'check-circle', isActive: true },
-  { key: 'spam', label: 'Спам', operator: 'contains', pattern: 'реклама,акция,скидка,promo,промо', scoreModifier: -0.20, color: '#6b7280', icon: 'x-circle', isActive: true },
+  { key: 'breaking', label: 'Срочное', operator: 'contains', pattern: 'срочно,экстренно,breaking,urgent', scoreModifier: 15, color: '#ef4444', icon: 'zap', isActive: true },
+  { key: 'exclusive', label: 'Эксклюзив', operator: 'contains', pattern: 'эксклюзив,exclusive,первоисточник', scoreModifier: 10, color: '#8b5cf6', icon: 'star', isActive: true },
+  { key: 'trending', label: 'Тренд', operator: 'contains', pattern: 'тренд,хайп,viral,популярн', scoreModifier: 8, color: '#f97316', icon: 'trending-up', isActive: true },
+  { key: 'actionable', label: 'Actionable', operator: 'contains', pattern: 'как,пошагов,instruction,руководство,гайд', scoreModifier: 6, color: '#06b6d4', icon: 'check-circle', isActive: true },
+  { key: 'spam', label: 'Спам', operator: 'contains', pattern: 'реклама,акция,скидка,promo,промо', scoreModifier: -12, color: '#6b7280', icon: 'x-circle', isActive: true },
 ];
 
 function sliderFillStyle(value: number): CSSProperties {
@@ -79,7 +78,6 @@ interface AgentFormProps {
 }
 
 export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }: AgentFormProps) {
-  const { addToast } = useToast();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [icon, setIcon] = useState('bot');
@@ -186,13 +184,6 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
-
-    // Validate scoring weights sum = 100
-    const weightsSum = Object.values(weights).reduce((a, b) => a + b, 0);
-    if (Math.abs(weightsSum - 100) >= 5) {
-      addToast({ title: 'Ошибка', description: 'Сумма весов скоринга должна быть ~100% (допуск ±5%)', variant: 'danger' });
-      return;
-    }
 
     const finalSubjectArea = customSubjectArea.trim() || subjectArea || undefined;
 
@@ -463,8 +454,8 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
                   <h3 className="text-sm font-semibold">Веса критериев AI-скоринга</h3>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  AI оценивает новость по 5 критериям (0–100), затем считается взвешенное среднее.
-                  Сумма весов = 100.
+                  AI оценивает новость по 5 критериям (0–100), а итог считается как взвешенное среднее.
+                  Важна относительная сила весов, а не точная сумма 100.
                 </p>
               </div>
 
@@ -525,22 +516,20 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
                   <span className="text-xs text-muted-foreground">Сумма весов:</span>
                   <span className={cn(
                     'text-sm font-mono tabular-nums font-bold',
-                    Math.abs(Object.values(weights).reduce((a, b) => a + b, 0) - 100) < 5
-                      ? 'text-green-600'
-                      : 'text-red-600'
+                    'text-accent'
                   )}>
                     {Object.values(weights).reduce((a, b) => a + b, 0)}%
                   </span>
                 </div>
-                {Math.abs(Object.values(weights).reduce((a, b) => a + b, 0) - 100) >= 5 && (
-                  <span className="text-xs text-red-500 font-medium">Сумма должна быть ~100%</span>
-                )}
+                <span className="text-xs text-muted-foreground">
+                  Сумма показывается для ориентира. Формула нормализует веса сама.
+                </span>
               </div>
 
               <div className="p-3 rounded-xl bg-accent/5 border border-accent/15 backdrop-blur-sm">
                 <p className="text-xs text-muted-foreground">
-                  <strong className="text-foreground">Гибридная формула:</strong> AI оценивает по 5 критериям → взвешенное среднее = ai_score.
-                  Затем: <code className="text-[11px] bg-muted px-1 py-0.5 rounded font-mono">final = ai_score×0.55 + keyword×0.20 + freshness×0.15 + source_trust×0.10</code>
+                  <strong className="text-foreground">Гибридная формула:</strong> AI оценивает по 5 критериям → base_score = SUM(score × weight) / SUM(weight).
+                  Затем: <code className="text-[11px] bg-muted px-1 py-0.5 rounded font-mono">hybrid = ai_score×0.55 + keyword×0.20 + freshness×0.15 + source_trust×0.10</code>, после чего chip-фильтры добавляют или уменьшают итоговый score.
                 </p>
               </div>
 
@@ -648,9 +637,9 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
                         <Label className="text-[11px] text-muted-foreground">Модификатор score</Label>
                         <input
                           type="number"
-                          step={0.05}
-                          min={-1}
-                          max={1}
+                          step={1}
+                          min={-100}
+                          max={100}
                           value={cf.scoreModifier ?? 0}
                           onChange={(e) => updateChipFilter(i, 'scoreModifier', Number(e.target.value))}
                           className={cn(

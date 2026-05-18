@@ -5,6 +5,8 @@ import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
 import { Skeleton } from '@shared/ui/skeleton';
 import { useArticlesStore } from '@shared/stores/articles-store';
+import { deepsearchApi } from '@shared/api/client';
+import { useToast } from '@shared/ui/toast';
 import {
   ArrowLeft,
   Bookmark,
@@ -12,6 +14,7 @@ import {
   Calendar,
   Bot,
   BarChart3,
+  Search,
 } from 'lucide-react';
 import { cn, formatDateTime, cleanArticleText } from '@shared/lib/utils';
 
@@ -27,6 +30,7 @@ const scoreColor = (score: number): string => {
 
 export function ArticleDetail({ articleId }: ArticleDetailProps) {
   const navigate = useNavigate();
+  const { addToast } = useToast();
   const {
     currentArticle,
     isLoading,
@@ -60,7 +64,7 @@ export function ArticleDetail({ articleId }: ArticleDetailProps) {
   }
 
   const scorePercent = Math.round(currentArticle.score);
-  const description = cleanArticleText(currentArticle.description);
+  const description = cleanArticleText(currentArticle.description || currentArticle.ai_summary || '');
   const content = cleanArticleText(currentArticle.content ?? '');
   const originalDescription = cleanArticleText(currentArticle.original_description ?? '');
   const shouldShowContent =
@@ -72,6 +76,26 @@ export function ArticleDetail({ articleId }: ArticleDetailProps) {
       Boolean(originalDescription) &&
       content === originalDescription
     );
+
+  const handleDeepSearch = async () => {
+    try {
+      const result = await deepsearchApi.start({
+        article_id: currentArticle.id,
+        agent_id: currentArticle.agent_id || undefined,
+      });
+      addToast({
+        title: 'DeepSearch запущен',
+        description: `Операция ${result.op_id} уже в работе. Смотри статус-бар и раздел генерации.`,
+        variant: 'success',
+      });
+    } catch (error) {
+      addToast({
+        title: 'Ошибка DeepSearch',
+        description: error instanceof Error ? error.message : 'Не удалось запустить DeepSearch',
+        variant: 'danger',
+      });
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -116,9 +140,13 @@ export function ArticleDetail({ articleId }: ArticleDetailProps) {
         </CardHeader>
 
         <CardContent className="space-y-4">
-          {description && (
+          {description ? (
             <p className="text-sm leading-relaxed text-foreground">
               {description}
+            </p>
+          ) : (
+            <p className="text-sm italic text-muted-foreground">
+              Краткое превью пока не сформировано.
             </p>
           )}
 
@@ -136,6 +164,10 @@ export function ArticleDetail({ articleId }: ArticleDetailProps) {
             >
               <Bookmark className={cn('h-4 w-4', currentArticle.is_favorite && 'fill-current')} />
               {currentArticle.is_favorite ? 'В избранном' : 'В избранное'}
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleDeepSearch}>
+              <Search className="h-4 w-4" />
+              DeepSearch
             </Button>
             <a
               href={currentArticle.url}

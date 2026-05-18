@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router';
 import { Card, CardContent } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
-import { Bookmark, ExternalLink, Calendar } from 'lucide-react';
+import { Bookmark, ExternalLink, Calendar, Search } from 'lucide-react';
 import { cn, truncate, formatDateTime, cleanArticleText } from '@shared/lib/utils';
 import type { Article } from '@shared/api/client';
 
@@ -12,6 +12,7 @@ interface ArticleCardProps {
   isSelected?: boolean;
   onSelect?: (id: string) => void;
   selectable?: boolean;
+  onDeepSearch?: (article: Article) => void;
 }
 
 const scoreColor = (score: number): string => {
@@ -20,9 +21,11 @@ const scoreColor = (score: number): string => {
   return 'bg-muted text-muted-foreground';
 };
 
-export function ArticleCard({ article, onToggleFavorite, isSelected, onSelect, selectable }: ArticleCardProps) {
+export function ArticleCard({ article, onToggleFavorite, isSelected, onSelect, selectable, onDeepSearch }: ArticleCardProps) {
   const scorePercent = Math.round(article.score);
-  const preview = cleanArticleText(article.description || article.content || '');
+  const preview = cleanArticleText(
+    article.description || article.ai_summary || article.content || article.original_description || ''
+  );
 
   return (
     <Card
@@ -49,9 +52,13 @@ export function ArticleCard({ article, onToggleFavorite, isSelected, onSelect, s
               </Badge>
             </div>
 
-            {preview && (
+            {preview ? (
               <p className="mt-1.5 text-xs text-muted-foreground line-clamp-2">
                 {truncate(preview, 180)}
+              </p>
+            ) : (
+              <p className="mt-1.5 text-xs italic text-muted-foreground/80">
+                Краткое превью пока не сформировано.
               </p>
             )}
 
@@ -70,6 +77,17 @@ export function ArticleCard({ article, onToggleFavorite, isSelected, onSelect, s
           </div>
 
           <div className="flex flex-row gap-1 shrink-0">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDeepSearch?.(article);
+              }}
+              title="Запустить DeepSearch"
+            >
+              <Search className="h-4 w-4" />
+            </Button>
             <Button
               variant="ghost"
               size="icon-sm"
