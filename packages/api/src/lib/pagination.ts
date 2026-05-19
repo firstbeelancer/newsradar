@@ -3,6 +3,7 @@ import { z } from "zod";
 const cursorSchema = z.object({
   id: z.string(),
   sortValue: z.string().optional(),
+  secondarySortValue: z.string().optional(),
 });
 
 export type Cursor = z.infer<typeof cursorSchema>;

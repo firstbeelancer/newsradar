@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@shared/ui/button';
@@ -92,27 +92,15 @@ function AgentArticlesList({ agentId }: { agentId: string }) {
   const [sortBy, setSortBy] = useState<'date' | 'score'>('date');
 
   const { data, isLoading } = useQuery({
-    queryKey: ['agent-articles', agentId],
+    queryKey: ['agent-articles', agentId, sortBy],
     queryFn: async () => {
-      const result = await articlesApi.list({ agent_id: agentId }, undefined, 20);
+      const result = await articlesApi.list({ agent_id: agentId, sort_by: sortBy }, undefined, 20);
       return result.data;
     },
     staleTime: 30_000,
   });
 
   const articles: Article[] = data ?? [];
-  const sortedArticles = useMemo(() => {
-    const copy = [...articles];
-    if (sortBy === 'score') {
-      copy.sort((a, b) => {
-        if (b.score !== a.score) return b.score - a.score;
-        return new Date(b.published_at).getTime() - new Date(a.published_at).getTime();
-      });
-      return copy;
-    }
-    copy.sort((a, b) => new Date(b.published_at).getTime() - new Date(a.published_at).getTime());
-    return copy;
-  }, [articles, sortBy]);
 
   if (isLoading) {
     return (
@@ -167,7 +155,7 @@ function AgentArticlesList({ agentId }: { agentId: string }) {
           Сначала высокий скор
         </Button>
       </div>
-      {sortedArticles.map((article) => (
+      {articles.map((article) => (
         <Card
           key={article.id}
           className="cursor-pointer hover:bg-muted/50 transition-colors"

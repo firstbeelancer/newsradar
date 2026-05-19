@@ -30,6 +30,7 @@ export function DigestGenerator() {
     setSelectedTemplateId,
     setSelectedProvider,
     setSelectedModel,
+    initFromProvider,
     generateDigest,
     startStream,
     resetGeneration,
@@ -48,6 +49,24 @@ export function DigestGenerator() {
     fetchTemplates();
     resetGeneration();
   }, [fetchAgents, fetchTemplates, resetGeneration]);
+
+  // Load initial provider/model from active AI provider in DB
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const providers = await apiGet<Array<{ id: string; provider: string; model: string; isActive: boolean }>>('/ai-providers');
+        if (cancelled) return;
+        const active = Array.isArray(providers) ? providers.find((p) => p.isActive) : null;
+        if (active) {
+          initFromProvider(active.provider, active.model);
+        }
+      } catch {
+        // Silently ignore — defaults from persisted store will be used
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [initFromProvider]);
 
   useEffect(() => {
     if (opId && !isStreaming && !streamContent) {
@@ -79,13 +98,16 @@ export function DigestGenerator() {
   const handleSaveConfig = async () => {
     setSavingConfig(true);
     try {
-      const providers = await apiGet<Array<{ id: string; isActive: boolean }>>('/ai-providers');
-      const activeProvider = Array.isArray(providers) ? providers.find((p) => p.isActive) : null;
-      if (activeProvider) {
-        await apiPut(`/ai-providers/${activeProvider.id}`, {
+      // Fetch current AI providers and find the one matching the selected provider
+      const providers = await apiGet<Array<{ id: string; provider: string; model: string; isActive: boolean }>>('/ai-providers');
+      const targetProvider = Array.isArray(providers)
+        ? providers.find((p) => p.provider === selectedProvider && p.isActive) ?? providers.find((p) => p.isActive)
+        : null;
+      if (targetProvider) {
+        await apiPut(`/ai-providers/${targetProvider.id}`, {
           model: selectedModel,
         });
-        addToast({ title: 'Конфигурация сохранена', description: `Модель: ${selectedModel}`, variant: 'success' });
+        addToast({ title: 'Конфигурация сохранена', description: `Провайдер: ${selectedProvider}, Модель: ${selectedModel}`, variant: 'success' });
       } else {
         addToast({ title: 'Нет активного провайдера', description: 'Добавьте AI провайдер в настройках', variant: 'warning' });
       }

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { Button } from '@shared/ui/button';
@@ -76,6 +76,7 @@ export function FeedPage() {
     agent_id: filters.agentId || undefined,
     status: filters.status || undefined,
     favorites_only: filters.favoritesOnly || undefined,
+    sort_by: sortBy,
   };
 
   const {
@@ -88,18 +89,6 @@ export function FeedPage() {
   } = useArticlesInfinite(articleFilters, search);
 
   const articles: Article[] = data?.pages.flatMap((p) => p.data) ?? [];
-  const sortedArticles = useMemo(() => {
-    const copy = [...articles];
-    if (sortBy === 'score') {
-      copy.sort((a, b) => {
-        if (b.score !== a.score) return b.score - a.score;
-        return new Date(b.published_at).getTime() - new Date(a.published_at).getTime();
-      });
-      return copy;
-    }
-    copy.sort((a, b) => new Date(b.published_at).getTime() - new Date(a.published_at).getTime());
-    return copy;
-  }, [articles, sortBy]);
 
   // Infinite scroll observer
   const observerRef = useCallback(
@@ -236,7 +225,7 @@ export function FeedPage() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {sortedArticles.map((article) => (
+          {articles.map((article) => (
             <ArticleCard
               key={article.id}
               article={article}
@@ -251,7 +240,7 @@ export function FeedPage() {
             {isFetchingNextPage && (
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             )}
-            {!hasNextPage && sortedArticles.length > 0 && (
+            {!hasNextPage && articles.length > 0 && (
               <p className="text-xs text-muted-foreground">Все новости загружены</p>
             )}
           </div>

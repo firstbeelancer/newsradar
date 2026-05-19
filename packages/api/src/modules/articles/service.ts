@@ -16,6 +16,7 @@ export interface ArticleFilters {
   dateFrom?: string;
   dateTo?: string;
   isFavorite?: boolean;
+  sortBy?: "date" | "score";
   limit: number;
   cursor?: string | null;
 }
@@ -79,6 +80,13 @@ export async function listArticles(
     );
   }
 
+  const sortBy = filters.sortBy ?? "date";
+
+  const orderByClause =
+    sortBy === "score"
+      ? [desc(articles.score), desc(articles.publishedAt ?? articles.createdAt), desc(articles.id)]
+      : [desc(articles.publishedAt ?? articles.createdAt), desc(articles.id)];
+
   let query = db
     .select({
       articles: articles,
@@ -87,16 +95,24 @@ export async function listArticles(
     .from(articles)
     .leftJoin(sources, eq(articles.sourceId, sources.id))
     .where(and(...conditions))
-    .orderBy(desc(articles.publishedAt ?? articles.createdAt), desc(articles.id))
+    .orderBy(...orderByClause)
     .limit(filters.limit + 1);
 
   if (filters.cursor) {
     const decoded = decodeCursor(filters.cursor);
     if (decoded?.sortValue) {
-      const cursorDate = new Date(decoded.sortValue);
-      conditions.push(
-        sql`(${articles.publishedAt} IS NOT NULL AND ${articles.publishedAt} < ${cursorDate}) OR (${articles.publishedAt} IS NULL AND ${articles.createdAt} < ${cursorDate})`
-      );
+      if (sortBy === "score") {
+        const sortValue = Number(decoded.sortValue);
+        const cursorDate = decoded.secondarySortValue ? new Date(decoded.secondarySortValue) : new Date(decoded.sortValue);
+        conditions.push(
+          sql`(${articles.score} < ${sortValue}) OR (${articles.score} = ${sortValue} AND ${articles.publishedAt} < ${cursorDate})`
+        );
+      } else {
+        const cursorDate = new Date(decoded.sortValue);
+        conditions.push(
+          sql`(${articles.publishedAt} IS NOT NULL AND ${articles.publishedAt} < ${cursorDate}) OR (${articles.publishedAt} IS NULL AND ${articles.createdAt} < ${cursorDate})`
+        );
+      }
       query = db
         .select({
           articles: articles,
@@ -105,7 +121,7 @@ export async function listArticles(
         .from(articles)
         .leftJoin(sources, eq(articles.sourceId, sources.id))
         .where(and(...conditions))
-        .orderBy(desc(articles.publishedAt ?? articles.createdAt), desc(articles.id))
+        .orderBy(...orderByClause)
         .limit(filters.limit + 1);
     }
   }
@@ -119,7 +135,12 @@ export async function listArticles(
     hasMore && lastItem
       ? encodeCursor({
           id: lastItem.articles.id,
-          sortValue: (lastItem.articles.publishedAt ?? lastItem.articles.createdAt).toISOString(),
+          sortValue: sortBy === "score"
+            ? lastItem.articles.score.toString()
+            : (lastItem.articles.publishedAt ?? lastItem.articles.createdAt).toISOString(),
+          secondarySortValue: sortBy === "score"
+            ? (lastItem.articles.publishedAt ?? lastItem.articles.createdAt).toISOString()
+            : undefined,
         } as Cursor)
       : null;
 
