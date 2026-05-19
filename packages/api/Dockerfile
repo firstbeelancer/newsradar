@@ -24,3 +24,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 CMD ["npx", "tsx", "src/index.ts"]
 # rebuild 1779226377
 # rebuild trigger 1779226898
+# deploy trigger 1779227337
