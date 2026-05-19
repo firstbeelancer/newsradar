@@ -6,7 +6,6 @@ import { Card, CardContent } from '@shared/ui/card';
 import { Skeleton } from '@shared/ui/skeleton';
 import { Input } from '@shared/ui/input';
 import { useAgentsStore } from '@shared/stores/agents-store';
-import { useArticlesStore } from '@shared/stores/articles-store';
 import { useGenerationStore } from '@shared/stores/generation-store';
 import { useToast } from '@shared/ui/toast';
 import { articlesApi, deepsearchApi, type Article, type ArticleFilters } from '@shared/api/client';
@@ -50,7 +49,6 @@ export function FeedPage() {
 
   const queryClient = useQueryClient();
   const { agents, fetchAgents } = useAgentsStore();
-  const { toggleFavorite } = useArticlesStore();
   const { setSelectedArticleIds, resetGeneration } = useGenerationStore();
   const { addToast } = useToast();
 
@@ -136,10 +134,45 @@ export function FeedPage() {
   }, [addToast]);
 
   const handleToggleFavorite = useCallback(async (id: string, isFavorite?: boolean) => {
-    await toggleFavorite(id, isFavorite);
-    // Invalidate articles cache so list stays in sync after API completes
-    queryClient.invalidateQueries({ queryKey: ['articles'] });
-  }, [toggleFavorite, queryClient]);
+    const newValue = !(isFavorite ?? false);
+
+    // Optimistic update: instantly flip is_favorite in React Query cache
+    queryClient.setQueryData(['articles', articleFilters, search], (old: typeof data) => {
+      if (!old?.pages) return old;
+      return {
+        ...old,
+        pages: old.pages.map((page: typeof data.pages[0]) => ({
+          ...page,
+          data: page.data.map((a: Article) =>
+            a.id === id ? { ...a, is_favorite: newValue } : a
+          ),
+        })),
+      };
+    });
+
+    try {
+      if (newValue) {
+        await articlesApi.favorite(id);
+      } else {
+        await articlesApi.unfavorite(id);
+      }
+    } catch {
+      // Rollback on error
+      queryClient.setQueryData(['articles', articleFilters, search], (old: typeof data) => {
+        if (!old?.pages) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page: typeof data.pages[0]) => ({
+            ...page,
+            data: page.data.map((a: Article) =>
+              a.id === id ? { ...a, is_favorite: !newValue } : a
+            ),
+          })),
+        };
+      });
+      addToast({ title: 'Ошибка', description: 'Не удалось изменить избранное', variant: 'danger' });
+    }
+  }, [articleFilters, search, queryClient, addToast]);
 
   const handleGeneratePost = useCallback((article: Article) => {
     resetGeneration();

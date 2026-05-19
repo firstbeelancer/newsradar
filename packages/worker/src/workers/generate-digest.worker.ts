@@ -14,6 +14,7 @@ import {
   contentTemplates,
   generatedPosts,
   agents,
+  workspaces,
 } from "../db/schema.js";
 import { eq, and, desc, gte, sql } from "drizzle-orm";
 import { streamComplete, complete } from "../lib/ai-client.js";
@@ -163,13 +164,27 @@ export async function processGenerateDigest(
 
   const content = articleTexts.join("\n\n---\n\n");
 
-  const systemPrompt =
-    template?.systemPrompt ??
-    "You are a professional news editor. Create a concise, well-structured digest in Russian based on the provided articles. Group related topics, highlight key insights, and provide context.";
+  // Fetch workspace-level prompts as fallback before hardcoded defaults
+  const workspaceResult = await db
+    .select({ config: workspaces.config })
+    .from(workspaces)
+    .where(eq(workspaces.id, workspaceId))
+    .limit(1);
 
+  const workspacePrompts = (workspaceResult[0]?.config as Record<string, unknown> | undefined)?.prompts as
+    | { post_generation?: string; digest_generation?: string }
+    | undefined;
+
+  const defaultSystemPrompt =
+    workspacePrompts?.digest_generation ??
+    "Ты — профессиональный аналитик новостей. Подготовь структурированный дайджест на основе предоставленных статей. Пиши на русском языке. Группируй новости по темам и значимости. Для каждой темы: краткое резюме + ключевые факты + вывод. Избегай дублирования. Добавляй аналитический контекст и прогнозы.";
+
+  const defaultUserPrompt =
+    `На основе следующих статей создай ${period === "day" ? "дневной" : "недельный"} дайджест:\n\n${content}`;
+
+  const systemPrompt = template?.systemPrompt ?? defaultSystemPrompt;
   const userPrompt =
-    template?.userPrompt?.replace(/\{\{content\}\}/g, content) ??
-    `Create a ${period === "day" ? "daily" : "weekly"} digest from the following articles:\n\n${content}`;
+    template?.userPrompt?.replace(/\{\{content\}\}/g, content) ?? defaultUserPrompt;
 
   await publishProgress(operationId, { status: "generating" });
 

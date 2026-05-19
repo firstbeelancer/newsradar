@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import { eq, and } from "drizzle-orm";
 import { db } from "./index.js";
-import { users, workspaces, aiProviders } from "./schema.js";
+import { users, workspaces, aiProviders, contentTemplates } from "./schema.js";
 import { encrypt } from "../lib/encryption.js";
 
 const SALT_ROUNDS = 12;
@@ -100,6 +100,7 @@ export async function seedAdminUsers(): Promise<void> {
       // Seed AI providers for this workspace
       if (workspaceId) {
         await seedAIProviders(workspaceId);
+        await seedDefaultTemplates(workspaceId);
       }
     } catch (err) {
       console.error(`[seed] Error seeding user ${seed.email}:`, err);
@@ -143,6 +144,76 @@ async function seedAIProviders(workspaceId: string): Promise<void> {
       }
     } catch (err) {
       console.error(`[seed] Error seeding AI provider ${provider.name}:`, err);
+    }
+  }
+}
+
+// ─── Default content templates ───
+
+const DEFAULT_TEMPLATES = [
+  {
+    name: "Структурированный пост",
+    type: "post" as const,
+    systemPrompt: "Ты — профессиональный редактор новостного контента. Твоя задача — создать увлекательный пост на основе предоставленных новостных статей.\n\nПРАВИЛА:\n1. Пиши на русском языке\n2. Используй информативный, но доступный стиль\n3. Начинай с самого важного — ключевой факт или инсайт\n4. Подкрепляй утверждения конкретными данными из источников\n5. Добавляй контекст: почему это важно именно сейчас\n6. Завершай резюме или прогнозом\n\nСТРУКТУРА ПОСТА:\n- Заголовок (краткий, цепляющий)\n- Лид (1-2 предложения — суть новости)\n- Основная часть (факты, данные, цитаты)\n- Контекст и анализ\n- Вывод / прогноз",
+    userPrompt: "На основе следующих статей создай структурированный пост:\n\n{{content}}",
+    isDefault: true,
+  },
+  {
+    name: "Краткий пост для соцсетей",
+    type: "post" as const,
+    systemPrompt: "Ты — SMM-копирайтер. Создай краткий, цепляющий пост для социальных сетей на основе новостных статей.\n\nПРАВИЛА:\n1. Пиши на русском языке\n2. Пост должен быть concise — до 500 символов\n3. Используй эмодзи для визуальной структуры (🔥💡📊⚡️)\n4. Начинай с хука — цепляющего факта или вопроса\n5. Добавляй 2-3 хештега в конце",
+    userPrompt: "Создай краткий пост для соцсетей на основе этих новостей:\n\n{{content}}",
+    isDefault: false,
+  },
+  {
+    name: "Экспертный анализ",
+    type: "post" as const,
+    systemPrompt: "Ты — эксперт-аналитик в сфере технологий и бизнеса. Создай глубокий аналитический пост на основе предоставленных новостей.\n\nПРАВИЛА:\n1. Пиши на русском языке\n2. Глубокий анализ, а не пересказ\n3. Выявляй скрытые тренды и закономерности\n4. Формулируй прогнозы с обоснованием\n5. Указывай на риски и возможности\n\nСТРУКТУРА:\n- Контекст проблемы\n- Анализ ситуации\n- Тренды и закономерности\n- Прогноз развития\n- Рекомендации",
+    userPrompt: "Подготовь экспертный анализ на основе этих новостей:\n\n{{content}}",
+    isDefault: false,
+  },
+  {
+    name: "Ежедневный дайджест",
+    type: "digest" as const,
+    systemPrompt: "Ты — профессиональный аналитик новостей. Твоя задача — подготовить структурированный дайджест на основе нескольких новостных статей по теме.\n\nПРАВИЛА:\n1. Пиши на русском языке\n2. Группируй новости по темам и значимости\n3. Для каждой темы: краткое резюме + ключевые факты + вывод\n4. Избегай дублирования — если несколько статей об одном, объединяй\n5. Добавляй аналитический контекст и прогнозы\n6. Указывай источники\n\nСТРУКТУРА ДАЙДЖЕСТА:\n- Заголовок дайджеста (тема + период)\n- Самое важное за период (3-5 ключевых событий)\n- Детальный разбор по темам\n- Тренды и закономерности\n- Прогноз и рекомендации",
+    userPrompt: "Подготовь структурированный дайджест на основе этих статей:\n\n{{content}}",
+    isDefault: true,
+  },
+  {
+    name: "Краткий дайджест",
+    type: "digest" as const,
+    systemPrompt: "Ты — аналитик новостей. Создай краткий дайджест — только самое важное.\n\nПРАВИЛА:\n1. Пиши на русском языке\n2. Не более 1000 символов\n3. Только топ-3 новости с кратким описанием каждой\n4. Формат: буллет-пункты\n5. В конце — одно предложение прогноза",
+    userPrompt: "Создай краткий дайджест из этих статей:\n\n{{content}}",
+    isDefault: false,
+  },
+];
+
+async function seedDefaultTemplates(workspaceId: string): Promise<void> {
+  for (const tmpl of DEFAULT_TEMPLATES) {
+    try {
+      // Check if a template with the same name already exists for this workspace
+      const existing = await db.query.contentTemplates.findFirst({
+        where: and(
+          eq(contentTemplates.workspaceId, workspaceId),
+          eq(contentTemplates.name, tmpl.name),
+        ),
+      });
+
+      if (!existing) {
+        await db.insert(contentTemplates).values({
+          name: tmpl.name,
+          type: tmpl.type,
+          systemPrompt: tmpl.systemPrompt,
+          userPrompt: tmpl.userPrompt,
+          isDefault: tmpl.isDefault,
+          workspaceId,
+        });
+        console.log(`[seed] Created template: ${tmpl.name}`);
+      } else {
+        console.log(`[seed] Template already exists: ${tmpl.name}`);
+      }
+    } catch (err) {
+      console.error(`[seed] Error seeding template ${tmpl.name}:`, err);
     }
   }
 }

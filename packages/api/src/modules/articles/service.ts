@@ -233,25 +233,29 @@ export async function searchArticles(
 // ─── Favorites ───
 
 export async function addToFavorite(id: string, workspaceId: string) {
-  await getArticleById(id, workspaceId);
-
   const [updated] = await db
     .update(articles)
     .set({ isFavorite: true, updatedAt: new Date() })
     .where(and(eq(articles.id, id), eq(articles.workspaceId, workspaceId)))
     .returning();
 
+  if (!updated) {
+    throw new AppError(404, "Article not found", "ARTICLE_NOT_FOUND");
+  }
+
   return updated;
 }
 
 export async function removeFromFavorite(id: string, workspaceId: string) {
-  await getArticleById(id, workspaceId);
-
   const [updated] = await db
     .update(articles)
     .set({ isFavorite: false, updatedAt: new Date() })
     .where(and(eq(articles.id, id), eq(articles.workspaceId, workspaceId)))
     .returning();
+
+  if (!updated) {
+    throw new AppError(404, "Article not found", "ARTICLE_NOT_FOUND");
+  }
 
   return updated;
 }

@@ -13,6 +13,7 @@ import {
   articles,
   contentTemplates,
   generatedPosts,
+  workspaces,
 } from "../db/schema.js";
 import { eq, and, sql } from "drizzle-orm";
 import { streamComplete, complete } from "../lib/ai-client.js";
@@ -83,18 +84,31 @@ export async function processGeneratePost(
 
   await publishProgress(operationId, { status: "pending" });
 
-  // Load template
-  const templateResult = await db
-    .select()
-    .from(contentTemplates)
-    .where(and(eq(contentTemplates.id, templateId), eq(contentTemplates.workspaceId, workspaceId)))
-    .limit(1);
+  // Load template (try specified, then default for type)
+  let template: typeof contentTemplates.$inferSelect | undefined;
 
-  const template = templateResult[0];
+  if (templateId) {
+    const templateResult = await db
+      .select()
+      .from(contentTemplates)
+      .where(and(eq(contentTemplates.id, templateId), eq(contentTemplates.workspaceId, workspaceId)))
+      .limit(1);
+    template = templateResult[0];
+  }
+
   if (!template) {
-    const error = `Template not found: ${templateId}`;
-    await publishProgress(operationId, { status: "error", error });
-    throw new Error(error);
+    const defaultResult = await db
+      .select()
+      .from(contentTemplates)
+      .where(
+        and(
+          eq(contentTemplates.workspaceId, workspaceId),
+          eq(contentTemplates.type, "post"),
+          eq(contentTemplates.isDefault, true)
+        )
+      )
+      .limit(1);
+    template = defaultResult[0];
   }
 
   // Load articles
@@ -125,6 +139,33 @@ export async function processGeneratePost(
 
   const { systemPrompt, userPrompt } = buildPrompt(template, articleTexts);
 
+  // Fetch workspace-level prompts as fallback if no template
+  let finalSystemPrompt = systemPrompt;
+  let finalUserPrompt = userPrompt;
+
+  if (!template) {
+    const workspaceResult = await db
+      .select({ config: workspaces.config })
+      .from(workspaces)
+      .where(eq(workspaces.id, workspaceId))
+      .limit(1);
+
+    const workspacePrompts = (workspaceResult[0]?.config as Record<string, unknown> | undefined)?.prompts as
+      | { post_generation?: string; digest_generation?: string }
+      | undefined;
+
+    const content = articleTexts.join("\n\n---\n\n");
+
+    finalSystemPrompt =
+      workspacePrompts?.post_generation ??
+      "Ты — профессиональный редактор новостного контента. Создай увлекательный пост на основе предоставленных статей. Пиши на русском языке. Используй информативный, но доступный стиль. Начинай с самого важного. Подкрепляй утверждения конкретными данными.";
+
+    finalUserPrompt =
+      workspacePrompts?.post_generation
+        ? `На основе следующих статей создай пост:\n\n${content}`
+        : `На основе следующих статей создай пост:\n\n${content}`;
+  }
+
   await publishProgress(operationId, { status: "generating" });
 
   // Generate content with streaming
@@ -133,8 +174,8 @@ export async function processGeneratePost(
   try {
     fullContent = await streamComplete({
       messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
+        { role: "system", content: finalSystemPrompt },
+        { role: "user", content: finalUserPrompt },
       ],
       temperature: 0.7,
       maxTokens: 4_000,
@@ -152,8 +193,8 @@ export async function processGeneratePost(
     logger.warn({ operationId, err: (err as Error).message }, "Streaming failed, using fallback");
     fullContent = await complete({
       messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
+        { role: "system", content: finalSystemPrompt },
+        { role: "user", content: finalUserPrompt },
       ],
       temperature: 0.7,
       maxTokens: 4_000,
@@ -166,7 +207,7 @@ export async function processGeneratePost(
     .values({
       workspaceId,
       agentId: agentId ?? null,
-      templateId: template.id,
+      templateId: template?.id ?? null,
       type: "manual",
       title: selectedArticles[0]?.title ?? "Generated post",
       content: fullContent,
@@ -177,7 +218,7 @@ export async function processGeneratePost(
         link: a.link,
         score: a.score,
       })),
-      promptSnapshot: userPrompt,
+      promptSnapshot: finalUserPrompt,
       modelSnapshot: "platform-ai",
     })
     .returning();
