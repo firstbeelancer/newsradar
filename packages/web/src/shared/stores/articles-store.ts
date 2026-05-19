@@ -9,6 +9,8 @@ interface ArticlesState {
   currentArticle: Article | null;
   isLoading: boolean;
   error: string | null;
+  // Track optimistic favorite state by article ID
+  optimisticFavorites: Record<string, boolean>;
 }
 
 interface ArticlesActions {
@@ -18,7 +20,7 @@ interface ArticlesActions {
   clearSelection: () => void;
   selectAll: (ids: string[]) => void;
   fetchArticle: (id: string) => Promise<void>;
-  toggleFavorite: (id: string) => Promise<void>;
+  toggleFavorite: (id: string, currentIsFavorite?: boolean) => Promise<void>;
   setCurrentArticle: (article: Article | null) => void;
   clearError: () => void;
 }
@@ -30,6 +32,7 @@ const initialState: ArticlesState = {
   currentArticle: null,
   isLoading: false,
   error: null,
+  optimisticFavorites: {},
 };
 
 export const useArticlesStore = create<ArticlesState & ArticlesActions>((set, get) => ({
@@ -64,24 +67,50 @@ export const useArticlesStore = create<ArticlesState & ArticlesActions>((set, ge
     }
   },
 
-  toggleFavorite: async (id) => {
-    // Optimistic toggle: check current state to decide add vs remove
-    const currentArticle = get().currentArticle;
-    const isCurrentlyFavorite = currentArticle?.id === id ? currentArticle.is_favorite : false;
+  toggleFavorite: async (id, currentIsFavorite) => {
+    // Determine current state: prefer explicitly passed value, then optimistic, then store
+    const state = get();
+    const wasFavorite: boolean = currentIsFavorite
+      ?? state.optimisticFavorites[id]
+      ?? (state.currentArticle?.id === id ? !!state.currentArticle?.is_favorite : false);
+
+    const newFavoriteState = !wasFavorite;
+
+    // Optimistic update: flip immediately
+    set((s) => ({
+      optimisticFavorites: { ...s.optimisticFavorites, [id]: newFavoriteState },
+      currentArticle:
+        s.currentArticle?.id === id
+          ? { ...s.currentArticle, is_favorite: newFavoriteState }
+          : s.currentArticle,
+    }));
+
     try {
-      if (isCurrentlyFavorite) {
-        await articlesApi.unfavorite(id);
-      } else {
+      if (newFavoriteState) {
         await articlesApi.favorite(id);
+      } else {
+        await articlesApi.unfavorite(id);
       }
-      set((state) => ({
-        currentArticle:
-          state.currentArticle?.id === id
-            ? { ...state.currentArticle, is_favorite: !state.currentArticle.is_favorite }
-            : state.currentArticle,
-      }));
+      // Clear optimistic entry after successful API call (real data will come from refetch)
+      set((s) => {
+        const updated = { ...s.optimisticFavorites };
+        delete updated[id];
+        return { optimisticFavorites: updated };
+      });
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : 'Ошибка' });
+      // Rollback on error
+      set((s) => {
+        const updated = { ...s.optimisticFavorites };
+        delete updated[id];
+        return {
+          optimisticFavorites: updated,
+          currentArticle:
+            s.currentArticle?.id === id
+              ? { ...s.currentArticle, is_favorite: wasFavorite }
+              : s.currentArticle,
+          error: err instanceof Error ? err.message : 'Ошибка',
+        };
+      });
     }
   },
 

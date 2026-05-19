@@ -23,6 +23,7 @@ const createSchema = z.object({
   apiKey: z.string().optional(),
   model: z.string().max(100).default("gpt-4o-mini"),
   isActive: z.boolean().optional(),
+  assignedTo: z.array(z.string()).optional(),
 });
 
 const updateSchema = z.object({
@@ -31,6 +32,7 @@ const updateSchema = z.object({
   baseUrl: z.string().optional(),
   apiKey: z.string().optional(),
   isActive: z.boolean().optional(),
+  assignedTo: z.array(z.string()).optional(),
 });
 
 // ─── Routes ───

@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams } from '@tanstack/react-router';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@shared/ui/button';
 import { Card, CardContent } from '@shared/ui/card';
 import { Skeleton } from '@shared/ui/skeleton';
@@ -36,9 +36,9 @@ function useArticlesInfinite(filters: ArticleFilters, searchQuery: string) {
       return lastPage.has_more ? (lastPage.next_cursor ?? undefined) : undefined;
     },
     initialPageParam: undefined as string | undefined,
-    staleTime: 0,
+    staleTime: 60_000,
     refetchOnMount: 'always',
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
     refetchOnReconnect: true,
   });
 }
@@ -48,6 +48,7 @@ export function FeedPage() {
   const routeParams = useParams({ strict: false });
   const agentIdFromRoute = (routeParams as Record<string, string> | undefined)?.agentId;
 
+  const queryClient = useQueryClient();
   const { agents, fetchAgents } = useAgentsStore();
   const { toggleFavorite } = useArticlesStore();
   const { setSelectedArticleIds, resetGeneration } = useGenerationStore();
@@ -133,6 +134,12 @@ export function FeedPage() {
       });
     }
   }, [addToast]);
+
+  const handleToggleFavorite = useCallback(async (id: string, isFavorite?: boolean) => {
+    await toggleFavorite(id, isFavorite);
+    // Invalidate articles cache so list stays in sync after API completes
+    queryClient.invalidateQueries({ queryKey: ['articles'] });
+  }, [toggleFavorite, queryClient]);
 
   const handleGeneratePost = useCallback((article: Article) => {
     resetGeneration();
@@ -245,7 +252,7 @@ export function FeedPage() {
             <ArticleCard
               key={article.id}
               article={article}
-              onToggleFavorite={toggleFavorite}
+              onToggleFavorite={handleToggleFavorite}
               onDeepSearch={handleDeepSearch}
               onGeneratePost={handleGeneratePost}
             />

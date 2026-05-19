@@ -8,7 +8,7 @@ import type { Article } from '@shared/api/client';
 
 interface ArticleCardProps {
   article: Article;
-  onToggleFavorite: (id: string) => void;
+  onToggleFavorite: (id: string, isFavorite?: boolean) => void;
   isSelected?: boolean;
   onSelect?: (id: string) => void;
   selectable?: boolean;
@@ -108,7 +108,7 @@ export function ArticleCard({ article, onToggleFavorite, isSelected, onSelect, s
                 size="icon-sm"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onToggleFavorite(article.id);
+                  onToggleFavorite(article.id, article.is_favorite);
                 }}
                 className={cn(
                   article.is_favorite && 'text-warning'

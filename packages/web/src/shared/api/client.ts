@@ -1067,6 +1067,8 @@ export interface WorkspaceConfig {
     search?: string;
     deepsearch?: string;
     scoring?: string;
+    post_generation?: string;
+    digest_generation?: string;
   };
   [key: string]: unknown;
 }

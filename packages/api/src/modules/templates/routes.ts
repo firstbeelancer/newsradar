@@ -16,7 +16,7 @@ const router = Router();
 
 const createSchema = z.object({
   name: z.string().min(1).max(100),
-  type: z.enum(["short", "detailed", "digest"]),
+  type: z.enum(["post", "digest"]),
   systemPrompt: z.string().min(1),
   userPrompt: z.string().default("{{content}}"),
   variables: z.array(z.object({ name: z.string(), description: z.string().optional() })).default([]),
@@ -31,7 +31,7 @@ const updateSchema = z.object({
   variables: z.array(z.object({ name: z.string(), description: z.string().optional() })).optional(),
   description: z.string().optional(),
   isDefault: z.boolean().optional(),
-  type: z.enum(["short", "detailed", "digest"]).optional(),
+  type: z.enum(["post", "digest"]).optional(),
 });
 
 // ─── Routes ───

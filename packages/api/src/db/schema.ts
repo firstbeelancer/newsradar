@@ -279,6 +279,7 @@ export const aiProviders = pgTable(
     apiKeyEncrypted: text("api_key_encrypted"),
     model: varchar("model", { length: 100 }).default("gpt-4o-mini").notNull(),
     isActive: boolean("is_active").default(true).notNull(),
+    assignedTo: jsonb("assigned_to").default("[]").notNull(),
     workspaceId: uuid("workspace_id")
       .references(() => workspaces.id, { onDelete: "cascade" })
       .notNull(),
@@ -450,7 +451,7 @@ export const contentTemplates = pgTable(
   (table) => [
     index("content_templates_workspace_id_idx").on(table.workspaceId),
     index("content_templates_type_idx").on(table.type),
-    check("content_templates_type_check", sql`${table.type} IN ('short', 'detailed', 'digest')`),
+    check("content_templates_type_check", sql`${table.type} IN ('post', 'digest')`),
   ]
 );
 

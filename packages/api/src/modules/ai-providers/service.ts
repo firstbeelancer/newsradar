@@ -58,15 +58,17 @@ export async function updateProvider(
     baseUrl: string;
     apiKey: string;
     isActive: boolean;
+    assignedTo: string[];
   }>
 ) {
-  const existing = await getProviderById(id, workspaceId);
+  await getProviderById(id, workspaceId);
 
   const updates: Partial<AiProvider> = {};
   if (data.name !== undefined) updates.name = data.name;
   if (data.model !== undefined) updates.model = data.model;
   if (data.baseUrl !== undefined) updates.baseUrl = data.baseUrl;
   if (data.isActive !== undefined) updates.isActive = data.isActive;
+  if (data.assignedTo !== undefined) updates.assignedTo = data.assignedTo;
 
   if (data.apiKey) {
     updates.apiKeyEncrypted = encrypt(data.apiKey);

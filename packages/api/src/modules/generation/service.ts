@@ -1,11 +1,10 @@
 import { eq, and, desc, sql } from "drizzle-orm";
 import { db } from "../../db/index.js";
-import { generatedPosts, articles, contentTemplates, aiProviders } from "../../db/schema.js";
+import { generatedPosts, articles, contentTemplates, aiProviders, workspaces } from "../../db/schema.js";
 import { AppError } from "../../middleware/error-handler.js";
-import { encrypt } from "../../lib/encryption.js";
 import type { PaginatedResult, Cursor } from "../../lib/pagination.js";
 import { encodeCursor, decodeCursor } from "../../lib/pagination.js";
-import type { GeneratedPost, NewGeneratedPost } from "../../db/types.js";
+import type { GeneratedPost } from "../../db/types.js";
 
 // ─── Generation types ───
 
@@ -50,7 +49,7 @@ export async function generatePost(
     template = await db.query.contentTemplates.findFirst({
       where: and(
         eq(contentTemplates.workspaceId, workspaceId),
-        eq(contentTemplates.type, type === "manual" ? "short" : type === "digest" ? "digest" : "detailed"),
+        eq(contentTemplates.type, type === "digest" ? "digest" : "post"),
         eq(contentTemplates.isDefault, true)
       ),
     });
@@ -78,15 +77,29 @@ export async function generatePost(
       .limit(10);
   }
 
-  // Build prompt
+  // Build prompt — fetch workspace-level prompts as fallback
   const articleTexts = selectedArticles.map((a) => {
     return `Title: ${a.title}\n${a.description ? `Description: ${a.description}\n` : ""}${a.aiSummary ? `Summary: ${a.aiSummary}\n` : ""}`;
   }).join("\n---\n");
 
-  const systemPrompt = template?.systemPrompt ?? "You are a professional news editor. Create engaging content based on the provided articles.";
+  // Fetch workspace config for base prompts
+  const workspace = await db.query.workspaces.findFirst({
+    where: eq(workspaces.id, workspaceId),
+    columns: { config: true },
+  });
+  const workspacePrompts = (workspace?.config as Record<string, unknown> | undefined)?.prompts as
+    | { post_generation?: string; digest_generation?: string }
+    | undefined;
+
+  const defaultSystemPrompt =
+    type === "digest"
+      ? (workspacePrompts?.digest_generation ?? "Ты — профессиональный аналитик новостей. Подготовь структурированный дайджест на основе предоставленных статей. Пиши на русском языке.")
+      : (workspacePrompts?.post_generation ?? "Ты — профессиональный редактор новостного контента. Создай увлекательный пост на основе предоставленных статей. Пиши на русском языке.");
+
+  const systemPrompt = template?.systemPrompt ?? defaultSystemPrompt;
   const userPrompt = customPrompt
     ?? template?.userPrompt?.replace(/\{\{content\}\}/g, articleTexts)
-    ?? `Based on the following articles, create a ${type} post:\n\n${articleTexts}`;
+    ?? `На основе следующих статей создай ${type === "digest" ? "дайджест" : "пост"}:\n\n${articleTexts}`;
 
   // Find active AI provider
   const provider = await db.query.aiProviders.findFirst({
@@ -148,7 +161,7 @@ async function startGeneration(
     }
 
     // Save generated post
-    const [post] = await db
+    await db
       .insert(generatedPosts)
       .values({
         workspaceId: context.workspaceId,

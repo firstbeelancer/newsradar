@@ -130,7 +130,15 @@ export function AIProvidersSettings() {
     setLoading(true);
     try {
       const data = await apiGet<AIProvider[]>('/ai-providers');
-      setProviders(Array.isArray(data) ? data : []);
+      // Normalize: ensure assignedTo is always an array (backend field is assigned_to)
+      const normalized = (Array.isArray(data) ? data : []).map((p) => {
+        const raw = p as unknown as Record<string, unknown>;
+        return {
+          ...p,
+          assignedTo: (raw.assignedTo ?? raw.assigned_to ?? []) as string[],
+        };
+      });
+      setProviders(normalized);
     } catch {
       setProviders([]);
     } finally {
@@ -426,27 +434,50 @@ export function AIProvidersSettings() {
                             <span className="truncate">{provider.baseUrl}</span>
                           </div>
                         )}
-                        {provider.assignedTo && provider.assignedTo.length > 0 && (
-                          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                            {provider.assignedTo.map((proc) => {
-                              const procOpt = PROCESS_OPTIONS.find((p) => p.value === proc);
-                              return (
-                                <span key={proc} className="inline-flex items-center rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent">
-                                  {procOpt?.label || proc}
-                                </span>
-                              );
-                            })}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-5 px-1.5 text-[10px]"
-                              onClick={() => handleSaveAssignments(provider)}
-                              title="Сохранить назначения"
-                            >
-                              <Save className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        )}
+                        {/* Assigned processes — always visible */}
+                        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                          <span className="text-[10px] text-muted-foreground mr-0.5">Процессы:</span>
+                          {PROCESS_OPTIONS.map((proc) => {
+                            const isAssigned = (provider.assignedTo || []).includes(proc.value);
+                            return (
+                              <button
+                                key={proc.value}
+                                type="button"
+                                onClick={() => {
+                                  setProviders((prev) =>
+                                    prev.map((p) =>
+                                      p.id === provider.id
+                                        ? {
+                                            ...p,
+                                            assignedTo: isAssigned
+                                              ? (p.assignedTo || []).filter((v) => v !== proc.value)
+                                              : [...(p.assignedTo || []), proc.value],
+                                          }
+                                        : p
+                                    )
+                                  );
+                                }}
+                                className={cn(
+                                  'rounded-full border px-2 py-0.5 text-[10px] font-medium transition-all',
+                                  isAssigned
+                                    ? 'border-accent bg-accent/10 text-accent'
+                                    : 'border-border/50 text-muted-foreground/60 hover:bg-muted'
+                                )}
+                              >
+                                {proc.label}
+                              </button>
+                            );
+                          })}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-5 px-1.5 text-[10px]"
+                            onClick={() => handleSaveAssignments(provider)}
+                            title="Сохранить назначения"
+                          >
+                            <Save className="h-3 w-3" />
+                          </Button>
+                        </div>
                         {testResult && (
                           <div className="mt-1 flex items-center gap-1">
                             {testResult.success ? (
