@@ -22,3 +22,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD wget -qO- http://localhost:3001/api/v1/health || exit 1
 
 CMD ["npx", "tsx", "src/index.ts"]
+# rebuild 1779226377
