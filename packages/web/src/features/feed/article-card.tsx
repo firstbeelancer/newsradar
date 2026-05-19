@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router';
 import { Card, CardContent } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
-import { Bookmark, ExternalLink, Calendar, Search } from 'lucide-react';
+import { Bookmark, ExternalLink, Calendar, Search, Sparkles } from 'lucide-react';
 import { cn, truncate, formatDateTime, cleanArticleText } from '@shared/lib/utils';
 import type { Article } from '@shared/api/client';
 
@@ -13,6 +13,7 @@ interface ArticleCardProps {
   onSelect?: (id: string) => void;
   selectable?: boolean;
   onDeepSearch?: (article: Article) => void;
+  onGeneratePost?: (article: Article) => void;
 }
 
 const scoreColor = (score: number): string => {
@@ -21,7 +22,7 @@ const scoreColor = (score: number): string => {
   return 'bg-muted text-muted-foreground';
 };
 
-export function ArticleCard({ article, onToggleFavorite, isSelected, onSelect, selectable, onDeepSearch }: ArticleCardProps) {
+export function ArticleCard({ article, onToggleFavorite, isSelected, onSelect, selectable, onDeepSearch, onGeneratePost }: ArticleCardProps) {
   const scorePercent = Math.round(article.score);
   const preview = cleanArticleText(
     article.description || article.ai_summary || article.content || article.original_description || ''
@@ -77,6 +78,17 @@ export function ArticleCard({ article, onToggleFavorite, isSelected, onSelect, s
           </div>
 
           <div className="flex flex-row gap-1 shrink-0">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                onGeneratePost?.(article);
+              }}
+              title="Отправить в генерацию поста"
+            >
+              <Sparkles className="h-4 w-4" />
+            </Button>
             <Button
               variant="ghost"
               size="icon-sm"

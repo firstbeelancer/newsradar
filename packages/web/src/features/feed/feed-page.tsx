@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { Button } from '@shared/ui/button';
@@ -7,6 +7,7 @@ import { Skeleton } from '@shared/ui/skeleton';
 import { Input } from '@shared/ui/input';
 import { useAgentsStore } from '@shared/stores/agents-store';
 import { useArticlesStore } from '@shared/stores/articles-store';
+import { useGenerationStore } from '@shared/stores/generation-store';
 import { useToast } from '@shared/ui/toast';
 import { articlesApi, deepsearchApi, type Article, type ArticleFilters } from '@shared/api/client';
 import { ArticleCard } from './article-card';
@@ -16,6 +17,8 @@ import {
   Search,
   Loader2,
   ArrowLeft,
+  ArrowDownWideNarrow,
+  Clock3,
 } from 'lucide-react';
 
 const PAGE_SIZE = 20;
@@ -47,9 +50,11 @@ export function FeedPage() {
 
   const { agents, fetchAgents } = useAgentsStore();
   const { toggleFavorite } = useArticlesStore();
+  const { setSelectedArticleIds, resetGeneration } = useGenerationStore();
   const { addToast } = useToast();
 
   const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState<'date' | 'score'>('date');
   const [filters, setFilters] = useState<FeedFiltersState>({
     agentId: agentIdFromRoute ?? '',
     status: '',
@@ -83,6 +88,18 @@ export function FeedPage() {
   } = useArticlesInfinite(articleFilters, search);
 
   const articles: Article[] = data?.pages.flatMap((p) => p.data) ?? [];
+  const sortedArticles = useMemo(() => {
+    const copy = [...articles];
+    if (sortBy === 'score') {
+      copy.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return new Date(b.published_at).getTime() - new Date(a.published_at).getTime();
+      });
+      return copy;
+    }
+    copy.sort((a, b) => new Date(b.published_at).getTime() - new Date(a.published_at).getTime());
+    return copy;
+  }, [articles, sortBy]);
 
   // Infinite scroll observer
   const observerRef = useCallback(
@@ -126,6 +143,12 @@ export function FeedPage() {
     }
   }, [addToast]);
 
+  const handleGeneratePost = useCallback((article: Article) => {
+    resetGeneration();
+    setSelectedArticleIds([article.id]);
+    navigate({ to: '/generation' });
+  }, [navigate, resetGeneration, setSelectedArticleIds]);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -165,6 +188,27 @@ export function FeedPage() {
 
         {/* Filters */}
         <FeedFilters agents={agents} filters={filters} onChange={setFilters} />
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant={sortBy === 'date' ? 'primary' : 'outline'}
+            size="sm"
+            onClick={() => setSortBy('date')}
+          >
+            <Clock3 className="h-4 w-4" />
+            Сначала новые
+          </Button>
+          <Button
+            type="button"
+            variant={sortBy === 'score' ? 'primary' : 'outline'}
+            size="sm"
+            onClick={() => setSortBy('score')}
+          >
+            <ArrowDownWideNarrow className="h-4 w-4" />
+            Сначала высокий скор
+          </Button>
+        </div>
       </div>
 
       {/* Articles list */}
@@ -192,12 +236,13 @@ export function FeedPage() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {articles.map((article) => (
+          {sortedArticles.map((article) => (
             <ArticleCard
               key={article.id}
               article={article}
               onToggleFavorite={toggleFavorite}
               onDeepSearch={handleDeepSearch}
+              onGeneratePost={handleGeneratePost}
             />
           ))}
 
@@ -206,7 +251,7 @@ export function FeedPage() {
             {isFetchingNextPage && (
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             )}
-            {!hasNextPage && articles.length > 0 && (
+            {!hasNextPage && sortedArticles.length > 0 && (
               <p className="text-xs text-muted-foreground">Все новости загружены</p>
             )}
           </div>

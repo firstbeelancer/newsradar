@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@shared/ui/button';
@@ -45,6 +45,8 @@ import {
   Compass,
   Hammer,
   Wrench,
+  ArrowDownWideNarrow,
+  Clock3,
   type LucideIcon,
 } from 'lucide-react';
 import { cleanArticleText } from '@shared/lib/utils';
@@ -87,6 +89,7 @@ import { agentsApi, sourcesApi, chipFiltersApi, articlesApi, type Article } from
 
 function AgentArticlesList({ agentId }: { agentId: string }) {
   const navigate = useNavigate();
+  const [sortBy, setSortBy] = useState<'date' | 'score'>('date');
 
   const { data, isLoading } = useQuery({
     queryKey: ['agent-articles', agentId],
@@ -98,6 +101,18 @@ function AgentArticlesList({ agentId }: { agentId: string }) {
   });
 
   const articles: Article[] = data ?? [];
+  const sortedArticles = useMemo(() => {
+    const copy = [...articles];
+    if (sortBy === 'score') {
+      copy.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return new Date(b.published_at).getTime() - new Date(a.published_at).getTime();
+      });
+      return copy;
+    }
+    copy.sort((a, b) => new Date(b.published_at).getTime() - new Date(a.published_at).getTime());
+    return copy;
+  }, [articles, sortBy]);
 
   if (isLoading) {
     return (
@@ -132,7 +147,27 @@ function AgentArticlesList({ agentId }: { agentId: string }) {
 
   return (
     <div className="space-y-3">
-      {articles.map((article) => (
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          variant={sortBy === 'date' ? 'primary' : 'outline'}
+          size="sm"
+          onClick={() => setSortBy('date')}
+        >
+          <Clock3 className="h-4 w-4" />
+          Сначала новые
+        </Button>
+        <Button
+          type="button"
+          variant={sortBy === 'score' ? 'primary' : 'outline'}
+          size="sm"
+          onClick={() => setSortBy('score')}
+        >
+          <ArrowDownWideNarrow className="h-4 w-4" />
+          Сначала высокий скор
+        </Button>
+      </div>
+      {sortedArticles.map((article) => (
         <Card
           key={article.id}
           className="cursor-pointer hover:bg-muted/50 transition-colors"
