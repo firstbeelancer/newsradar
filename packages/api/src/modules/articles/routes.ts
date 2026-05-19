@@ -29,6 +29,7 @@ const listQuerySchema = z.object({
   dateTo: z.string().optional(),
   isFavorite: z.enum(["true", "false"]).optional(),
   sortBy: z.enum(["date", "score"]).optional(),
+  sortOrder: z.enum(["asc", "desc"]).optional(),
 });
 
 // ─── Routes ───
@@ -48,6 +49,7 @@ router.get("/", authMiddleware, async (req, res, next) => {
       dateTo: filters.dateTo,
       isFavorite: filters.isFavorite === "true" ? true : filters.isFavorite === "false" ? false : undefined,
       sortBy: filters.sortBy ?? "date",
+      sortOrder: filters.sortOrder ?? "desc",
       limit,
       cursor: cursor ?? null,
     });

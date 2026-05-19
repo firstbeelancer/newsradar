@@ -1,4 +1,4 @@
-import { eq, and, desc, sql, type SQL } from "drizzle-orm";
+import { eq, and, desc, asc, sql, type SQL } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import { articles, articleScores, sources } from "../../db/schema.js";
 import { AppError } from "../../middleware/error-handler.js";
@@ -17,6 +17,7 @@ export interface ArticleFilters {
   dateTo?: string;
   isFavorite?: boolean;
   sortBy?: "date" | "score";
+  sortOrder?: "asc" | "desc";
   limit: number;
   cursor?: string | null;
 }
@@ -81,11 +82,13 @@ export async function listArticles(
   }
 
   const sortBy = filters.sortBy ?? "date";
+  const sortOrder = filters.sortOrder ?? "desc";
+  const orderFn = sortOrder === "asc" ? asc : desc;
 
   const orderByClause =
     sortBy === "score"
-      ? [desc(articles.score), desc(articles.publishedAt ?? articles.createdAt), desc(articles.id)]
-      : [desc(articles.publishedAt ?? articles.createdAt), desc(articles.id)];
+      ? [orderFn(articles.score), orderFn(articles.publishedAt ?? articles.createdAt), orderFn(articles.id)]
+      : [orderFn(articles.publishedAt ?? articles.createdAt), orderFn(articles.id)];
 
   let query = db
     .select({
@@ -104,14 +107,26 @@ export async function listArticles(
       if (sortBy === "score") {
         const sortValue = Number(decoded.sortValue);
         const cursorDate = decoded.secondarySortValue ? new Date(decoded.secondarySortValue) : new Date(decoded.sortValue);
-        conditions.push(
-          sql`(${articles.score} < ${sortValue}) OR (${articles.score} = ${sortValue} AND ${articles.publishedAt} < ${cursorDate})`
-        );
+        if (sortOrder === "desc") {
+          conditions.push(
+            sql`(${articles.score} < ${sortValue}) OR (${articles.score} = ${sortValue} AND ${articles.publishedAt} < ${cursorDate})`
+          );
+        } else {
+          conditions.push(
+            sql`(${articles.score} > ${sortValue}) OR (${articles.score} = ${sortValue} AND ${articles.publishedAt} > ${cursorDate})`
+          );
+        }
       } else {
         const cursorDate = new Date(decoded.sortValue);
-        conditions.push(
-          sql`(${articles.publishedAt} IS NOT NULL AND ${articles.publishedAt} < ${cursorDate}) OR (${articles.publishedAt} IS NULL AND ${articles.createdAt} < ${cursorDate})`
-        );
+        if (sortOrder === "desc") {
+          conditions.push(
+            sql`(${articles.publishedAt} IS NOT NULL AND ${articles.publishedAt} < ${cursorDate}) OR (${articles.publishedAt} IS NULL AND ${articles.createdAt} < ${cursorDate})`
+          );
+        } else {
+          conditions.push(
+            sql`(${articles.publishedAt} IS NOT NULL AND ${articles.publishedAt} > ${cursorDate}) OR (${articles.publishedAt} IS NULL AND ${articles.createdAt} > ${cursorDate})`
+          );
+        }
       }
       query = db
         .select({

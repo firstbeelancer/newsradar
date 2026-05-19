@@ -18,7 +18,7 @@ import {
   Loader2,
   ArrowLeft,
   ArrowDownWideNarrow,
-  Clock3,
+  ArrowUpWideNarrow,
 } from 'lucide-react';
 
 const PAGE_SIZE = 20;
@@ -55,6 +55,7 @@ export function FeedPage() {
 
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<'date' | 'score'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [filters, setFilters] = useState<FeedFiltersState>({
     agentId: agentIdFromRoute ?? '',
     status: '',
@@ -77,6 +78,7 @@ export function FeedPage() {
     status: filters.status || undefined,
     favorites_only: filters.favoritesOnly || undefined,
     sort_by: sortBy,
+    sort_order: sortOrder,
   };
 
   const {
@@ -183,19 +185,33 @@ export function FeedPage() {
             type="button"
             variant={sortBy === 'date' ? 'primary' : 'outline'}
             size="sm"
-            onClick={() => setSortBy('date')}
+            onClick={() => {
+              if (sortBy === 'date') {
+                setSortOrder((o) => (o === 'desc' ? 'asc' : 'desc'));
+              } else {
+                setSortBy('date');
+                setSortOrder('desc');
+              }
+            }}
           >
-            <Clock3 className="h-4 w-4" />
-            Сначала новые
+            {sortOrder === 'desc' && sortBy === 'date' ? <ArrowDownWideNarrow className="h-4 w-4" /> : <ArrowUpWideNarrow className="h-4 w-4" />}
+            {sortBy === 'date' && sortOrder === 'desc' ? 'Сначала новые' : sortBy === 'date' && sortOrder === 'asc' ? 'Сначала старые' : 'По дате'}
           </Button>
           <Button
             type="button"
             variant={sortBy === 'score' ? 'primary' : 'outline'}
             size="sm"
-            onClick={() => setSortBy('score')}
+            onClick={() => {
+              if (sortBy === 'score') {
+                setSortOrder((o) => (o === 'desc' ? 'asc' : 'desc'));
+              } else {
+                setSortBy('score');
+                setSortOrder('desc');
+              }
+            }}
           >
-            <ArrowDownWideNarrow className="h-4 w-4" />
-            Сначала высокий скор
+            {sortOrder === 'desc' && sortBy === 'score' ? <ArrowDownWideNarrow className="h-4 w-4" /> : <ArrowUpWideNarrow className="h-4 w-4" />}
+            {sortBy === 'score' && sortOrder === 'desc' ? 'Сначала высокий скор' : sortBy === 'score' && sortOrder === 'asc' ? 'Сначала низкий скор' : 'По скору'}
           </Button>
         </div>
       </div>

@@ -77,52 +77,56 @@ export function ArticleCard({ article, onToggleFavorite, isSelected, onSelect, s
             </div>
           </div>
 
-          <div className="flex flex-row gap-1 shrink-0">
+          <div className="flex flex-col gap-1 shrink-0">
             <Button
-              variant="ghost"
-              size="icon-sm"
+              variant="outline"
+              size="sm"
               onClick={(e) => {
                 e.stopPropagation();
                 onGeneratePost?.(article);
               }}
               title="Отправить в генерацию поста"
+              className="text-accent border-accent/30 hover:bg-accent/10 gap-1"
             >
-              <Sparkles className="h-4 w-4" />
+              <Sparkles className="h-3.5 w-3.5" />
+              <span className="text-xs">Генерация</span>
             </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDeepSearch?.(article);
-              }}
-              title="Запустить DeepSearch"
-            >
-              <Search className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleFavorite(article.id);
-              }}
-              className={cn(
-                article.is_favorite && 'text-warning'
-              )}
-            >
-              <Bookmark className={cn('h-4 w-4', article.is_favorite && 'fill-current')} />
-            </Button>
-            <a
-              href={article.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Button variant="ghost" size="icon-sm">
-                <ExternalLink className="h-4 w-4" />
+            <div className="flex flex-row gap-1">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeepSearch?.(article);
+                }}
+                title="Запустить DeepSearch"
+              >
+                <Search className="h-4 w-4" />
               </Button>
-            </a>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleFavorite(article.id);
+                }}
+                className={cn(
+                  article.is_favorite && 'text-warning'
+                )}
+              >
+                <Bookmark className={cn('h-4 w-4', article.is_favorite && 'fill-current')} />
+              </Button>
+              <a
+                href={article.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Button variant="ghost" size="icon-sm">
+                  <ExternalLink className="h-4 w-4" />
+                </Button>
+              </a>
+            </div>
           </div>
         </div>
       </CardContent>

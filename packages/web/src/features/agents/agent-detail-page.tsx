@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@shared/ui/button';
@@ -46,7 +46,8 @@ import {
   Hammer,
   Wrench,
   ArrowDownWideNarrow,
-  Clock3,
+  ArrowUpWideNarrow,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react';
 import { cleanArticleText } from '@shared/lib/utils';
@@ -84,23 +85,32 @@ function getAgentIcon(iconStr?: string): LucideIcon {
 }
 import type { CreateAgentDto, UpdateAgentDto, AgentStats, ChipFilter } from '@shared/api/client';
 import { agentsApi, sourcesApi, chipFiltersApi, articlesApi, type Article } from '@shared/api/client';
+import { useGenerationStore } from '@shared/stores/generation-store';
 
 // ─── Inline articles list for agent detail ───────────────────────────────────
 
 function AgentArticlesList({ agentId }: { agentId: string }) {
   const navigate = useNavigate();
   const [sortBy, setSortBy] = useState<'date' | 'score'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const { setSelectedArticleIds, resetGeneration } = useGenerationStore();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['agent-articles', agentId, sortBy],
+    queryKey: ['agent-articles', agentId, sortBy, sortOrder],
     queryFn: async () => {
-      const result = await articlesApi.list({ agent_id: agentId, sort_by: sortBy }, undefined, 20);
+      const result = await articlesApi.list({ agent_id: agentId, sort_by: sortBy, sort_order: sortOrder }, undefined, 20);
       return result.data;
     },
     staleTime: 30_000,
   });
 
   const articles: Article[] = data ?? [];
+
+  const handleGeneratePost = useCallback((article: Article) => {
+    resetGeneration();
+    setSelectedArticleIds([article.id]);
+    navigate({ to: '/generation' });
+  }, [navigate, resetGeneration, setSelectedArticleIds]);
 
   if (isLoading) {
     return (
@@ -140,19 +150,33 @@ function AgentArticlesList({ agentId }: { agentId: string }) {
           type="button"
           variant={sortBy === 'date' ? 'primary' : 'outline'}
           size="sm"
-          onClick={() => setSortBy('date')}
+          onClick={() => {
+            if (sortBy === 'date') {
+              setSortOrder((o) => (o === 'desc' ? 'asc' : 'desc'));
+            } else {
+              setSortBy('date');
+              setSortOrder('desc');
+            }
+          }}
         >
-          <Clock3 className="h-4 w-4" />
-          Сначала новые
+          {sortOrder === 'desc' && sortBy === 'date' ? <ArrowDownWideNarrow className="h-4 w-4" /> : <ArrowUpWideNarrow className="h-4 w-4" />}
+          {sortBy === 'date' && sortOrder === 'desc' ? 'Сначала новые' : sortBy === 'date' && sortOrder === 'asc' ? 'Сначала старые' : 'По дате'}
         </Button>
         <Button
           type="button"
           variant={sortBy === 'score' ? 'primary' : 'outline'}
           size="sm"
-          onClick={() => setSortBy('score')}
+          onClick={() => {
+            if (sortBy === 'score') {
+              setSortOrder((o) => (o === 'desc' ? 'asc' : 'desc'));
+            } else {
+              setSortBy('score');
+              setSortOrder('desc');
+            }
+          }}
         >
-          <ArrowDownWideNarrow className="h-4 w-4" />
-          Сначала высокий скор
+          {sortOrder === 'desc' && sortBy === 'score' ? <ArrowDownWideNarrow className="h-4 w-4" /> : <ArrowUpWideNarrow className="h-4 w-4" />}
+          {sortBy === 'score' && sortOrder === 'desc' ? 'Сначала высокий скор' : sortBy === 'score' && sortOrder === 'asc' ? 'Сначала низкий скор' : 'По скору'}
         </Button>
       </div>
       {articles.map((article) => (
@@ -182,9 +206,23 @@ function AgentArticlesList({ agentId }: { agentId: string }) {
                   </span>
                 </div>
               </div>
-              <Badge className="shrink-0 text-[10px]">
-                {Math.round(article.score)}
-              </Badge>
+              <div className="flex flex-col gap-1 shrink-0 items-end">
+                <Badge className="shrink-0 text-[10px]">
+                  {Math.round(article.score)}
+                </Badge>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleGeneratePost(article);
+                  }}
+                  className="text-accent border-accent/30 hover:bg-accent/10 gap-1 text-xs h-7"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Генерация
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>

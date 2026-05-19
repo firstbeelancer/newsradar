@@ -668,6 +668,7 @@ export interface ArticleFilters {
   date_to?: string;
   favorites_only?: boolean;
   sort_by?: 'date' | 'score';
+  sort_order?: 'asc' | 'desc';
 }
 
 // ─── Template Types ──────────────────────────────────────────────────────────
@@ -932,6 +933,7 @@ export const articlesApi = {
     if (filters?.date_to) params.set('dateTo', filters.date_to);
     if (filters?.favorites_only !== undefined) params.set('isFavorite', String(filters.favorites_only));
     if (filters?.sort_by) params.set('sortBy', filters.sort_by);
+    if (filters?.sort_order) params.set('sortOrder', filters.sort_order);
     return apiGet<BackendCursorResponse<BackendArticle>>(`/articles?${params.toString()}`).then((payload) =>
       normalizeCursorResponse(payload, normalizeArticle)
     );
