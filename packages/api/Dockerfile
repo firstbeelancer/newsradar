@@ -5,10 +5,16 @@ FROM node:22-alpine
 
 WORKDIR /app
 
+# Copy package files first for layer caching
 COPY packages/api/package.json ./
 RUN npm install
 
+# Copy source code (invalidates cache when files change)
 COPY packages/api ./
+
+# Force rebuild timestamp — change this to trigger Coolify rebuild
+# Last updated: 2026-05-20-force-rebuild
+ARG CACHEBUST=1
 
 EXPOSE 3001
 

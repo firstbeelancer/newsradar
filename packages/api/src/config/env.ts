@@ -14,7 +14,7 @@ const envSchema = z.object({
 
   JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters"),
 
-  ENCRYPTION_KEY: z.string().regex(/^[a-f0-9]{64}$/, "ENCRYPTION_KEY must be 64 hex characters (32 bytes)"),
+  ENCRYPTION_KEY: z.string().regex(/^[a-fA-F0-9]{64}$/, "ENCRYPTION_KEY must be 64 hex characters (32 bytes)"),
 
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),

@@ -30,9 +30,18 @@ const MIGRATION_SENTINELS: Record<string, string[]> = {
     "scoring_criteria",
     "subject_areas",
   ],
-  "0002_add_workspace_config.sql": [
-    "workspaces_config_check",
-  ],
+  // BUG FIX: Previously checked for table "workspaces_config_check" which doesn't exist
+  // (it's a constraint name, not a table). The sentinel approach only checks
+  // information_schema.tables, so it can't detect column/constraint additions.
+  // Removed — migration 0002 is idempotent (ADD COLUMN IF NOT EXISTS), so
+  // re-running on an existing schema is safe.
+  //
+  // "0002_add_workspace_config.sql": ["workspaces_config_check"],  // BROKEN — not a table
+  //
+  // Similarly, 0003 and 0004 don't need sentinels:
+  //   0003_fix_... uses ALTER COLUMN TYPE (idempotent if same type)
+  //   0003_seed_... uses CREATE OR REPLACE + idempotent DO block
+  //   0004_... uses ADD COLUMN IF NOT EXISTS + DROP/ADD CONSTRAINT IF EXISTS
 };
 
 async function migrationIsMaterialized(

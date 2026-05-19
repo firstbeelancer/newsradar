@@ -5,7 +5,7 @@ const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 16;
 const AUTH_TAG_LENGTH = 16;
 
-const key = Buffer.from(env.ENCRYPTION_KEY, "hex");
+const key = Buffer.from(env.ENCRYPTION_KEY.toLowerCase(), "hex");
 
 export function encrypt(plaintext: string): string {
   const iv = randomBytes(IV_LENGTH);

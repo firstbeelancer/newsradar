@@ -19,3 +19,5 @@ build
 *~
 .vscode
 .idea
+# Do NOT ignore package-lock.json — needed for npm ci
+

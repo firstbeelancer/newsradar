@@ -50,6 +50,8 @@ services:
     build:
       context: .
       dockerfile: packages/api/Dockerfile
+      args:
+        CACHEBUST: ${CACHEBUST:-1}
     container_name: newsradar-api
     restart: unless-stopped
     environment:
