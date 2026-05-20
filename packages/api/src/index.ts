@@ -25,6 +25,7 @@ import agentRoutes from "./modules/agents/routes.js";
 import sourceRoutes from "./modules/sources/routes.js";
 import articleRoutes from "./modules/articles/routes.js";
 import searchRoutes from "./modules/search/routes.js";
+import deepsearchRoutes from "./modules/deepsearch/routes.js";
 
 // Layer 3 — AI + Scoring
 import scoringRoutes from "./modules/scoring/routes.js";
@@ -79,6 +80,7 @@ app.use("/api/v1/agents", agentRoutes);
 app.use("/api/v1/sources", sourceRoutes);
 app.use("/api/v1/articles", articleRoutes);
 app.use("/api/v1/search", searchRoutes);
+app.use("/api/v1/deepsearch", deepsearchRoutes);
 
 // Layer 3
 app.use("/api/v1/scoring", scoringRoutes);

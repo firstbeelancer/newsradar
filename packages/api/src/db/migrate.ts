@@ -38,10 +38,9 @@ const MIGRATION_SENTINELS: Record<string, string[]> = {
   //
   // "0002_add_workspace_config.sql": ["workspaces_config_check"],  // BROKEN — not a table
   //
-  // Similarly, 0003 and 0004 don't need sentinels:
-  //   0003_fix_... uses ALTER COLUMN TYPE (idempotent if same type)
-  //   0003_seed_... uses CREATE OR REPLACE + idempotent DO block
-  //   0004_... uses ADD COLUMN IF NOT EXISTS + DROP/ADD CONSTRAINT IF EXISTS
+  // 0003_seed_default_sources.sql — uses CREATE OR REPLACE + idempotent DO block, safe to re-run
+  // 0004_add_assigned_to_and_fix_template_types.sql — uses ADD COLUMN IF NOT EXISTS + DROP/ADD CONSTRAINT IF EXISTS
+  // 0005_fix_article_scores_decimal_precision.sql — idempotent: checks current column type before altering
 };
 
 async function migrationIsMaterialized(
