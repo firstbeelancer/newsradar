@@ -1,4 +1,4 @@
-import { eq, and, desc, asc, sql, coalesce, type SQL } from "drizzle-orm";
+import { eq, and, desc, asc, sql, type SQL } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import { articles, articleScores, sources } from "../../db/schema.js";
 import { AppError } from "../../middleware/error-handler.js";
@@ -86,7 +86,7 @@ export async function listArticles(
   const orderFn = sortOrder === "asc" ? asc : desc;
 
   // Use SQL COALESCE for publishedAt fallback to createdAt — JS ?? doesn't work with Drizzle columns
-  const sortDateExpr = coalesce(articles.publishedAt, articles.createdAt);
+  const sortDateExpr = sql<Date>`coalesce(${articles.publishedAt}, ${articles.createdAt})`;
 
   const orderByClause =
     sortBy === "score"
@@ -195,7 +195,7 @@ export async function searchArticles(
     .from(articles)
     .leftJoin(sources, eq(articles.sourceId, sources.id))
     .where(and(...conditions))
-    .orderBy(desc(articles.score), desc(coalesce(articles.publishedAt, articles.createdAt)))
+    .orderBy(desc(articles.score), desc(sql<Date>`coalesce(${articles.publishedAt}, ${articles.createdAt})`))
     .limit(params.limit + 1);
 
   if (params.cursor) {
@@ -212,7 +212,7 @@ export async function searchArticles(
         .from(articles)
         .leftJoin(sources, eq(articles.sourceId, sources.id))
         .where(and(...conditions))
-        .orderBy(desc(articles.score), desc(coalesce(articles.publishedAt, articles.createdAt)))
+        .orderBy(desc(articles.score), desc(sql<Date>`coalesce(${articles.publishedAt}, ${articles.createdAt})`))
         .limit(params.limit + 1);
     }
   }
