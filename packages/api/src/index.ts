@@ -116,6 +116,14 @@ app.use((_req, res) => {
 
 async function bootstrap() {
   try {
+    // 0. Diagnostic: print env check (without exposing secrets)
+    console.log("[bootstrap] Node version:", process.version);
+    console.log("[bootstrap] NODE_ENV:", env.NODE_ENV);
+    console.log("[bootstrap] DATABASE_URL set:", !!env.DATABASE_URL);
+    console.log("[bootstrap] REDIS_URL set:", !!env.REDIS_URL);
+    console.log("[bootstrap] JWT_SECRET length:", env.JWT_SECRET?.length ?? 0);
+    console.log("[bootstrap] ENCRYPTION_KEY length:", env.ENCRYPTION_KEY?.length ?? 0);
+
     // 1. Run database migrations
     console.log("[bootstrap] Running database migrations...");
     await runMigrations();

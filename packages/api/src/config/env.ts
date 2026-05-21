@@ -33,6 +33,9 @@ if (!parsed.success) {
   const errors = parsed.error.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join("\n");
   // eslint-disable-next-line no-console
   console.error("Environment validation failed:\n", errors);
+  console.error("\n[env] Debug — present env vars:", Object.keys(process.env).filter(k =>
+    k.includes("DATABASE") || k.includes("REDIS") || k.includes("JWT") || k.includes("ENCRYPTION") || k.includes("NODE_ENV")
+  ).join(", "));
   process.exit(1);
 }
 
