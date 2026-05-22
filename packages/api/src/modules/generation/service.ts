@@ -7,6 +7,7 @@ import { decodeCursor, encodeCursor } from "../../lib/pagination.js";
 import type { Cursor, PaginatedResult } from "../../lib/pagination.js";
 import { createOperationLog, updateOperationLog } from "../operation-logs/service.js";
 import { getDefaultEmojiValues } from "../asset-packs/service.js";
+import { resolveProviderForProcess } from "../ai-providers/service.js";
 import {
   buildArticleContent,
   ensureLeadingEmoji,
@@ -39,37 +40,6 @@ export interface StreamOperation {
 }
 
 const streamStore = new Map<string, StreamOperation>();
-
-async function resolveGenerationProvider(
-  workspaceId: string,
-  requestedProvider?: string,
-  requestedModel?: string
-) {
-  const providers = await db
-    .select()
-    .from(aiProviders)
-    .where(and(eq(aiProviders.workspaceId, workspaceId), eq(aiProviders.isActive, true)))
-    .orderBy(desc(aiProviders.updatedAt), desc(aiProviders.createdAt));
-
-  const generationAssigned = providers.filter((provider) => {
-    const assignedTo = Array.isArray(provider.assignedTo) ? provider.assignedTo : [];
-    return assignedTo.length === 0 || assignedTo.includes("generation");
-  });
-
-  const candidatePool = generationAssigned.length > 0 ? generationAssigned : providers;
-
-  if (requestedProvider || requestedModel) {
-    const explicitMatch = candidatePool.find((provider) => {
-      const providerMatches = requestedProvider ? provider.provider === requestedProvider : true;
-      const modelMatches = requestedModel ? provider.model === requestedModel : true;
-      return providerMatches && modelMatches;
-    });
-
-    if (explicitMatch) return explicitMatch;
-  }
-
-  return candidatePool[0];
-}
 
 export async function generatePost(
   input: GeneratePostInput,
@@ -150,7 +120,7 @@ export async function generatePost(
     ?? `На основе следующих статей создай ${type === "digest" ? "дайджест" : "пост"}:\n\n${articleTexts}`;
   const userPrompt = buildGenerationUserPrompt(baseUserPrompt, customPrompt);
 
-  const provider = await resolveGenerationProvider(workspaceId, requestedProvider, requestedModel);
+  const provider = await resolveProviderForProcess(workspaceId, "generation", requestedProvider, requestedModel);
   const operationLog = await createOperationLog({
     userId,
     workspaceId,
@@ -228,7 +198,7 @@ async function startGeneration(
       throw new AppError(503, "Для выбранного AI-провайдера не настроен API-ключ", "GENERATION_PROVIDER_KEY_MISSING");
     }
 
-    const rawContent = await callAiProvider(provider, systemPrompt, userPrompt, operationId);
+    const { content: rawContent, modelUsed } = await callAiProvider(provider, systemPrompt, userPrompt, operationId);
     const content = ensureLeadingEmoji(sanitizeTelegramText(rawContent), context.emojiPack);
 
     await db
@@ -248,7 +218,7 @@ async function startGeneration(
           score: article.score,
         })),
         promptSnapshot: userPrompt,
-        modelSnapshot: provider.model ?? "fallback-simulated",
+        modelSnapshot: modelUsed,
       })
       .returning();
 
@@ -292,7 +262,7 @@ async function callAiProvider(
   systemPrompt: string,
   userPrompt: string,
   operationId: string
-): Promise<string> {
+): Promise<{ content: string; modelUsed: string }> {
   const { decrypt } = await import("../../lib/encryption.js");
   const apiKey = decrypt(provider.apiKeyEncrypted!);
   const baseUrl = provider.baseUrl ?? getDefaultBaseUrl(provider.provider);
@@ -302,36 +272,16 @@ async function callAiProvider(
 
   try {
     if (provider.provider === "openai" || provider.provider === "openrouter") {
-      const response = await fetch(`${baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: provider.model,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          temperature: 0.7,
-          max_tokens: 4000,
-        }),
+      const result = await requestOpenAiCompatibleCompletion({
+        provider,
+        apiKey,
+        baseUrl,
+        systemPrompt,
+        userPrompt,
         signal: controller.signal,
       });
-
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`AI provider error ${response.status}: ${error.slice(0, 500)}`);
-      }
-
-      const data = (await response.json()) as {
-        choices?: Array<{ message?: { content?: string } }>;
-      };
-
-      const content = data.choices?.[0]?.message?.content ?? "";
-      pushStreamChunk(operationId, content);
-      return content;
+      pushStreamChunk(operationId, result.content);
+      return result;
     }
 
     if (provider.provider === "anthropic") {
@@ -362,13 +312,101 @@ async function callAiProvider(
 
       const content = data.content?.[0]?.text ?? "";
       pushStreamChunk(operationId, content);
-      return content;
+      return {
+        content,
+        modelUsed: provider.model,
+      };
     }
 
     throw new AppError(400, `Провайдер ${provider.provider} пока не поддерживает генерацию через этот endpoint`, "GENERATION_PROVIDER_UNSUPPORTED");
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function shouldRetryOpenRouterWithAuto(
+  provider: typeof aiProviders.$inferSelect,
+  status: number,
+  errorText: string
+) {
+  if (provider.provider !== "openrouter" || provider.model === "openrouter/auto") {
+    return false;
+  }
+
+  if (status === 429 || status >= 500) {
+    return true;
+  }
+
+  const normalized = errorText.toLowerCase();
+  return (
+    normalized.includes("provider returned error") ||
+    normalized.includes("temporarily rate-limited") ||
+    normalized.includes("temporarily unavailable") ||
+    normalized.includes("no endpoints found") ||
+    normalized.includes("model not found")
+  );
+}
+
+function formatProviderError(status: number, errorText: string) {
+  if (status === 429) {
+    return "AI-провайдер временно упёрся в лимит запросов. Попробуй ещё раз через минуту или переключи модель.";
+  }
+
+  if (status >= 500) {
+    return "AI-провайдер сейчас отвечает нестабильно. Попробуй повторить генерацию чуть позже.";
+  }
+
+  return `AI provider error ${status}: ${errorText.slice(0, 500)}`;
+}
+
+async function requestOpenAiCompatibleCompletion(params: {
+  provider: typeof aiProviders.$inferSelect;
+  apiKey: string;
+  baseUrl: string;
+  systemPrompt: string;
+  userPrompt: string;
+  signal: AbortSignal;
+  modelOverride?: string;
+}): Promise<{ content: string; modelUsed: string }> {
+  const model = params.modelOverride ?? params.provider.model;
+  const response = await fetch(`${params.baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${params.apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: params.systemPrompt },
+        { role: "user", content: params.userPrompt },
+      ],
+      temperature: 0.7,
+      max_tokens: 4000,
+    }),
+    signal: params.signal,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    if (shouldRetryOpenRouterWithAuto(params.provider, response.status, errorText)) {
+      return requestOpenAiCompatibleCompletion({
+        ...params,
+        modelOverride: "openrouter/auto",
+      });
+    }
+
+    throw new Error(formatProviderError(response.status, errorText));
+  }
+
+  const data = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+
+  return {
+    content: data.choices?.[0]?.message?.content ?? "",
+    modelUsed: model,
+  };
 }
 
 function pushStreamChunk(operationId: string, content: string) {

@@ -197,6 +197,8 @@ export async function processGenerateDigest(
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
+      workspaceId,
+      process: "generation",
       temperature: 0.7,
       maxTokens: 4_000,
       onChunk: async (chunk) => {
@@ -215,6 +217,8 @@ export async function processGenerateDigest(
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
+      workspaceId,
+      process: "generation",
       temperature: 0.7,
       maxTokens: 4_000,
     });

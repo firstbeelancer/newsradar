@@ -95,6 +95,7 @@ export async function processScoreArticle(
 
   // Run scoring
   const scoreResult = await scoreArticle(articleId, {
+    workspaceId: article.workspaceId,
     agentTopic: agentCtx.topic,
     agentTone: agentCtx.tone,
     keywords,

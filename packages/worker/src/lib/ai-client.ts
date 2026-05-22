@@ -9,7 +9,11 @@
  * ------------------------------------------------------------------
  */
 
+import { and, desc, eq } from "drizzle-orm";
 import { env } from "../config/env.js";
+import { db } from "../db/index.js";
+import { aiProviders } from "../db/schema.js";
+import { decrypt } from "./encryption.js";
 
 export interface AiMessage {
   role: "system" | "user" | "assistant";
@@ -22,6 +26,8 @@ export interface AiCompleteOptions {
   apiKey?: string;
   baseUrl?: string;
   provider?: "openai" | "anthropic" | "openrouter" | "google";
+  workspaceId?: string;
+  process?: "search" | "translation" | "ingest_analysis" | "scoring" | "generation" | "deepsearch";
   temperature?: number;
   maxTokens?: number;
 }
@@ -50,7 +56,7 @@ export function setAiTelemetryError(message: string): void {
 
 /* ─── Provider helpers ─── */
 
-function resolveProvider(
+function resolveEnvProvider(
   opts?: Pick<AiCompleteOptions, "provider" | "baseUrl" | "apiKey">
 ): {
   provider: "openai" | "anthropic" | "openrouter" | "google";
@@ -74,6 +80,64 @@ function resolveProvider(
       : env.PLATFORM_AI_API_KEY ?? "");
 
   return { provider, baseUrl, apiKey };
+}
+
+function normalizeAssignedTo(processes: unknown): string[] {
+  return Array.isArray(processes) ? processes.filter((value): value is string => typeof value === "string") : [];
+}
+
+async function resolveProvider(
+  opts: AiCompleteOptions
+): Promise<{
+  provider: "openai" | "anthropic" | "openrouter" | "google";
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+}> {
+  if (opts.apiKey) {
+    const envProvider = resolveEnvProvider(opts);
+    return {
+      ...envProvider,
+      model: resolveModel(opts),
+    };
+  }
+
+  if (opts.workspaceId && opts.process) {
+    const providers = await db
+      .select()
+      .from(aiProviders)
+      .where(and(eq(aiProviders.workspaceId, opts.workspaceId), eq(aiProviders.isActive, true)))
+      .orderBy(desc(aiProviders.updatedAt), desc(aiProviders.createdAt));
+
+    const assigned = providers.filter((provider) =>
+      normalizeAssignedTo(provider.assignedTo).includes(opts.process!)
+    );
+    const pool = assigned.length > 0 ? assigned : providers;
+
+    const explicit = pool.find((provider) => {
+      const providerMatches = opts.provider ? provider.provider === opts.provider : true;
+      const modelMatches = opts.model ? provider.model === opts.model : true;
+      return providerMatches && modelMatches;
+    });
+
+    const selected = explicit ?? pool[0];
+    if (selected?.apiKeyEncrypted) {
+      return {
+        provider: selected.provider as "openai" | "anthropic" | "openrouter" | "google",
+        baseUrl:
+          selected.baseUrl ??
+          resolveEnvProvider({ provider: selected.provider as "openai" | "anthropic" | "openrouter" | "google" }).baseUrl,
+        apiKey: decrypt(selected.apiKeyEncrypted),
+        model: opts.model ?? selected.model,
+      };
+    }
+  }
+
+  const envProvider = resolveEnvProvider(opts);
+  return {
+    ...envProvider,
+    model: resolveModel(opts),
+  };
 }
 
 function sanitizeApiKey(apiKey: string): string {
@@ -186,7 +250,7 @@ function shouldRetryOpenRouterWithAuto(
     return false;
   }
 
-  if (status >= 500) {
+  if (status === 429 || status >= 500) {
     return true;
   }
 
@@ -197,8 +261,21 @@ function shouldRetryOpenRouterWithAuto(
     normalized.includes("provider returned error") ||
     normalized.includes("is not a valid model id") ||
     normalized.includes("does not exist") ||
+    normalized.includes("temporarily rate-limited") ||
     normalized.includes("temporarily unavailable")
   );
+}
+
+function formatProviderError(status: number, errorText: string): string {
+  if (status === 429) {
+    return "AI-провайдер временно упёрся в лимит запросов. Попробуй ещё раз через минуту или переключи модель.";
+  }
+
+  if (status >= 500) {
+    return "AI-провайдер сейчас отвечает нестабильно. Попробуй повторить запрос чуть позже.";
+  }
+
+  return `AI provider error ${status}: ${errorText.slice(0, 500)}`;
 }
 
 async function postCompletionRequest(opts: {
@@ -247,8 +324,9 @@ async function postCompletionRequest(opts: {
       });
     }
 
-    aiTelemetry.lastError = `AI provider error ${response.status}: ${trimmedError}`;
-    throw new Error(`AI provider error ${response.status}: ${trimmedError}`);
+    const formattedError = formatProviderError(response.status, trimmedError);
+    aiTelemetry.lastError = formattedError;
+    throw new Error(formattedError);
   }
 
   const data = (await response.json()) as unknown;
@@ -292,9 +370,8 @@ function parseNonStreamingResponse(
  * @returns The complete response text.
  */
 export async function complete(opts: AiCompleteOptions): Promise<string> {
-  const { provider, baseUrl, apiKey } = resolveProvider(opts);
+  const { provider, baseUrl, apiKey, model } = await resolveProvider(opts);
   const sanitizedApiKey = sanitizeApiKey(apiKey);
-  const model = resolveModel(opts);
   const temperature = opts.temperature ?? 0.7;
   const maxTokens = opts.maxTokens ?? 4_000;
 
@@ -333,9 +410,8 @@ export async function complete(opts: AiCompleteOptions): Promise<string> {
  * @returns The full aggregated response text.
  */
 export async function streamComplete(opts: AiStreamOptions): Promise<string> {
-  const { provider, baseUrl, apiKey } = resolveProvider(opts);
+  const { provider, baseUrl, apiKey, model } = await resolveProvider(opts);
   const sanitizedApiKey = sanitizeApiKey(apiKey);
-  const model = resolveModel(opts);
   const temperature = opts.temperature ?? 0.7;
   const maxTokens = opts.maxTokens ?? 4_000;
 
@@ -374,10 +450,30 @@ export async function streamComplete(opts: AiStreamOptions): Promise<string> {
 
     if (!response.ok) {
       const errorText = await response.text();
-      aiTelemetry.lastError = `AI provider error ${response.status}: ${errorText.slice(0, 500)}`;
-      throw new Error(
-        `AI provider error ${response.status}: ${errorText.slice(0, 500)}`
-      );
+      const trimmedError = errorText.slice(0, 500);
+
+      if (
+        shouldRetryOpenRouterWithAuto(
+          provider,
+          model,
+          response.status,
+          trimmedError
+        )
+      ) {
+        const text = await complete({
+          ...opts,
+          provider,
+          baseUrl,
+          apiKey: sanitizedApiKey,
+          model: "openrouter/auto",
+        });
+        await opts.onChunk(text);
+        return text;
+      }
+
+      const formattedError = formatProviderError(response.status, trimmedError);
+      aiTelemetry.lastError = formattedError;
+      throw new Error(formattedError);
     }
 
     if (!response.body) {

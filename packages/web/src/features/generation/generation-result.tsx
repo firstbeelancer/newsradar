@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@shared/ui/card';
 import { Textarea } from '@shared/ui/textarea';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@shared/ui/tooltip';
 import { Check, Copy, Mic, MicOff, RotateCcw } from 'lucide-react';
 
 interface GenerationResultProps {
@@ -67,15 +68,18 @@ export function GenerationResult({ content, onRegenerate, onCopy }: GenerationRe
     }
   };
 
-  const toggleRecording = () => {
+  const stopRecording = () => {
+    recognitionRef.current?.stop();
+    setIsRecording(false);
+  };
+
+  const startRecording = () => {
     if (!SpeechRecognitionImpl) {
       setSpeechError('Голосовой ввод не поддерживается в этом браузере');
       return;
     }
 
     if (isRecording) {
-      recognitionRef.current?.stop();
-      setIsRecording(false);
       return;
     }
 
@@ -140,10 +144,29 @@ export function GenerationResult({ content, onRegenerate, onCopy }: GenerationRe
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-3">
             <label className="text-sm font-medium">Комментарии к перегенерации</label>
-            <Button variant="outline" size="sm" onClick={toggleRecording}>
-              {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-              {isRecording ? 'Стоп запись' : 'Наговорить'}
-            </Button>
+            <TooltipProvider delayDuration={120}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    aria-label={isRecording ? 'Остановить диктовку' : 'Начать диктовку'}
+                    onPointerDown={startRecording}
+                    onPointerUp={stopRecording}
+                    onPointerLeave={() => {
+                      if (isRecording) {
+                        stopRecording();
+                      }
+                    }}
+                  >
+                    {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {isRecording ? 'Отпусти, чтобы остановить' : 'Удерживайте, чтобы диктовать'}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
           <Textarea
             value={feedback}

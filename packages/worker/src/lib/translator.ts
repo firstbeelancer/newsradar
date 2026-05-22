@@ -97,7 +97,8 @@ async function translateViaGoogleGtx(
  */
 export async function translateToRussian(
   text: string,
-  sourceLang: string = "auto"
+  sourceLang: string = "auto",
+  workspaceId?: string
 ): Promise<string> {
   if (!text || text.trim().length === 0) return "";
 
@@ -115,6 +116,8 @@ export async function translateToRussian(
         { role: "system", content: systemPrompt },
         { role: "user", content: truncated },
       ],
+      workspaceId,
+      process: "translation",
       temperature: 0.3,
       maxTokens: 4_000,
     });
@@ -135,7 +138,8 @@ export async function translateToRussian(
 export async function translateArticle(
   title: string,
   description?: string,
-  content?: string
+  content?: string,
+  workspaceId?: string
 ): Promise<{
   title: string;
   description: string;
@@ -157,9 +161,9 @@ export async function translateArticle(
   }
 
   const [translatedTitle, translatedBody] = await Promise.all([
-    translateToRussian(title, detectedLang),
+    translateToRussian(title, detectedLang, workspaceId),
     sourceBody
-      ? translateToRussian(sourceBody, detectedLang)
+      ? translateToRussian(sourceBody, detectedLang, workspaceId)
       : Promise.resolve(""),
   ]);
 

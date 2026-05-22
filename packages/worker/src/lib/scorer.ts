@@ -91,6 +91,7 @@ export async function scoreWithAI(
   title: string,
   description: string,
   content: string,
+  workspaceId: string,
   agentTopic?: string,
   agentTone?: string,
   logger?: Logger
@@ -130,6 +131,8 @@ Each value must be an integer 0–100.`;
         },
         { role: "user", content: prompt },
       ],
+      workspaceId,
+      process: "scoring",
       temperature: 0.1,
       maxTokens: 80,
     });
@@ -574,12 +577,13 @@ export async function loadAgentWeights(agentId: string): Promise<AIWeights> {
 export async function scoreArticle(
   articleId: string,
   options: {
+    workspaceId: string;
     agentTopic?: string;
     agentTone?: string;
     keywords?: string[];
     weights?: AIWeights;
     logger?: Logger;
-  } = {}
+  }
 ): Promise<ScoreResult> {
   const result = await db
     .select({
@@ -613,6 +617,7 @@ export async function scoreArticle(
       article.title,
       article.description ?? "",
       article.content ?? "",
+      options.workspaceId,
       options.agentTopic,
       options.agentTone,
       options.logger

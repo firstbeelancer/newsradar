@@ -43,6 +43,7 @@ export async function processTranslate(
       title: articles.title,
       description: articles.description,
       content: articles.content,
+      workspaceId: articles.workspaceId,
       originalTitle: articles.originalTitle,
       originalDescription: articles.originalDescription,
       language: articles.language,
@@ -96,7 +97,8 @@ export async function processTranslate(
     const translated = await translateArticle(
       sourceTitle,
       sourceDescription ?? undefined,
-      sourceContent ?? undefined
+      sourceContent ?? undefined,
+      article.workspaceId
     );
 
     await db

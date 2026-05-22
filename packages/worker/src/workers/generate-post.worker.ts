@@ -177,6 +177,8 @@ export async function processGeneratePost(
         { role: "system", content: finalSystemPrompt },
         { role: "user", content: finalUserPrompt },
       ],
+      workspaceId,
+      process: "generation",
       temperature: 0.7,
       maxTokens: 4_000,
       onChunk: async (chunk) => {
@@ -196,6 +198,8 @@ export async function processGeneratePost(
         { role: "system", content: finalSystemPrompt },
         { role: "user", content: finalUserPrompt },
       ],
+      workspaceId,
+      process: "generation",
       temperature: 0.7,
       maxTokens: 4_000,
     });

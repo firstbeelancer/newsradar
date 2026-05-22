@@ -3,6 +3,7 @@ import { z } from "zod";
 import { authMiddleware } from "../../middleware/auth.js";
 import { AppError } from "../../middleware/error-handler.js";
 import {
+  AI_PROVIDER_PROCESS_VALUES,
   createProvider,
   getProviderById,
   listProviders,
@@ -23,7 +24,7 @@ const createSchema = z.object({
   apiKey: z.string().optional(),
   model: z.string().max(100).default("gpt-4o-mini"),
   isActive: z.boolean().optional(),
-  assignedTo: z.array(z.string()).optional(),
+  assignedTo: z.array(z.enum(AI_PROVIDER_PROCESS_VALUES)).optional(),
 });
 
 const updateSchema = z.object({
@@ -32,7 +33,7 @@ const updateSchema = z.object({
   baseUrl: z.string().optional(),
   apiKey: z.string().optional(),
   isActive: z.boolean().optional(),
-  assignedTo: z.array(z.string()).optional(),
+  assignedTo: z.array(z.enum(AI_PROVIDER_PROCESS_VALUES)).optional(),
 });
 
 // ─── Routes ───

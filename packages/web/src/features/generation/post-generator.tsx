@@ -71,7 +71,7 @@ export function PostGenerator() {
 
         const generationProviders = (Array.isArray(providers) ? providers : []).filter((provider) => {
           const assignedTo = Array.isArray(provider.assignedTo) ? provider.assignedTo : [];
-          return provider.isActive && (assignedTo.length === 0 || assignedTo.includes('generation'));
+          return provider.isActive && assignedTo.includes('generation');
         });
 
         setProviderOptions(generationProviders);
