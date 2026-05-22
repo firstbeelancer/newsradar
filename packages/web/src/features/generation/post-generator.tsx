@@ -294,8 +294,8 @@ export function PostGenerator() {
         description="На выходе будет один готовый текст для Telegram без markdown-мусора."
         idleSummary={`Выбрано статей: ${selectedArticleIds.length}. Шаблон и модель уже подтянуты из текущих настроек.`}
         onOpenChange={setDialogOpen}
-        onStart={() => generatePost()}
-        onRegenerate={(comments) => generatePost({ custom_prompt: comments })}
+        onStart={() => generatePost({ article_ids: selectedArticleIds })}
+        onRegenerate={(comments) => generatePost({ article_ids: selectedArticleIds, custom_prompt: comments })}
       />
     </div>
   );

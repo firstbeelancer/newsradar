@@ -22,48 +22,54 @@ const scoreColor = (score: number): string => {
   return 'bg-muted text-muted-foreground';
 };
 
-export function ArticleCard({ article, onToggleFavorite, isSelected, onSelect, selectable, onDeepSearch, onGeneratePost }: ArticleCardProps) {
-  const scorePercent = Math.round(article.score);
-  const preview = cleanArticleText(
-    article.description || article.ai_summary || article.content || article.original_description || ''
-  );
+function formatScore(score: number): number {
+  return Math.round(Math.max(0, Math.min(score, 100)));
+}
+
+export function ArticleCard({
+  article,
+  onToggleFavorite,
+  isSelected,
+  onSelect,
+  selectable,
+  onDeepSearch,
+  onGeneratePost,
+}: ArticleCardProps) {
+  const scorePercent = formatScore(article.score);
+  const preview = cleanArticleText(article.description || article.ai_summary || article.content || article.original_description || '');
 
   return (
     <Card
       className={cn(
-        'transition-all hover:shadow-md overflow-hidden',
+        'overflow-hidden transition-all hover:shadow-md',
         selectable && isSelected && 'ring-2 ring-accent'
       )}
       onClick={() => selectable && onSelect?.(article.id)}
     >
       <CardContent className="p-4">
-        <div className="flex items-start gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
           <div className="min-w-0 flex-1 overflow-hidden">
             <div className="flex items-start gap-2">
               <Link
                 to="/feed/article/$id"
                 params={{ id: article.id }}
-                className="text-sm font-medium leading-snug hover:text-accent transition-colors line-clamp-2 flex-1"
-                onClick={(e) => selectable && e.preventDefault()}
+                className="flex-1 text-sm font-medium leading-snug transition-colors hover:text-accent line-clamp-2"
+                onClick={(event) => selectable && event.preventDefault()}
               >
                 {article.title}
               </Link>
-              <Badge className={cn('shrink-0 text-[10px]', scoreColor(article.score))}>
+              <Badge className={cn('shrink-0 text-[10px] tabular-nums', scoreColor(article.score))}>
                 {scorePercent}
               </Badge>
             </div>
 
             {preview ? (
-              <p className="mt-1.5 text-xs text-muted-foreground line-clamp-2">
-                {truncate(preview, 180)}
-              </p>
+              <p className="mt-1.5 line-clamp-2 text-xs text-muted-foreground">{truncate(preview, 180)}</p>
             ) : (
-              <p className="mt-1.5 text-xs italic text-muted-foreground/80">
-                Краткое превью пока не сформировано.
-              </p>
+              <p className="mt-1.5 text-xs italic text-muted-foreground/80">Краткое превью пока не сформировано.</p>
             )}
 
-            <div className="mt-2 flex items-center gap-3 text-[11px] text-muted-foreground flex-wrap">
+            <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
               <span className="font-medium">{article.source_name}</span>
               <span className="flex items-center gap-1">
                 <Calendar className="h-3 w-3" />
@@ -77,42 +83,43 @@ export function ArticleCard({ article, onToggleFavorite, isSelected, onSelect, s
             </div>
           </div>
 
-          <div className="flex flex-col gap-1 shrink-0">
+          <div className="flex flex-col gap-2 sm:w-auto sm:min-w-[164px]">
             <Button
               variant="outline"
               size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
+              onClick={(event) => {
+                event.stopPropagation();
                 onGeneratePost?.(article);
               }}
               title="Отправить в генерацию поста"
-              className="text-accent border-accent/30 hover:bg-accent/10 gap-1"
+              className="w-full gap-1 border-accent/30 text-accent hover:bg-accent/10"
             >
               <Sparkles className="h-3.5 w-3.5" />
               <span className="text-xs">Генерация</span>
             </Button>
-            <div className="flex flex-row gap-1">
+
+            <div className="grid grid-cols-3 gap-1">
               <Button
                 variant="ghost"
                 size="icon-sm"
-                onClick={(e) => {
-                  e.stopPropagation();
+                onClick={(event) => {
+                  event.stopPropagation();
                   onDeepSearch?.(article);
                 }}
                 title="Запустить DeepSearch"
+                className="w-full"
               >
                 <Search className="h-4 w-4" />
               </Button>
               <Button
                 variant="ghost"
                 size="icon-sm"
-                onClick={(e) => {
-                  e.stopPropagation();
+                onClick={(event) => {
+                  event.stopPropagation();
                   onToggleFavorite(article.id, article.is_favorite);
                 }}
-                className={cn(
-                  article.is_favorite && 'text-warning'
-                )}
+                className={cn('w-full', article.is_favorite && 'text-warning')}
+                title={article.is_favorite ? 'Убрать из избранного' : 'Добавить в избранное'}
               >
                 <Bookmark className={cn('h-4 w-4', article.is_favorite && 'fill-current')} />
               </Button>
@@ -120,9 +127,10 @@ export function ArticleCard({ article, onToggleFavorite, isSelected, onSelect, s
                 href={article.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
+                onClick={(event) => event.stopPropagation()}
+                className="block"
               >
-                <Button variant="ghost" size="icon-sm">
+                <Button variant="ghost" size="icon-sm" className="w-full">
                   <ExternalLink className="h-4 w-4" />
                 </Button>
               </a>

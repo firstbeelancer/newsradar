@@ -151,6 +151,13 @@ interface BackendOperationLog {
   finished_at?: string | null;
 }
 
+interface BackendDashboardSummary {
+  totalArticles?: number;
+  total_articles?: number;
+  favoriteCount?: number;
+  favorite_count?: number;
+}
+
 // ─── Normalizers ─────────────────────────────────────────────────────────────
 
 function normalizeCursorResponse<TInput, TOutput>(
@@ -212,6 +219,7 @@ export function normalizeArticle(raw: BackendArticle): Article {
   const publishedAt = raw.published_at ?? raw.publishedAt ?? raw.created_at ?? raw.createdAt ?? new Date(0).toISOString();
   const createdAt = raw.created_at ?? raw.createdAt ?? publishedAt;
   const collectedAt = raw.collected_at ?? raw.collectedAt ?? createdAt;
+  const normalizedScore = normalizeArticleScore(raw.score);
 
   return {
     id: raw.id,
@@ -227,12 +235,39 @@ export function normalizeArticle(raw: BackendArticle): Article {
     agent_name: raw.agent_name ?? raw.agentName ?? undefined,
     published_at: publishedAt,
     collected_at: collectedAt,
-    score: typeof raw.score === 'number' ? raw.score : Number(raw.score ?? 0),
+    score: normalizedScore,
     is_favorite: raw.is_favorite ?? raw.isFavorite ?? false,
     status: (raw.status as Article['status']) ?? 'new',
     language: raw.language ?? undefined,
     metadata: raw.metadata,
   };
+}
+
+function normalizeArticleScore(rawScore: string | number | null | undefined): number {
+  if (typeof rawScore === 'number') {
+    return clampArticleScore(rawScore);
+  }
+
+  if (typeof rawScore === 'string') {
+    const parsed = Number.parseFloat(rawScore.replace(',', '.').trim());
+    if (Number.isFinite(parsed)) {
+      return clampArticleScore(parsed);
+    }
+  }
+
+  return 0;
+}
+
+function clampArticleScore(score: number): number {
+  if (!Number.isFinite(score)) return 0;
+  if (score > 100) {
+    if (score <= 10000) {
+      return Math.max(0, Math.min(score / 100, 100));
+    }
+    return 100;
+  }
+  if (score < 0) return 0;
+  return score;
 }
 
 export function normalizeGeneratedPost(raw: BackendGeneratedPost): GeneratedPost {
@@ -756,6 +791,11 @@ export interface OperationLog {
   finished_at?: string;
 }
 
+export interface DashboardSummary {
+  total_articles: number;
+  favorite_count: number;
+}
+
 // ─── Scoring Types ───────────────────────────────────────────────────────────
 
 export interface ScoringConfig {
@@ -966,6 +1006,14 @@ export const operationLogsApi = {
     apiPatch<BackendOperationLog, { status: string }>(`/operation-logs/${id}`, { status: 'cancelled' }).then(normalizeOperationLog),
 };
 
+export const dashboardApi = {
+  get: () =>
+    apiGet<BackendDashboardSummary>('/dashboard').then((payload) => ({
+      total_articles: Number(payload.total_articles ?? payload.totalArticles ?? 0),
+      favorite_count: Number(payload.favorite_count ?? payload.favoriteCount ?? 0),
+    })),
+};
+
 // Templates
 export const templatesApi = {
   list: () => apiGet<Template[]>('/templates'),
@@ -996,6 +1044,7 @@ export const generationApi = {
       agentId?: string;
       articleIds?: string[];
       templateId?: string;
+      customPrompt?: string;
       period?: 'day' | 'week' | 'month';
       articleCount?: number;
       provider?: string;

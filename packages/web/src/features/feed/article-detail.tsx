@@ -5,6 +5,7 @@ import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
 import { Skeleton } from '@shared/ui/skeleton';
 import { useArticlesStore } from '@shared/stores/articles-store';
+import { useGenerationStore } from '@shared/stores/generation-store';
 import { deepsearchApi } from '@shared/api/client';
 import { useToast } from '@shared/ui/toast';
 import {
@@ -15,6 +16,7 @@ import {
   Bot,
   BarChart3,
   Search,
+  Sparkles,
 } from 'lucide-react';
 import { cn, formatDateTime, cleanArticleText } from '@shared/lib/utils';
 
@@ -28,18 +30,18 @@ const scoreColor = (score: number): string => {
   return 'bg-muted text-muted-foreground';
 };
 
+function clampScore(score: number): number {
+  return Math.max(0, Math.min(score, 100));
+}
+
 export function ArticleDetail({ articleId }: ArticleDetailProps) {
   const navigate = useNavigate();
   const { addToast } = useToast();
-  const {
-    currentArticle,
-    isLoading,
-    fetchArticle,
-    toggleFavorite,
-  } = useArticlesStore();
+  const { setSelectedArticleIds, resetGeneration } = useGenerationStore();
+  const { currentArticle, isLoading, fetchArticle, toggleFavorite } = useArticlesStore();
 
   useEffect(() => {
-    fetchArticle(articleId);
+    void fetchArticle(articleId);
   }, [articleId, fetchArticle]);
 
   if (isLoading && !currentArticle) {
@@ -63,18 +65,19 @@ export function ArticleDetail({ articleId }: ArticleDetailProps) {
     );
   }
 
-  const scorePercent = Math.round(currentArticle.score);
+  const scorePercent = Math.round(clampScore(currentArticle.score));
+  const scoreLabel = clampScore(currentArticle.score).toFixed(2);
   const description = cleanArticleText(currentArticle.description || currentArticle.ai_summary || '');
   const content = cleanArticleText(currentArticle.content ?? '');
   const originalDescription = cleanArticleText(currentArticle.original_description ?? '');
   const shouldShowContent =
-    Boolean(content) &&
-    content !== description &&
-    !(
-      currentArticle.language === 'ru' &&
-      Boolean(description) &&
-      Boolean(originalDescription) &&
-      content === originalDescription
+    Boolean(content)
+    && content !== description
+    && !(
+      currentArticle.language === 'ru'
+      && Boolean(description)
+      && Boolean(originalDescription)
+      && content === originalDescription
     );
 
   const handleDeepSearch = async () => {
@@ -97,14 +100,15 @@ export function ArticleDetail({ articleId }: ArticleDetailProps) {
     }
   };
 
+  const handleGeneratePost = () => {
+    resetGeneration();
+    setSelectedArticleIds([currentArticle.id]);
+    navigate({ to: '/generation' });
+  };
+
   return (
     <div className="space-y-6">
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => navigate({ to: '/feed' })}
-        className="-ml-2"
-      >
+      <Button variant="ghost" size="sm" onClick={() => navigate({ to: '/feed' })} className="-ml-2">
         <ArrowLeft className="h-4 w-4" />
         Лента
       </Button>
@@ -112,15 +116,11 @@ export function ArticleDetail({ articleId }: ArticleDetailProps) {
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-start gap-2">
-            <CardTitle className="text-lg leading-snug flex-1">
-              {currentArticle.title}
-            </CardTitle>
-            <Badge className={cn('shrink-0', scoreColor(currentArticle.score))}>
-              {scorePercent}
-            </Badge>
+            <CardTitle className="flex-1 text-lg leading-snug">{currentArticle.title}</CardTitle>
+            <Badge className={cn('shrink-0 tabular-nums', scoreColor(currentArticle.score))}>{scorePercent}</Badge>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mt-2">
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
             <span className="font-medium text-foreground">{currentArticle.source_name}</span>
             <span className="flex items-center gap-1">
               <Calendar className="h-3 w-3" />
@@ -134,47 +134,42 @@ export function ArticleDetail({ articleId }: ArticleDetailProps) {
             )}
             <span className="flex items-center gap-1">
               <BarChart3 className="h-3 w-3" />
-              Скор: {currentArticle.score.toFixed(2)}
+              Скор: {scoreLabel}
             </span>
           </div>
         </CardHeader>
 
         <CardContent className="space-y-4">
           {description ? (
-            <p className="text-sm leading-relaxed text-foreground">
-              {description}
-            </p>
+            <p className="text-sm leading-relaxed text-foreground">{description}</p>
           ) : (
-            <p className="text-sm italic text-muted-foreground">
-              Краткое превью пока не сформировано.
-            </p>
+            <p className="text-sm italic text-muted-foreground">Краткое превью пока не сформировано.</p>
           )}
 
           {shouldShowContent && (
-            <div className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
-              {content}
-            </div>
+            <div className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">{content}</div>
           )}
 
-          <div className="flex items-center gap-2 pt-4 border-t border-border">
+          <div className="grid gap-2 border-t border-border pt-4 sm:flex sm:flex-wrap sm:items-center">
+            <Button variant="outline" size="sm" onClick={handleGeneratePost} className="justify-center">
+              <Sparkles className="h-4 w-4" />
+              Генерация
+            </Button>
             <Button
               variant={currentArticle.is_favorite ? 'primary' : 'outline'}
               size="sm"
               onClick={() => toggleFavorite(currentArticle.id)}
+              className="justify-center"
             >
               <Bookmark className={cn('h-4 w-4', currentArticle.is_favorite && 'fill-current')} />
               {currentArticle.is_favorite ? 'В избранном' : 'В избранное'}
             </Button>
-            <Button variant="outline" size="sm" onClick={handleDeepSearch}>
+            <Button variant="outline" size="sm" onClick={handleDeepSearch} className="justify-center">
               <Search className="h-4 w-4" />
               DeepSearch
             </Button>
-            <a
-              href={currentArticle.url}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <Button variant="outline" size="sm">
+            <a href={currentArticle.url} target="_blank" rel="noopener noreferrer" className="block">
+              <Button variant="outline" size="sm" className="w-full justify-center">
                 <ExternalLink className="h-4 w-4" />
                 Открыть оригинал
               </Button>

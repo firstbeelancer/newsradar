@@ -4,14 +4,16 @@ import { Loader2, Play, Search, Sparkles, BarChart3, X, Square } from 'lucide-re
 import { cn } from '@shared/lib/utils';
 
 const OPERATION_LABELS: Record<string, { label: string; icon: React.ElementType; color: string }> = {
-  collection: { label: 'Сбор', icon: Play, color: 'text-blue-500' },
-  fetch_source: { label: 'Сбор', icon: Play, color: 'text-blue-500' },
-  collect_agent: { label: 'Сбор', icon: Play, color: 'text-blue-500' },
+  collection: { label: 'Поиск', icon: Play, color: 'text-blue-500' },
+  collect_all: { label: 'Поиск', icon: Play, color: 'text-blue-500' },
+  fetch_source: { label: 'Поиск', icon: Play, color: 'text-blue-500' },
+  collect_agent: { label: 'Поиск', icon: Play, color: 'text-blue-500' },
   scoring: { label: 'Скоринг', icon: BarChart3, color: 'text-amber-500' },
   deepsearch: { label: 'Дипсерч', icon: Search, color: 'text-purple-500' },
   generation: { label: 'Генерация', icon: Sparkles, color: 'text-emerald-500' },
   generate_post: { label: 'Генерация', icon: Sparkles, color: 'text-emerald-500' },
   generate_digest: { label: 'Дайджест', icon: Sparkles, color: 'text-emerald-500' },
+  articles_delete_all: { label: 'Очистка', icon: X, color: 'text-rose-500' },
 };
 
 function getOperationInfo(type: string) {
@@ -27,17 +29,15 @@ export function StatusBar() {
   const fetchActiveOps = useCallback(async () => {
     try {
       const result = await operationLogsApi.list(undefined, 20);
-      const active = result.data.filter(
-        (op) => op.status === 'running' || op.status === 'pending'
-      );
+      const active = result.data.filter((op) => op.status === 'running' || op.status === 'pending');
       setActiveOps(active);
     } catch {
-      // Silently ignore — status bar is non-critical
+      // Status bar is non-critical.
     }
   }, []);
 
   useEffect(() => {
-    fetchActiveOps();
+    void fetchActiveOps();
     const interval = setInterval(fetchActiveOps, 5000);
     return () => clearInterval(interval);
   }, [fetchActiveOps]);
@@ -48,7 +48,7 @@ export function StatusBar() {
       await operationLogsApi.cancel(opId);
       await fetchActiveOps();
     } catch {
-      // Silently ignore
+      // Ignore cancel failures in status bar.
     } finally {
       setCancellingId(null);
     }
@@ -60,7 +60,7 @@ export function StatusBar() {
       await Promise.all(activeOps.map((op) => operationLogsApi.cancel(op.id)));
       await fetchActiveOps();
     } catch {
-      // Silently ignore
+      // Ignore cancel failures in status bar.
     } finally {
       setCancellingAll(false);
     }
@@ -68,41 +68,40 @@ export function StatusBar() {
 
   if (activeOps.length === 0) return null;
 
-  // Compact: show summary in one line
   const summaryMap = new Map<string, number>();
-  for (const op of activeOps) {
-    const info = getOperationInfo(op.operation_type);
-    const key = info.label;
-    summaryMap.set(key, (summaryMap.get(key) || 0) + 1);
+  for (const operation of activeOps) {
+    const info = getOperationInfo(operation.operation_type);
+    summaryMap.set(info.label, (summaryMap.get(info.label) || 0) + 1);
   }
 
   const summaryItems = Array.from(summaryMap.entries());
 
   return (
-    <div className="fixed bottom-[68px] md:bottom-0 left-0 right-0 z-30 md:left-64">
+    <div className="fixed bottom-[68px] left-0 right-0 z-30 md:bottom-0 md:left-64">
       <div
         className={cn(
-          'mx-2 md:mx-4 mb-2 rounded-xl border border-cyan-100/80 bg-white/90 shadow-lg shadow-blue-950/10 backdrop-blur-xl transition-all',
+          'mx-2 mb-2 rounded-xl border border-cyan-100/80 bg-white/90 shadow-lg shadow-blue-950/10 backdrop-blur-xl transition-all md:mx-4',
           expanded ? 'p-3' : 'px-3 py-2'
         )}
       >
-        <div
-          className="flex items-center gap-3 cursor-pointer"
-          onClick={() => setExpanded(!expanded)}
-        >
-          <Loader2 className="h-4 w-4 animate-spin text-cyan-600 shrink-0" />
-          <div className="flex items-center gap-2 flex-wrap min-w-0">
+        <div className="flex cursor-pointer items-center gap-3" onClick={() => setExpanded(!expanded)}>
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-cyan-600" />
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             {summaryItems.map(([label, count]) => (
               <span key={label} className="inline-flex items-center gap-1 text-xs font-medium text-slate-700">
-                {label}{count > 1 ? ` ×${count}` : ''}
+                {label}
+                {count > 1 ? ` ×${count}` : ''}
               </span>
             ))}
             <span className="text-xs text-muted-foreground">— выполняется</span>
           </div>
           <button
-            onClick={(e) => { e.stopPropagation(); handleCancelAll(); }}
+            onClick={(event) => {
+              event.stopPropagation();
+              void handleCancelAll();
+            }}
             disabled={cancellingAll}
-            className="ml-auto shrink-0 inline-flex items-center gap-1 rounded-lg bg-red-500/90 px-2.5 py-1 text-xs font-semibold text-white hover:bg-red-600 transition-colors disabled:opacity-50"
+            className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-lg bg-red-500/90 px-2.5 py-1 text-xs font-semibold text-white transition-colors hover:bg-red-600 disabled:opacity-50"
             title="Остановить все операции"
           >
             <Square className="h-3 w-3" />
@@ -112,27 +111,33 @@ export function StatusBar() {
 
         {expanded && (
           <div className="mt-2 space-y-1.5">
-            {activeOps.map((op) => {
-              const info = getOperationInfo(op.operation_type);
+            {activeOps.map((operation) => {
+              const info = getOperationInfo(operation.operation_type);
               const Icon = info.icon;
-              const isCancelling = cancellingId === op.id;
+              const isCancelling = cancellingId === operation.id;
+
               return (
-                <div key={op.id} className="flex items-center gap-2 text-xs">
+                <div key={operation.id} className="flex items-center gap-2 text-xs">
                   <Icon className={cn('h-3.5 w-3.5 shrink-0', info.color)} />
-                  <span className="font-medium truncate">{info.label}</span>
-                  {op.message && (
-                    <span className="text-muted-foreground truncate flex-1">{op.message}</span>
+                  <span className="truncate font-medium">{info.label}</span>
+                  {operation.message && (
+                    <span className="flex-1 truncate text-muted-foreground">{operation.message}</span>
                   )}
-                  <span className={cn(
-                    'text-[10px] font-semibold shrink-0 px-1.5 py-0.5 rounded-full',
-                    op.status === 'running' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'
-                  )}>
-                    {op.status === 'running' ? 'Выполняется' : 'Ожидание'}
+                  <span
+                    className={cn(
+                      'shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
+                      operation.status === 'running' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'
+                    )}
+                  >
+                    {operation.status === 'running' ? 'Выполняется' : 'Ожидание'}
                   </span>
                   <button
-                    onClick={(e) => { e.stopPropagation(); handleCancel(op.id); }}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void handleCancel(operation.id);
+                    }}
                     disabled={isCancelling}
-                    className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-danger hover:bg-danger-light transition-colors disabled:opacity-50"
+                    className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:bg-danger-light hover:text-danger disabled:opacity-50"
                     title="Остановить"
                   >
                     <X className="h-3.5 w-3.5" />

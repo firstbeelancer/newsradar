@@ -34,6 +34,7 @@ import {
   Globe,
   TestTube2,
   XCircle,
+  X,
   Save,
 } from 'lucide-react';
 
@@ -526,11 +527,14 @@ export function AIProvidersSettings() {
 
       {/* Add / Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) closeDialog(); }}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
             <DialogTitle>
               {editingProvider ? 'Редактировать провайдер' : 'Добавить провайдер'}
             </DialogTitle>
+            <Button variant="ghost" size="icon-sm" onClick={closeDialog} aria-label="Закрыть настройки провайдера">
+              <X className="h-4 w-4" />
+            </Button>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
@@ -613,6 +617,7 @@ export function AIProvidersSettings() {
             </div>
           </div>
           <DialogFooter>
+            <Button variant="outline" onClick={closeDialog}>Закрыть</Button>
             <Button variant="ghost" onClick={closeDialog}>Отмена</Button>
             <Button onClick={handleSave} disabled={saving || !form.name.trim() || !form.apiKey.trim() || !form.model.trim()}>
               {saving ? 'Сохранение...' : editingProvider ? 'Сохранить' : 'Добавить'}

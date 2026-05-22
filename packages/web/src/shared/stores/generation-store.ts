@@ -5,7 +5,6 @@ import { generationApi, type GeneratePostDto, type GenerateDigestDto, type Gener
 type GenerationType = 'post' | 'digest' | null;
 
 interface GenerationState {
-  // UI state
   generationType: GenerationType;
   selectedArticleIds: string[];
   selectedAgentId: string | null;
@@ -13,21 +12,16 @@ interface GenerationState {
   selectedTemplateId: string | null;
   selectedProvider: string;
   selectedModel: string;
-
-  // Stream state
   streamContent: string;
   isStreaming: boolean;
   streamError: string | null;
-
-  // Generation state
   generationResult: string;
   isGenerating: boolean;
   lastGeneratedPost: GeneratedPost | null;
   opId: string | null;
-
-  // History
+  lastPostRequest: Partial<GeneratePostDto> | null;
+  lastDigestRequest: Partial<GenerateDigestDto> | null;
   historyCursor: string | undefined;
-
   error: string | null;
 }
 
@@ -40,13 +34,11 @@ interface GenerationActions {
   setSelectedProvider: (provider: string) => void;
   setSelectedModel: (model: string) => void;
   initFromProvider: (provider: string, model: string) => void;
-
   generatePost: (dto?: Partial<GeneratePostDto>) => Promise<void>;
   generateDigest: (dto?: Partial<GenerateDigestDto>) => Promise<void>;
   startStream: (opId: string) => (() => void);
   setGenerationResult: (content: string) => void;
   resetGeneration: () => void;
-
   setHistoryCursor: (cursor: string | undefined) => void;
   clearError: () => void;
 }
@@ -59,18 +51,16 @@ const initialState: GenerationState = {
   selectedTemplateId: null,
   selectedProvider: 'openai',
   selectedModel: 'gpt-4o-mini',
-
   streamContent: '',
   isStreaming: false,
   streamError: null,
-
   generationResult: '',
   isGenerating: false,
   lastGeneratedPost: null,
   opId: null,
-
+  lastPostRequest: null,
+  lastDigestRequest: null,
   historyCursor: undefined,
-
   error: null,
 };
 
@@ -90,16 +80,34 @@ export const useGenerationStore = create<GenerationState & GenerationActions>()(
 
       generatePost: async (dto) => {
         const state = get();
+        const articleIds =
+          dto?.article_ids
+          ?? (state.selectedArticleIds.length > 0 ? state.selectedArticleIds : state.lastPostRequest?.article_ids)
+          ?? [];
+        const templateId = dto?.template_id ?? state.selectedTemplateId ?? state.lastPostRequest?.template_id ?? undefined;
+        const provider = dto?.provider ?? state.selectedProvider ?? state.lastPostRequest?.provider;
+        const model = dto?.model ?? state.selectedModel ?? state.lastPostRequest?.model;
+        const request: GeneratePostDto = {
+          article_ids: articleIds,
+          template_id: templateId,
+          custom_prompt: dto?.custom_prompt,
+          provider,
+          model,
+        };
+
         set({ isGenerating: true, error: null, streamContent: '', generationResult: '', opId: null });
         try {
-          const result = await generationApi.generatePost({
-            article_ids: dto?.article_ids ?? state.selectedArticleIds,
-            template_id: dto?.template_id ?? state.selectedTemplateId ?? undefined,
-            custom_prompt: dto?.custom_prompt,
-            provider: dto?.provider ?? state.selectedProvider,
-            model: dto?.model ?? state.selectedModel,
+          const result = await generationApi.generatePost(request);
+          set({
+            opId: result.op_id,
+            isGenerating: false,
+            lastPostRequest: {
+              article_ids: articleIds,
+              template_id: templateId,
+              provider,
+              model,
+            },
           });
-          set({ opId: result.op_id, isGenerating: false });
         } catch (err) {
           set({
             error: err instanceof Error ? err.message : 'Ошибка генерации',
@@ -111,19 +119,42 @@ export const useGenerationStore = create<GenerationState & GenerationActions>()(
 
       generateDigest: async (dto) => {
         const state = get();
+        const articleIds =
+          dto?.article_ids
+          ?? (state.selectedArticleIds.length > 0 ? state.selectedArticleIds : state.lastDigestRequest?.article_ids);
+        const agentId = dto?.agent_id ?? state.selectedAgentId ?? state.lastDigestRequest?.agent_id ?? '';
+        const articleCount = dto?.article_count ?? state.lastDigestRequest?.article_count;
+        const period = dto?.period ?? state.selectedPeriod ?? state.lastDigestRequest?.period ?? 'day';
+        const templateId = dto?.template_id ?? state.selectedTemplateId ?? state.lastDigestRequest?.template_id ?? undefined;
+        const provider = dto?.provider ?? state.selectedProvider ?? state.lastDigestRequest?.provider;
+        const model = dto?.model ?? state.selectedModel ?? state.lastDigestRequest?.model;
+        const request: GenerateDigestDto = {
+          agent_id: agentId,
+          article_ids: articleIds,
+          article_count: articleCount,
+          period,
+          template_id: templateId,
+          custom_prompt: dto?.custom_prompt,
+          provider,
+          model,
+        };
+
         set({ isGenerating: true, error: null, streamContent: '', generationResult: '', opId: null });
         try {
-          const result = await generationApi.generateDigest({
-            agent_id: dto?.agent_id ?? state.selectedAgentId ?? '',
-            article_ids: dto?.article_ids ?? state.selectedArticleIds,
-            article_count: dto?.article_count,
-            period: dto?.period ?? state.selectedPeriod,
-            template_id: dto?.template_id ?? state.selectedTemplateId ?? undefined,
-            custom_prompt: dto?.custom_prompt,
-            provider: dto?.provider ?? state.selectedProvider,
-            model: dto?.model ?? state.selectedModel,
+          const result = await generationApi.generateDigest(request);
+          set({
+            opId: result.op_id,
+            isGenerating: false,
+            lastDigestRequest: {
+              agent_id: agentId,
+              article_ids: articleIds,
+              article_count: articleCount,
+              period,
+              template_id: templateId,
+              provider,
+              model,
+            },
           });
-          set({ opId: result.op_id, isGenerating: false });
         } catch (err) {
           set({
             error: err instanceof Error ? err.message : 'Ошибка генерации',
@@ -180,7 +211,6 @@ export const useGenerationStore = create<GenerationState & GenerationActions>()(
     }),
     {
       name: 'generation-settings',
-      // Only persist provider/model selections — not transient runtime state
       partialize: (state) => ({
         selectedProvider: state.selectedProvider,
         selectedModel: state.selectedModel,
