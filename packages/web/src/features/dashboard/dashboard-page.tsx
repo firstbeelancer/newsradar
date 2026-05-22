@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useAuthStore } from '@shared/stores/auth-store';
 import { useAgentsStore } from '@shared/stores/agents-store';
-import { articlesApi, operationLogsApi } from '@shared/api/client';
+import { articlesApi, operationLogsApi, scoringApi } from '@shared/api/client';
 import { Button } from '@shared/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
@@ -36,6 +36,7 @@ import {
   Compass,
   Hammer,
   Wrench,
+  RotateCcw,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -90,6 +91,7 @@ export function DashboardPage() {
   const [operationLogsLoading, setOperationLogsLoading] = useState(true);
   const [operationLogsError, setOperationLogsError] = useState<string | null>(null);
   const [deleteAllLoading, setDeleteAllLoading] = useState(false);
+  const [rescoreLoading, setRescoreLoading] = useState(false);
   const [collectDialogOpen, setCollectDialogOpen] = useState(false);
 
   useEffect(() => {
@@ -157,6 +159,27 @@ export function DashboardPage() {
     }
   };
 
+  const handleRescore = async () => {
+    setRescoreLoading(true);
+    try {
+      const result = await scoringApi.recalculate();
+      addToast({
+        title: 'Рескоринг запущен',
+        description: `В очередь поставлено ${result.articlesQueued} статей`,
+        variant: 'success',
+      });
+      await loadOperationLogs();
+    } catch (err) {
+      addToast({
+        title: 'Не удалось запустить рескоринг',
+        description: err instanceof Error ? err.message : 'Попробуй ещё раз',
+        variant: 'danger',
+      });
+    } finally {
+      setRescoreLoading(false);
+    }
+  };
+
   const activeAgents = agents.filter((a) => a.is_active);
 
   // Stats
@@ -183,6 +206,10 @@ export function DashboardPage() {
           <Button variant="danger" size="sm" onClick={handleDeleteAllArticles} loading={deleteAllLoading}>
             <Trash2 className="h-4 w-4" />
             <span className="hidden sm:inline">Удалить все</span>
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleRescore} loading={rescoreLoading}>
+            <RotateCcw className="h-4 w-4" />
+            <span className="hidden sm:inline">Рескоринг</span>
           </Button>
           <Button size="sm" onClick={() => setCollectDialogOpen(true)}>
             <Plus className="h-4 w-4" />

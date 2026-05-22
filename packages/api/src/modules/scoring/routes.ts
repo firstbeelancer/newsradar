@@ -10,8 +10,10 @@ import {
   deleteScoringCriterion,
   reorderScoringCriteria,
   recalculateAgentScores,
+  recalculateWorkspaceScores,
   getScoringStats,
 } from "./service.js";
+import { createOperationLog, updateOperationLog } from "../operation-logs/service.js";
 
 const router = Router();
 
@@ -36,6 +38,10 @@ const updateCriterionSchema = z.object({
 
 const reorderSchema = z.object({
   orderedIds: z.array(z.string().uuid()),
+});
+
+const recalculateSchema = z.object({
+  agentId: z.string().uuid().optional(),
 });
 
 // ─── Routes ───
@@ -100,6 +106,43 @@ router.post("/agents/:agentId/recalculate", authMiddleware, workspaceAuth, async
   try {
     const workspaceId = req.workspaceId!;
     const result = await recalculateAgentScores(req.params.agentId, workspaceId);
+    res.json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/recalculate", authMiddleware, workspaceAuth, async (req, res, next) => {
+  try {
+    const workspaceId = req.workspaceId!;
+    const input = recalculateSchema.parse(req.body ?? {});
+
+    const operationLog = await createOperationLog({
+      userId: req.user!.sub,
+      workspaceId,
+      agentId: input.agentId ?? null,
+      operationType: "scoring",
+      entityType: "article",
+      status: "running",
+      message: input.agentId ? "Пересчитываю скоринг для агента" : "Пересчитываю скоринг для всех агентов",
+      metadata: {
+        agentId: input.agentId ?? null,
+      },
+    });
+
+    const result = await recalculateWorkspaceScores(workspaceId, input.agentId);
+
+    await updateOperationLog(operationLog.id, req.user!.sub, {
+      status: "completed",
+      message: `Перескоринг поставил в очередь ${result.articlesQueued} статей`,
+      finishedAt: new Date(),
+      metadata: {
+        agentId: input.agentId ?? null,
+        articlesQueued: result.articlesQueued,
+        agentsProcessed: result.agentsProcessed,
+      },
+    });
+
     res.json({ success: true, data: result });
   } catch (err) {
     next(err);

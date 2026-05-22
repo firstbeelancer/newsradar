@@ -9,7 +9,7 @@ import { useGenerationStore } from '@shared/stores/generation-store';
 import { useSettingsStore } from '@shared/stores/settings-store';
 import { useToast } from '@shared/ui/toast';
 import { articlesApi, apiGet, apiPut } from '@shared/api/client';
-import { Sparkles, Save } from 'lucide-react';
+import { Save, Sparkles } from 'lucide-react';
 import { GenerationRunDialog } from './generation-run-dialog';
 
 const PAGE_SIZE = 20;
@@ -139,7 +139,7 @@ export function PostGenerator() {
     if (!targetProvider) {
       addToast({
         title: 'Нет провайдера для генерации',
-        description: 'Сначала настрой AI-провайдер в разделе настроек.',
+        description: 'Сначала настрой AI-провайдера в разделе настроек.',
         variant: 'warning',
       });
       return;
@@ -174,7 +174,7 @@ export function PostGenerator() {
           <CardTitle className="text-base">Настройки генерации поста</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="space-y-1.5">
               <label className="text-sm font-medium">Шаблон</label>
               <Select
@@ -201,7 +201,7 @@ export function PostGenerator() {
               <label className="text-sm font-medium">Провайдер</label>
               <Select value={selectedProvider} onValueChange={setSelectedProvider}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Выбери провайдер" />
+                  <SelectValue placeholder="Выбери провайдера" />
                 </SelectTrigger>
                 <SelectContent>
                   {providerChoices.map((provider) => (
@@ -232,8 +232,8 @@ export function PostGenerator() {
 
           <div className="flex justify-end">
             <Button size="sm" onClick={handleSaveConfig} disabled={savingConfig || providerOptions.length === 0}>
-              <Save className="h-4 w-4 mr-1" />
-              {savingConfig ? 'Сохранение...' : 'Сохранить конфигурацию'}
+              <Save className="mr-1 h-4 w-4" />
+              {savingConfig ? 'Сохраняю...' : 'Сохранить конфигурацию'}
             </Button>
           </div>
         </CardContent>
@@ -251,24 +251,24 @@ export function PostGenerator() {
         {isLoading ? (
           <div className="space-y-2">
             {Array.from({ length: 5 }).map((_, index) => (
-              <div key={index} className="h-16 rounded-lg border border-border bg-muted animate-pulse" />
+              <div key={index} className="h-16 animate-pulse rounded-lg border border-border bg-muted" />
             ))}
           </div>
         ) : articles.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center py-12">
-              <p className="text-sm text-muted-foreground mb-4">Нет доступных статей</p>
+              <p className="mb-4 text-sm text-muted-foreground">Нет доступных статей</p>
               <Button variant="outline" size="sm" onClick={() => navigate({ to: '/feed' })}>
                 Перейти в ленту
               </Button>
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+          <div className="max-h-[500px] space-y-2 overflow-y-auto pr-1">
             {articles.map((article) => (
               <label
                 key={article.id}
-                className="flex items-start gap-3 rounded-lg border border-border p-3 cursor-pointer transition-colors hover:bg-muted/50"
+                className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-muted/50"
               >
                 <Checkbox
                   checked={selectedArticleIds.includes(article.id)}
@@ -276,8 +276,8 @@ export function PostGenerator() {
                   className="mt-0.5"
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium line-clamp-2">{article.title}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
+                  <p className="line-clamp-2 text-sm font-medium">{article.title}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
                     {article.source_name} • {article.published_at ? new Date(article.published_at).toLocaleDateString('ru-RU') : 'без даты'}
                   </p>
                 </div>
@@ -291,11 +291,11 @@ export function PostGenerator() {
         open={dialogOpen}
         requestKey={requestKey}
         title="Генерация поста"
-        description="Сейчас откроется потоковый результат. Когда текст будет готов, ты сможешь его поправить и скопировать."
-        idleSummary={`Выбрано статей: ${selectedArticleIds.length}. Шаблон и модель уже подставлены из текущих настроек.`}
+        description="На выходе будет один готовый текст для Telegram без markdown-мусора."
+        idleSummary={`Выбрано статей: ${selectedArticleIds.length}. Шаблон и модель уже подтянуты из текущих настроек.`}
         onOpenChange={setDialogOpen}
         onStart={() => generatePost()}
-        onRegenerate={() => generatePost()}
+        onRegenerate={(comments) => generatePost({ custom_prompt: comments })}
       />
     </div>
   );

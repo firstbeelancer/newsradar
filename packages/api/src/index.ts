@@ -35,6 +35,7 @@ import chipFilterRoutes from "./modules/chip-filters/routes.js";
 // Layer 4 — Generation
 import templateRoutes from "./modules/templates/routes.js";
 import generationRoutes from "./modules/generation/routes.js";
+import assetPackRoutes from "./modules/asset-packs/routes.js";
 
 // Layer 5 — Notifications
 import notificationRoutes from "./modules/notifications/routes.js";
@@ -90,6 +91,7 @@ app.use("/api/v1/chip-filters", chipFilterRoutes);
 // Layer 4
 app.use("/api/v1/templates", templateRoutes);
 app.use("/api/v1/generation", generationRoutes);
+app.use("/api/v1/asset-packs", assetPackRoutes);
 
 // Layer 5
 app.use("/api/v1/notifications", notificationRoutes);

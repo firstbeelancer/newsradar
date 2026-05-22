@@ -1,13 +1,19 @@
-import { eq, and, desc, sql, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../db/index.js";
-import { generatedPosts, articles, contentTemplates, aiProviders, workspaces } from "../../db/schema.js";
-import { AppError } from "../../middleware/error-handler.js";
-import type { PaginatedResult, Cursor } from "../../lib/pagination.js";
-import { encodeCursor, decodeCursor } from "../../lib/pagination.js";
+import { aiProviders, articles, contentTemplates, generatedPosts, workspaces } from "../../db/schema.js";
 import type { GeneratedPost } from "../../db/types.js";
-import { buildArticleContent, getGenerationCutoffDate, renderPromptTemplate } from "./template-utils.js";
-
-// ─── Generation types ───
+import { AppError } from "../../middleware/error-handler.js";
+import { decodeCursor, encodeCursor } from "../../lib/pagination.js";
+import type { Cursor, PaginatedResult } from "../../lib/pagination.js";
+import { createOperationLog, updateOperationLog } from "../operation-logs/service.js";
+import { getDefaultEmojiValues } from "../asset-packs/service.js";
+import {
+  buildArticleContent,
+  ensureLeadingEmoji,
+  getGenerationCutoffDate,
+  renderPromptTemplate,
+  sanitizeTelegramText,
+} from "./template-utils.js";
 
 export interface GeneratePostInput {
   workspaceId: string;
@@ -28,9 +34,10 @@ export interface StreamOperation {
   content: string;
   error?: string;
   chunks: string[];
+  operationLogId?: string;
+  userId?: string;
 }
 
-// In-memory store for stream operations (use Redis in production)
 const streamStore = new Map<string, StreamOperation>();
 
 async function resolveGenerationProvider(
@@ -64,24 +71,32 @@ async function resolveGenerationProvider(
   return candidatePool[0];
 }
 
-// ─── Content generation ───
-
 export async function generatePost(
   input: GeneratePostInput,
-  _userId: string
+  userId: string
 ): Promise<{ operationId: string; status: string }> {
   const operationId = crypto.randomUUID();
-  const { workspaceId, templateId, articleIds, articleCount, customPrompt, type, agentId, provider: requestedProvider, model: requestedModel, period } = input;
+  const {
+    workspaceId,
+    templateId,
+    articleIds,
+    articleCount,
+    customPrompt,
+    type,
+    agentId,
+    provider: requestedProvider,
+    model: requestedModel,
+    period,
+  } = input;
 
-  // Resolve template
   let template: typeof contentTemplates.$inferSelect | undefined;
   if (templateId) {
     template = await db.query.contentTemplates.findFirst({
       where: and(eq(contentTemplates.id, templateId), eq(contentTemplates.workspaceId, workspaceId)),
     });
   }
+
   if (!template) {
-    // Find default template for the type
     template = await db.query.contentTemplates.findFirst({
       where: and(
         eq(contentTemplates.workspaceId, workspaceId),
@@ -91,20 +106,13 @@ export async function generatePost(
     });
   }
 
-  // Fetch articles to include
   let selectedArticles: typeof articles.$inferSelect[] = [];
   if (articleIds && articleIds.length > 0) {
     selectedArticles = await db
       .select()
       .from(articles)
-      .where(
-        and(
-          eq(articles.workspaceId, workspaceId),
-          inArray(articles.id, articleIds)
-        )
-      );
+      .where(and(eq(articles.workspaceId, workspaceId), inArray(articles.id, articleIds)));
   } else if (agentId) {
-    // Get top-scored recent articles for the agent
     const cutoffDate = getGenerationCutoffDate(period);
     selectedArticles = await db
       .select()
@@ -120,10 +128,8 @@ export async function generatePost(
       .limit(articleCount ?? 10);
   }
 
-  // Build prompt — fetch workspace-level prompts as fallback
   const articleTexts = buildArticleContent(selectedArticles);
 
-  // Fetch workspace config for base prompts
   const workspace = await db.query.workspaces.findFirst({
     where: eq(workspaces.id, workspaceId),
     columns: { config: true },
@@ -134,37 +140,58 @@ export async function generatePost(
 
   const defaultSystemPrompt =
     type === "digest"
-      ? (workspacePrompts?.digest_generation ?? "Ты — профессиональный аналитик новостей. Подготовь структурированный дайджест на основе предоставленных статей. Пиши на русском языке.")
-      : (workspacePrompts?.post_generation ?? "Ты — профессиональный редактор новостного контента. Создай увлекательный пост на основе предоставленных статей. Пиши на русском языке.");
+      ? (workspacePrompts?.digest_generation ?? "Ты — профессиональный аналитик новостей. Подготовь готовый к отправке дайджест на русском языке.")
+      : (workspacePrompts?.post_generation ?? "Ты — сильный редактор Telegram-канала. Подготовь готовый к отправке пост на русском языке.");
 
-  const systemPrompt = template?.systemPrompt ?? defaultSystemPrompt;
-  const userPrompt = customPrompt
-    ?? renderPromptTemplate(template?.userPrompt, selectedArticles)
+  const emojiPack = await getDefaultEmojiValues(workspaceId);
+  const systemPrompt = buildTelegramSystemPrompt(template?.systemPrompt ?? defaultSystemPrompt, type, emojiPack);
+  const baseUserPrompt =
+    renderPromptTemplate(template?.userPrompt, selectedArticles)
     ?? `На основе следующих статей создай ${type === "digest" ? "дайджест" : "пост"}:\n\n${articleTexts}`;
+  const userPrompt = buildGenerationUserPrompt(baseUserPrompt, customPrompt);
 
   const provider = await resolveGenerationProvider(workspaceId, requestedProvider, requestedModel);
+  const operationLog = await createOperationLog({
+    userId,
+    workspaceId,
+    agentId: agentId ?? null,
+    operationType: type === "digest" ? "generate_digest" : "generate_post",
+    entityType: "generated_post",
+    status: "pending",
+    message: type === "digest" ? "Готовлю дайджест для Telegram" : "Готовлю пост для Telegram",
+    metadata: {
+      operationId,
+      articleCount: selectedArticles.length,
+      articleIds: selectedArticles.map((article) => article.id),
+      templateId: template?.id ?? null,
+      provider: provider?.provider ?? requestedProvider ?? null,
+      model: provider?.model ?? requestedModel ?? null,
+      hasFeedback: Boolean(customPrompt?.trim()),
+    },
+  });
 
-  // Initialize stream operation
   streamStore.set(operationId, {
     id: operationId,
     status: "pending",
     content: "",
     chunks: [],
+    operationLogId: operationLog.id,
+    userId,
   });
 
-  // Start async generation (in production this would be a BullMQ job)
-  startGeneration(operationId, systemPrompt, userPrompt, provider, {
+  void startGeneration(operationId, systemPrompt, userPrompt, provider, {
     workspaceId,
     agentId,
     templateId: template?.id ?? null,
     articles: selectedArticles,
     type,
+    emojiPack,
+    operationLogId: operationLog.id,
+    userId,
   });
 
   return { operationId, status: "queued" };
 }
-
-// ─── Async generation worker ───
 
 async function startGeneration(
   operationId: string,
@@ -177,6 +204,9 @@ async function startGeneration(
     templateId: string | null;
     articles: typeof articles.$inferSelect[];
     type: string;
+    emojiPack: string[];
+    operationLogId: string;
+    userId: string;
   }
 ): Promise<void> {
   const op = streamStore.get(operationId);
@@ -184,6 +214,10 @@ async function startGeneration(
 
   op.status = "generating";
   streamStore.set(operationId, op);
+  await updateOperationLog(context.operationLogId, context.userId, {
+    status: "running",
+    message: context.type === "digest" ? "Собираю финальный дайджест" : "Собираю финальный пост",
+  });
 
   try {
     if (!provider) {
@@ -194,9 +228,9 @@ async function startGeneration(
       throw new AppError(503, "Для выбранного AI-провайдера не настроен API-ключ", "GENERATION_PROVIDER_KEY_MISSING");
     }
 
-    const content = await callAiProvider(provider, systemPrompt, userPrompt, operationId);
+    const rawContent = await callAiProvider(provider, systemPrompt, userPrompt, operationId);
+    const content = ensureLeadingEmoji(sanitizeTelegramText(rawContent), context.emojiPack);
 
-    // Save generated post
     await db
       .insert(generatedPosts)
       .values({
@@ -207,26 +241,49 @@ async function startGeneration(
         title: context.articles[0]?.title ?? "Generated post",
         content,
         articleCount: context.articles.length,
-        articlesSnapshot: context.articles.map((a) => ({
-          id: a.id,
-          title: a.title,
-          link: a.link,
-          score: a.score,
+        articlesSnapshot: context.articles.map((article) => ({
+          id: article.id,
+          title: article.title,
+          link: article.link,
+          score: article.score,
         })),
         promptSnapshot: userPrompt,
-        modelSnapshot: provider?.model ?? "fallback-simulated",
+        modelSnapshot: provider.model ?? "fallback-simulated",
       })
       .returning();
 
-    const finalOp = streamStore.get(operationId)!;
-    finalOp.status = "completed";
-    finalOp.content = content;
-    streamStore.set(operationId, finalOp);
+    const finalOp = streamStore.get(operationId);
+    if (finalOp) {
+      finalOp.status = "completed";
+      finalOp.content = content;
+      streamStore.set(operationId, finalOp);
+    }
+
+    await updateOperationLog(context.operationLogId, context.userId, {
+      status: "completed",
+      message: context.type === "digest" ? "Дайджест готов" : "Пост готов",
+      finishedAt: new Date(),
+      metadata: {
+        articleCount: context.articles.length,
+        preview: content.slice(0, 280),
+      },
+    });
   } catch (err) {
-    const errorOp = streamStore.get(operationId)!;
-    errorOp.status = "error";
-    errorOp.error = err instanceof Error ? err.message : "Generation failed";
-    streamStore.set(operationId, errorOp);
+    const errorOp = streamStore.get(operationId);
+    if (errorOp) {
+      errorOp.status = "error";
+      errorOp.error = err instanceof Error ? err.message : "Generation failed";
+      streamStore.set(operationId, errorOp);
+    }
+
+    await updateOperationLog(context.operationLogId, context.userId, {
+      status: "error",
+      message: err instanceof Error ? err.message : "Generation failed",
+      finishedAt: new Date(),
+      metadata: {
+        articleCount: context.articles.length,
+      },
+    });
   }
 }
 
@@ -273,15 +330,7 @@ async function callAiProvider(
       };
 
       const content = data.choices?.[0]?.message?.content ?? "";
-
-      // Push a chunk to the stream store
-      const op = streamStore.get(operationId);
-      if (op) {
-        op.chunks.push(content.slice(0, 200));
-        op.content = content;
-        streamStore.set(operationId, op);
-      }
-
+      pushStreamChunk(operationId, content);
       return content;
     }
 
@@ -312,14 +361,7 @@ async function callAiProvider(
       };
 
       const content = data.content?.[0]?.text ?? "";
-
-      const op = streamStore.get(operationId);
-      if (op) {
-        op.chunks.push(content.slice(0, 200));
-        op.content = content;
-        streamStore.set(operationId, op);
-      }
-
+      pushStreamChunk(operationId, content);
       return content;
     }
 
@@ -327,6 +369,40 @@ async function callAiProvider(
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function pushStreamChunk(operationId: string, content: string) {
+  const op = streamStore.get(operationId);
+  if (!op) return;
+
+  op.chunks.push(content.slice(0, 200));
+  op.content = content;
+  streamStore.set(operationId, op);
+}
+
+function buildGenerationUserPrompt(basePrompt: string, customPrompt?: string): string {
+  const feedback = customPrompt?.trim();
+  if (!feedback) return basePrompt;
+
+  return `${basePrompt}\n\nКомментарии редактора:\n${feedback}\n\nСделай новую версию с учетом комментариев.`;
+}
+
+function buildTelegramSystemPrompt(basePrompt: string, type: GeneratePostInput["type"], emojis: string[]): string {
+  const emojiList = emojis.join(" ");
+
+  return `${basePrompt}
+
+ФОРМАТ ВЫВОДА:
+- Верни один готовый текст для Telegram.
+- Не используй Markdown: никаких #, **, *, __, \`\`\`, обратных кавычек.
+- Не используй хештеги, если их явно не попросили.
+- Пиши короткими абзацами, живо и по делу.
+- Используй эмодзи только из этого набора: ${emojiList || "🚨 🔥 🧠 📌 📊 👀 ⚡ ✅"}.
+- Итог должен быть сразу пригоден для копирования и отправки без ручной чистки.
+
+${type === "digest"
+    ? "Для дайджеста сгруппируй материалы по смыслу и оставь только самое важное."
+    : "Для поста сделай сильный заход, затем 2-4 коротких абзаца по сути и финальный вывод."}`.trim();
 }
 
 function getDefaultBaseUrl(provider: string): string {
@@ -344,8 +420,6 @@ function getDefaultBaseUrl(provider: string): string {
   }
 }
 
-// ─── Stream operations ───
-
 export function getStreamOperation(operationId: string): StreamOperation | undefined {
   return streamStore.get(operationId);
 }
@@ -353,8 +427,6 @@ export function getStreamOperation(operationId: string): StreamOperation | undef
 export function cleanupStreamOperation(operationId: string): void {
   streamStore.delete(operationId);
 }
-
-// ─── Generated posts CRUD ───
 
 export async function listGeneratedPosts(
   workspaceId: string,
@@ -382,12 +454,7 @@ export async function listGeneratedPosts(
       query = db
         .select()
         .from(generatedPosts)
-        .where(
-          and(
-            ...conditions,
-            sql`${generatedPosts.createdAt} < ${new Date(decoded.sortValue)}`
-          )
-        )
+        .where(and(...conditions, sql`${generatedPosts.createdAt} < ${new Date(decoded.sortValue)}`))
         .orderBy(desc(generatedPosts.createdAt))
         .limit(params.limit + 1);
     }
@@ -441,9 +508,7 @@ export async function updateGeneratedPost(
 
 export async function deleteGeneratedPost(id: string, workspaceId: string) {
   await getGeneratedPost(id, workspaceId);
-  await db
-    .delete(generatedPosts)
-    .where(and(eq(generatedPosts.id, id), eq(generatedPosts.workspaceId, workspaceId)));
+  await db.delete(generatedPosts).where(and(eq(generatedPosts.id, id), eq(generatedPosts.workspaceId, workspaceId)));
   return { deleted: true };
 }
 

@@ -95,6 +95,7 @@ export const useGenerationStore = create<GenerationState & GenerationActions>()(
           const result = await generationApi.generatePost({
             article_ids: dto?.article_ids ?? state.selectedArticleIds,
             template_id: dto?.template_id ?? state.selectedTemplateId ?? undefined,
+            custom_prompt: dto?.custom_prompt,
             provider: dto?.provider ?? state.selectedProvider,
             model: dto?.model ?? state.selectedModel,
           });
@@ -118,6 +119,7 @@ export const useGenerationStore = create<GenerationState & GenerationActions>()(
             article_count: dto?.article_count,
             period: dto?.period ?? state.selectedPeriod,
             template_id: dto?.template_id ?? state.selectedTemplateId ?? undefined,
+            custom_prompt: dto?.custom_prompt,
             provider: dto?.provider ?? state.selectedProvider,
             model: dto?.model ?? state.selectedModel,
           });

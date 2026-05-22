@@ -155,12 +155,11 @@ export async function recalculateAgentScores(agentId: string, workspaceId: strin
       and(
         eq(articles.agentId, agentId),
         eq(articles.workspaceId, workspaceId),
-        sql`${articles.status} IN ('analyzed', 'translated', 'new')`,
-        sql`${articles.score} <= 0`
+        sql`${articles.status} IN ('new', 'translated', 'analyzed', 'scored', 'deduped', 'published')`
       )
     )
     .orderBy(sql`${articles.createdAt} DESC`)
-    .limit(500);
+    .limit(1000);
 
   // Queue scoring jobs instead of doing Math.random()
   let queuedCount = 0;
@@ -191,6 +190,39 @@ export async function recalculateAgentScores(agentId: string, workspaceId: strin
     usedFallbackWeights: criteria.length === 0,
     articlesQueued: queuedCount,
     weights,
+    triggeredAt: new Date().toISOString(),
+  };
+}
+
+export async function recalculateWorkspaceScores(workspaceId: string, agentId?: string) {
+  const scopedAgents = agentId
+    ? await db
+        .select({ id: agents.id })
+        .from(agents)
+        .where(and(eq(agents.workspaceId, workspaceId), eq(agents.id, agentId)))
+    : await db
+        .select({ id: agents.id })
+        .from(agents)
+        .where(eq(agents.workspaceId, workspaceId));
+
+  if (scopedAgents.length === 0) {
+    throw new AppError(404, "Agents not found", "AGENTS_NOT_FOUND");
+  }
+
+  const results = [];
+  let totalQueued = 0;
+
+  for (const scopedAgent of scopedAgents) {
+    const result = await recalculateAgentScores(scopedAgent.id, workspaceId);
+    results.push(result);
+    totalQueued += result.articlesQueued;
+  }
+
+  return {
+    agentId: agentId ?? null,
+    agentsProcessed: results.length,
+    articlesQueued: totalQueued,
+    results,
     triggeredAt: new Date().toISOString(),
   };
 }

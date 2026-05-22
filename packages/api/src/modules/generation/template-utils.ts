@@ -22,6 +22,34 @@ export function buildArticleContent(articlesForPrompt: PromptArticle[]): string 
     .join('\n\n---\n\n');
 }
 
+export function sanitizeTelegramText(text: string): string {
+  let sanitized = text.replace(/\r\n/g, '\n');
+
+  sanitized = sanitized
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/__(.*?)__/g, '$1')
+    .replace(/`{1,3}([^`]+)`{1,3}/g, '$1')
+    .replace(/^\s*[-*]\s+/gm, '• ')
+    .replace(/(^|\s)#([^\s#]+)/g, '$1$2')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  return sanitized;
+}
+
+export function ensureLeadingEmoji(text: string, emojis: string[]): string {
+  const normalized = text.trim();
+  if (!normalized) return normalized;
+  if (emojis.length === 0) return normalized;
+
+  const startsWithEmoji = emojis.some((emoji) => normalized.startsWith(emoji));
+  if (startsWithEmoji) return normalized;
+
+  return `${emojis[0]} ${normalized}`;
+}
+
 function resolveTemplatePath(context: Record<string, unknown>, rawPath: string): string {
   const normalizedPath = rawPath
     .trim()

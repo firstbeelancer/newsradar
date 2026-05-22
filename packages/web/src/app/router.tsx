@@ -20,6 +20,7 @@ import { AgentsSettings } from '@/features/settings/agents-settings';
 import { TemplatesSettings } from '@/features/settings/templates-settings';
 import { AIProvidersSettings } from '@/features/settings/ai-providers-settings';
 import { PromptsSettings } from '@/features/settings/prompts-settings';
+import { TelegramAssetsSettings } from '@/features/settings/telegram-assets-settings';
 import { SubscriptionPage } from '@/features/subscriptions/subscription-page';
 import { IBoardPage } from '@/features/iboard/iboard-page';
 import { NotificationsPage } from '@/features/notifications/notifications-page';
@@ -230,6 +231,12 @@ const settingsPromptsRoute = createRoute({
   component: PromptsSettings,
 });
 
+const settingsTelegramAssetsRoute = createRoute({
+  getParentRoute: () => settingsLayoutRoute,
+  path: 'telegram-assets',
+  component: TelegramAssetsSettings,
+});
+
 // ─── Route Tree ──────────────────────────────────────────────────────────────
 
 const routeTree = rootRoute.addChildren([
@@ -256,6 +263,7 @@ const routeTree = rootRoute.addChildren([
       settingsTemplatesRoute,
       settingsAIProvidersRoute,
       settingsPromptsRoute,
+      settingsTelegramAssetsRoute,
     ]),
   ]),
   loginRoute,

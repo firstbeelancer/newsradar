@@ -697,6 +697,7 @@ export interface CreateTemplateDto {
 export interface GeneratePostDto {
   article_ids: string[];
   template_id?: string;
+  custom_prompt?: string;
   provider?: string;
   model?: string;
 }
@@ -707,6 +708,7 @@ export interface GenerateDigestDto {
   article_count?: number;
   period?: 'day' | 'week' | 'month';
   template_id?: string;
+  custom_prompt?: string;
   provider?: string;
   model?: string;
 }
@@ -985,6 +987,7 @@ export const generationApi = {
     }>('/generation/post', {
       articleIds: data.article_ids,
       templateId: data.template_id,
+      customPrompt: data.custom_prompt,
       provider: data.provider,
       model: data.model,
     }).then(normalizeGenerationResult),
@@ -1001,6 +1004,7 @@ export const generationApi = {
       agentId: data.agent_id,
       articleIds: data.article_ids,
       templateId: data.template_id,
+      customPrompt: data.custom_prompt,
       period: data.period,
       articleCount: data.article_count,
       provider: data.provider,
@@ -1056,6 +1060,11 @@ export const scoringApi = {
   recalculate: (agentId?: string) => apiPost<{ articlesQueued: number }>('/scoring/recalculate', agentId ? { agentId } : {}),
 };
 
+export const assetPacksApi = {
+  list: () => apiGet<AssetPack[]>('/asset-packs'),
+  setDefault: (packId: string) => apiPost<AssetPack>('/asset-packs/default', { packId }),
+};
+
 // ─── Subscription API ────────────────────────────────────────
 
 export const subscriptionApi = {
@@ -1085,7 +1094,28 @@ export interface WorkspaceConfig {
     post_generation?: string;
     digest_generation?: string;
   };
+  telegram?: {
+    stickerPacks?: string[];
+  };
   [key: string]: unknown;
+}
+
+export interface AssetPackItem {
+  id: string;
+  type: string;
+  name: string;
+  value: string;
+  label?: string | null;
+  position: number;
+}
+
+export interface AssetPack {
+  id: string;
+  name: string;
+  description?: string | null;
+  isDefault: boolean;
+  itemCount: number;
+  items: AssetPackItem[];
 }
 
 export const workspaceApi = {
