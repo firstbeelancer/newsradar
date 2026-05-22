@@ -1,4 +1,4 @@
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import { generatedPosts, articles, contentTemplates, aiProviders, workspaces } from "../../db/schema.js";
 import { AppError } from "../../middleware/error-handler.js";
@@ -100,7 +100,7 @@ export async function generatePost(
       .where(
         and(
           eq(articles.workspaceId, workspaceId),
-          sql`${articles.id} = ANY(${articleIds})`
+          inArray(articles.id, articleIds)
         )
       );
   } else if (agentId) {
