@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { Button } from '@shared/ui/button';
@@ -7,7 +6,7 @@ import { Skeleton } from '@shared/ui/skeleton';
 import { Badge } from '@shared/ui/badge';
 import { generationApi } from '@shared/api/client';
 import type { GeneratedPost } from '@shared/api/client';
-import { FileText, Newspaper, Loader2, ArrowLeft } from 'lucide-react';
+import { FileText, Newspaper, ArrowLeft } from 'lucide-react';
 import { cn, formatDateTime } from '@shared/lib/utils';
 
 const PAGE_SIZE = 20;

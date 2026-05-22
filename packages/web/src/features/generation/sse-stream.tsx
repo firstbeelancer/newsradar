@@ -1,5 +1,4 @@
 import { Card, CardContent } from '@shared/ui/card';
-import { Spinner } from '@shared/ui/spinner';
 import { Loader2, Check, AlertCircle } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 

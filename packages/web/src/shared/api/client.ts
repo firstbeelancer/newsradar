@@ -702,7 +702,9 @@ export interface GeneratePostDto {
 }
 
 export interface GenerateDigestDto {
-  agent_id: string;
+  agent_id?: string;
+  article_ids?: string[];
+  article_count?: number;
   period?: 'day' | 'week' | 'month';
   template_id?: string;
   provider?: string;
@@ -978,18 +980,31 @@ export const generationApi = {
       templateId?: string;
       customPrompt?: string;
       agentId?: string;
+      provider?: string;
+      model?: string;
     }>('/generation/post', {
       articleIds: data.article_ids,
       templateId: data.template_id,
+      provider: data.provider,
+      model: data.model,
     }).then(normalizeGenerationResult),
   generateDigest: (data: GenerateDigestDto) =>
     apiPost<{ operationId?: string; op_id?: string; status?: string; content?: string; error?: string }, {
-      agentId: string;
+      agentId?: string;
+      articleIds?: string[];
       templateId?: string;
+      period?: 'day' | 'week' | 'month';
       articleCount?: number;
+      provider?: string;
+      model?: string;
     }>('/generation/digest', {
       agentId: data.agent_id,
+      articleIds: data.article_ids,
       templateId: data.template_id,
+      period: data.period,
+      articleCount: data.article_count,
+      provider: data.provider,
+      model: data.model,
     }).then(normalizeGenerationResult),
   stream: (
     opId: string,

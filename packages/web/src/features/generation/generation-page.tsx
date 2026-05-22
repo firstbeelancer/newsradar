@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { Card, CardContent } from '@shared/ui/card';
 import { Button } from '@shared/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@shared/ui/tabs';
 import { PostGenerator } from './post-generator';
 import { DigestGenerator } from './digest-generator';
-import { Sparkles, FileText, Newspaper, Clock } from 'lucide-react';
+import { FileText, Newspaper, Clock } from 'lucide-react';
 
 export function GenerationPage() {
   const navigate = useNavigate();

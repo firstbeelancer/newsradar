@@ -5,6 +5,7 @@ import { AppError } from "../../middleware/error-handler.js";
 import type { PaginatedResult, Cursor } from "../../lib/pagination.js";
 import { encodeCursor, decodeCursor } from "../../lib/pagination.js";
 import type { GeneratedPost } from "../../db/types.js";
+import { buildArticleContent, getGenerationCutoffDate, renderPromptTemplate } from "./template-utils.js";
 
 // ─── Generation types ───
 
@@ -13,7 +14,11 @@ export interface GeneratePostInput {
   agentId?: string;
   templateId?: string;
   articleIds?: string[];
+  articleCount?: number;
   customPrompt?: string;
+  provider?: string;
+  model?: string;
+  period?: "day" | "week" | "month";
   type: "manual" | "digest" | "deepsearch";
 }
 
@@ -28,6 +33,36 @@ export interface StreamOperation {
 // In-memory store for stream operations (use Redis in production)
 const streamStore = new Map<string, StreamOperation>();
 
+async function resolveGenerationProvider(
+  workspaceId: string,
+  requestedProvider?: string,
+  requestedModel?: string
+) {
+  const providers = await db.query.aiProviders.findMany({
+    where: and(eq(aiProviders.workspaceId, workspaceId), eq(aiProviders.isActive, true)),
+    orderBy: [desc(aiProviders.updatedAt), desc(aiProviders.createdAt)],
+  });
+
+  const generationAssigned = providers.filter((provider) => {
+    const assignedTo = Array.isArray(provider.assignedTo) ? provider.assignedTo : [];
+    return assignedTo.length === 0 || assignedTo.includes("generation");
+  });
+
+  const candidatePool = generationAssigned.length > 0 ? generationAssigned : providers;
+
+  if (requestedProvider || requestedModel) {
+    const explicitMatch = candidatePool.find((provider) => {
+      const providerMatches = requestedProvider ? provider.provider === requestedProvider : true;
+      const modelMatches = requestedModel ? provider.model === requestedModel : true;
+      return providerMatches && modelMatches;
+    });
+
+    if (explicitMatch) return explicitMatch;
+  }
+
+  return candidatePool[0];
+}
+
 // ─── Content generation ───
 
 export async function generatePost(
@@ -35,7 +70,7 @@ export async function generatePost(
   _userId: string
 ): Promise<{ operationId: string; status: string }> {
   const operationId = crypto.randomUUID();
-  const { workspaceId, templateId, articleIds, customPrompt, type, agentId } = input;
+  const { workspaceId, templateId, articleIds, articleCount, customPrompt, type, agentId, provider: requestedProvider, model: requestedModel, period } = input;
 
   // Resolve template
   let template: typeof contentTemplates.$inferSelect | undefined;
@@ -69,18 +104,23 @@ export async function generatePost(
       );
   } else if (agentId) {
     // Get top-scored recent articles for the agent
+    const cutoffDate = getGenerationCutoffDate(period);
     selectedArticles = await db
       .select()
       .from(articles)
-      .where(and(eq(articles.workspaceId, workspaceId), eq(articles.agentId, agentId)))
+      .where(
+        and(
+          eq(articles.workspaceId, workspaceId),
+          eq(articles.agentId, agentId),
+          sql`COALESCE(${articles.publishedAt}, ${articles.createdAt}) >= ${cutoffDate}`
+        )
+      )
       .orderBy(desc(articles.score), desc(articles.createdAt))
-      .limit(10);
+      .limit(articleCount ?? 10);
   }
 
   // Build prompt — fetch workspace-level prompts as fallback
-  const articleTexts = selectedArticles.map((a) => {
-    return `Title: ${a.title}\n${a.description ? `Description: ${a.description}\n` : ""}${a.aiSummary ? `Summary: ${a.aiSummary}\n` : ""}`;
-  }).join("\n---\n");
+  const articleTexts = buildArticleContent(selectedArticles);
 
   // Fetch workspace config for base prompts
   const workspace = await db.query.workspaces.findFirst({
@@ -98,13 +138,10 @@ export async function generatePost(
 
   const systemPrompt = template?.systemPrompt ?? defaultSystemPrompt;
   const userPrompt = customPrompt
-    ?? template?.userPrompt?.replace(/\{\{content\}\}/g, articleTexts)
+    ?? renderPromptTemplate(template?.userPrompt, selectedArticles)
     ?? `На основе следующих статей создай ${type === "digest" ? "дайджест" : "пост"}:\n\n${articleTexts}`;
 
-  // Find active AI provider
-  const provider = await db.query.aiProviders.findFirst({
-    where: and(eq(aiProviders.workspaceId, workspaceId), eq(aiProviders.isActive, true)),
-  });
+  const provider = await resolveGenerationProvider(workspaceId, requestedProvider, requestedModel);
 
   // Initialize stream operation
   streamStore.set(operationId, {
@@ -148,17 +185,15 @@ async function startGeneration(
   streamStore.set(operationId, op);
 
   try {
-    let content: string;
-
-    if (!provider || !provider.apiKeyEncrypted) {
-      // Fallback: simulate generation with a delay
-      await simulateGeneration(operationId);
-      const finalOp = streamStore.get(operationId)!;
-      content = finalOp.content;
-    } else {
-      // Real AI generation
-      content = await callAiProvider(provider, systemPrompt, userPrompt, operationId);
+    if (!provider) {
+      throw new AppError(503, "Для генерации не найден активный AI-провайдер", "GENERATION_PROVIDER_NOT_FOUND");
     }
+
+    if (!provider.apiKeyEncrypted) {
+      throw new AppError(503, "Для выбранного AI-провайдера не настроен API-ключ", "GENERATION_PROVIDER_KEY_MISSING");
+    }
+
+    const content = await callAiProvider(provider, systemPrompt, userPrompt, operationId);
 
     // Save generated post
     await db
@@ -191,37 +226,6 @@ async function startGeneration(
     errorOp.status = "error";
     errorOp.error = err instanceof Error ? err.message : "Generation failed";
     streamStore.set(operationId, errorOp);
-  }
-}
-
-async function simulateGeneration(operationId: string): Promise<void> {
-  const sentences = [
-    "Analyzing source materials...",
-    "Extracting key insights...",
-    "Structuring narrative...",
-    "Refining language...",
-    "Finalizing output...",
-  ];
-
-  let content = "";
-  for (const sentence of sentences) {
-    await new Promise((r) => setTimeout(r, 600));
-    const op = streamStore.get(operationId);
-    if (!op) break;
-    content += `[${sentence}]\n`;
-    op.chunks.push(`[${sentence}]`);
-    op.content = content;
-    streamStore.set(operationId, op);
-  }
-
-  const finalText =
-    "Here is the generated content based on the analyzed articles.\n\nKey takeaways have been synthesized from multiple sources to provide a comprehensive overview of the topic.\n\nThis is a simulated generation — in production, this will be replaced with actual AI-generated content from your configured provider.";
-
-  const op = streamStore.get(operationId);
-  if (op) {
-    op.content = finalText;
-    op.chunks.push(finalText);
-    streamStore.set(operationId, op);
   }
 }
 
@@ -318,9 +322,7 @@ async function callAiProvider(
       return content;
     }
 
-    // Fallback for other providers
-    await simulateGeneration(operationId);
-    return streamStore.get(operationId)?.content ?? "";
+    throw new AppError(400, `Провайдер ${provider.provider} пока не поддерживает генерацию через этот endpoint`, "GENERATION_PROVIDER_UNSUPPORTED");
   } finally {
     clearTimeout(timeout);
   }

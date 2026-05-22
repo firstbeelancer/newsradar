@@ -15,6 +15,10 @@ import {
 
 const router = Router();
 
+function getUserSub(req: { user?: unknown }) {
+  return (req.user as { sub: string } | undefined)?.sub ?? "";
+}
+
 function normalizeGenerationBody(body: unknown) {
   if (!body || typeof body !== "object") return body;
   const raw = body as Record<string, unknown>;
@@ -25,6 +29,9 @@ function normalizeGenerationBody(body: unknown) {
     articleIds: raw.articleIds ?? raw.article_ids,
     articleCount: raw.articleCount ?? raw.article_count,
     customPrompt: raw.customPrompt ?? raw.custom_prompt,
+    provider: raw.provider,
+    model: raw.model,
+    period: raw.period,
   };
 }
 
@@ -35,15 +42,23 @@ const generatePostSchema = z.preprocess(
     templateId: z.string().uuid().optional(),
     articleIds: z.array(z.string().uuid()).optional(),
     customPrompt: z.string().optional(),
+    provider: z.string().min(1).optional(),
+    model: z.string().min(1).optional(),
   })
 );
 
 const generateDigestSchema = z.preprocess(
   normalizeGenerationBody,
   z.object({
-    agentId: z.string().uuid(),
+    agentId: z.string().uuid().optional(),
+    articleIds: z.array(z.string().uuid()).optional(),
     templateId: z.string().uuid().optional(),
+    provider: z.string().min(1).optional(),
+    model: z.string().min(1).optional(),
+    period: z.enum(["day", "week", "month"]).default("day"),
     articleCount: z.coerce.number().int().min(1).max(50).default(10),
+  }).refine((value) => (value.agentId ?? value.articleIds?.length), {
+    message: "agentId или articleIds обязательны",
   })
 );
 
@@ -64,7 +79,7 @@ router.post("/post", authMiddleware, async (req, res, next) => {
         workspaceId,
         type: "manual",
       },
-      req.user!.sub
+      getUserSub(req)
     );
     res.status(202).json({ success: true, data: result });
   } catch (err) {
@@ -82,10 +97,15 @@ router.post("/digest", authMiddleware, async (req, res, next) => {
       {
         workspaceId,
         agentId: input.agentId,
+        articleIds: input.articleIds,
         templateId: input.templateId,
+        provider: input.provider,
+        model: input.model,
+        period: input.period,
+        articleCount: input.articleCount,
         type: "digest",
       },
-      req.user!.sub
+      getUserSub(req)
     );
     res.status(202).json({ success: true, data: result });
   } catch (err) {
@@ -95,7 +115,7 @@ router.post("/digest", authMiddleware, async (req, res, next) => {
 
 router.get("/stream/:operationId", authMiddleware, async (req, res, next) => {
   try {
-    const { operationId } = req.params;
+    const operationId = String(req.params.operationId);
 
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
@@ -163,7 +183,7 @@ router.get("/posts/:id", authMiddleware, async (req, res, next) => {
     const workspaceId = req.query.workspaceId as string;
     if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
 
-    const post = await getGeneratedPost(req.params.id, workspaceId);
+    const post = await getGeneratedPost(String(req.params.id), workspaceId);
     res.json({ success: true, data: post });
   } catch (err) {
     next(err);
@@ -176,7 +196,7 @@ router.put("/posts/:id", authMiddleware, async (req, res, next) => {
     if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
 
     const input = updatePostSchema.parse(req.body);
-    const post = await updateGeneratedPost(req.params.id, workspaceId, input);
+    const post = await updateGeneratedPost(String(req.params.id), workspaceId, input);
     res.json({ success: true, data: post });
   } catch (err) {
     next(err);
@@ -188,7 +208,7 @@ router.delete("/posts/:id", authMiddleware, async (req, res, next) => {
     const workspaceId = req.query.workspaceId as string;
     if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
 
-    await deleteGeneratedPost(req.params.id, workspaceId);
+    await deleteGeneratedPost(String(req.params.id), workspaceId);
     res.json({ success: true, data: { deleted: true } });
   } catch (err) {
     next(err);

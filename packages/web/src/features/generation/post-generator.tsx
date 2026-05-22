@@ -1,30 +1,34 @@
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { Button } from '@shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@shared/ui/card';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@shared/ui/select';
+import { Checkbox } from '@shared/ui/checkbox';
 import { useGenerationStore } from '@shared/stores/generation-store';
 import { useSettingsStore } from '@shared/stores/settings-store';
 import { useToast } from '@shared/ui/toast';
-import { articlesApi, apiPut, apiGet } from '@shared/api/client';
-import { SSEStream } from './sse-stream';
-import { GenerationResult } from './generation-result';
-import { Checkbox } from '@shared/ui/checkbox';
+import { articlesApi, apiGet, apiPut } from '@shared/api/client';
 import { Sparkles, Save } from 'lucide-react';
+import { GenerationRunDialog } from './generation-run-dialog';
 
 const PAGE_SIZE = 20;
 const DEFAULT_TEMPLATE_VALUE = '__default_template__';
 
+interface AIProviderOption {
+  id: string;
+  name: string;
+  provider: string;
+  model: string;
+  isActive: boolean;
+  assignedTo?: string[];
+}
+
 function useArticlesForSelection() {
   return useInfiniteQuery({
-    queryKey: ['articles-for-generation'],
-    queryFn: async ({ pageParam }) => {
-      return articlesApi.list({}, pageParam as string | undefined, PAGE_SIZE);
-    },
-    getNextPageParam: (lastPage) => {
-      return lastPage.has_more ? (lastPage.next_cursor ?? undefined) : undefined;
-    },
+    queryKey: ['articles-for-post-generation'],
+    queryFn: async ({ pageParam }) => articlesApi.list({}, pageParam as string | undefined, PAGE_SIZE),
+    getNextPageParam: (lastPage) => (lastPage.has_more ? (lastPage.next_cursor ?? undefined) : undefined),
     initialPageParam: undefined as string | undefined,
     staleTime: 2 * 60 * 1000,
   });
@@ -37,109 +41,125 @@ export function PostGenerator() {
     selectedTemplateId,
     selectedProvider,
     selectedModel,
-    streamContent,
-    isStreaming,
     isGenerating,
-    opId,
-    streamError,
     setSelectedArticleIds,
     setSelectedTemplateId,
     setSelectedProvider,
     setSelectedModel,
     initFromProvider,
     generatePost,
-    startStream,
-    resetGeneration,
   } = useGenerationStore();
 
   const { templates, fetchTemplates } = useSettingsStore();
   const { addToast } = useToast();
-  const streamUnsubscribe = useRef<(() => void) | null>(null);
-
-  const [showResult, setShowResult] = useState(false);
+  const [providerOptions, setProviderOptions] = useState<AIProviderOption[]>([]);
   const [savingConfig, setSavingConfig] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [requestKey, setRequestKey] = useState(0);
 
   useEffect(() => {
-    fetchTemplates();
-    resetGeneration();
-  }, [fetchTemplates, resetGeneration]);
+    void fetchTemplates();
+  }, [fetchTemplates]);
 
-  // Load initial provider/model from active AI provider in DB
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+
+    void (async () => {
       try {
-        const providers = await apiGet<Array<{ id: string; provider: string; model: string; isActive: boolean }>>('/ai-providers');
+        const providers = await apiGet<AIProviderOption[]>('/ai-providers');
         if (cancelled) return;
-        const active = Array.isArray(providers) ? providers.find((p) => p.isActive) : null;
+
+        const generationProviders = (Array.isArray(providers) ? providers : []).filter((provider) => {
+          const assignedTo = Array.isArray(provider.assignedTo) ? provider.assignedTo : [];
+          return provider.isActive && (assignedTo.length === 0 || assignedTo.includes('generation'));
+        });
+
+        setProviderOptions(generationProviders);
+
+        const active = generationProviders[0];
         if (active) {
           initFromProvider(active.provider, active.model);
         }
       } catch {
-        // Silently ignore — defaults from persisted store will be used
+        setProviderOptions([]);
       }
     })();
-    return () => { cancelled = true; };
+
+    return () => {
+      cancelled = true;
+    };
   }, [initFromProvider]);
 
-  useEffect(() => {
-    if (opId && !isStreaming && !streamContent) {
-      streamUnsubscribe.current = startStream(opId);
-      setShowResult(true);
-    }
-    return () => {
-      streamUnsubscribe.current?.();
-    };
-  }, [opId, isStreaming, streamContent, startStream]);
-
   const { data, isLoading } = useArticlesForSelection();
-  const articles = data?.pages.flatMap((p) => p.data) ?? [];
+  const articles = data?.pages.flatMap((page) => page.data) ?? [];
+
+  const providerChoices = useMemo(() => {
+    const uniqueProviders = new Map<string, string>();
+    for (const provider of providerOptions) {
+      if (!uniqueProviders.has(provider.provider)) {
+        uniqueProviders.set(provider.provider, provider.name);
+      }
+    }
+    return Array.from(uniqueProviders.entries()).map(([value, label]) => ({ value, label }));
+  }, [providerOptions]);
+
+  const modelChoices = useMemo(
+    () => providerOptions.filter((provider) => provider.provider === selectedProvider),
+    [providerOptions, selectedProvider]
+  );
+
+  useEffect(() => {
+    if (!selectedProvider) return;
+    if (modelChoices.length === 0) return;
+    if (!modelChoices.some((provider) => provider.model === selectedModel)) {
+      setSelectedModel(modelChoices[0].model);
+    }
+  }, [modelChoices, selectedModel, selectedProvider, setSelectedModel]);
 
   const toggleArticle = (id: string) => {
     setSelectedArticleIds(
       selectedArticleIds.includes(id)
-        ? selectedArticleIds.filter((a) => a !== id)
+        ? selectedArticleIds.filter((articleId) => articleId !== id)
         : [...selectedArticleIds, id]
     );
   };
 
-  const handleGenerate = async () => {
+  const handleGenerate = () => {
     if (selectedArticleIds.length === 0) return;
-    resetGeneration();
-    setShowResult(false);
-    try {
-      await generatePost();
-    } catch {
-      // Error handled by store
-    }
-  };
-
-  const handleRegenerate = () => {
-    resetGeneration();
-    setShowResult(false);
-    handleGenerate();
+    setDialogOpen(true);
+    setRequestKey((current) => current + 1);
   };
 
   const handleSaveConfig = async () => {
+    const targetProvider = providerOptions.find(
+      (provider) => provider.provider === selectedProvider && provider.model === selectedModel
+    ) ?? providerOptions.find((provider) => provider.provider === selectedProvider)
+      ?? providerOptions[0];
+
+    if (!targetProvider) {
+      addToast({
+        title: 'Нет провайдера для генерации',
+        description: 'Сначала настрой AI-провайдер в разделе настроек.',
+        variant: 'warning',
+      });
+      return;
+    }
+
     setSavingConfig(true);
     try {
-      // Fetch current AI providers and find the one matching the selected provider
-      const providers = await apiGet<Array<{ id: string; provider: string; model: string; isActive: boolean }>>('/ai-providers');
-      const targetProvider = Array.isArray(providers)
-        ? providers.find((p) => p.provider === selectedProvider && p.isActive) ?? providers.find((p) => p.isActive)
-        : null;
-      if (targetProvider) {
-        await apiPut(`/ai-providers/${targetProvider.id}`, {
-          model: selectedModel,
-        });
-        addToast({ title: 'Конфигурация сохранена', description: `Провайдер: ${selectedProvider}, Модель: ${selectedModel}`, variant: 'success' });
-      } else {
-        addToast({ title: 'Нет активного провайдера', description: 'Добавьте AI провайдер в настройках', variant: 'warning' });
-      }
-    } catch (err) {
+      await apiPut(`/ai-providers/${targetProvider.id}`, {
+        model: selectedModel,
+        assignedTo: Array.from(new Set([...(targetProvider.assignedTo ?? []), 'generation'])),
+      });
+      addToast({
+        title: 'Конфигурация сохранена',
+        description: `Генерация будет идти через ${targetProvider.name}.`,
+        variant: 'success',
+      });
+    } catch (error) {
       addToast({
         title: 'Ошибка',
-        description: err instanceof Error ? err.message : 'Не удалось сохранить',
+        description: error instanceof Error ? error.message : 'Не удалось сохранить конфигурацию',
         variant: 'danger',
       });
     } finally {
@@ -147,28 +167,11 @@ export function PostGenerator() {
     }
   };
 
-  if (showResult && (streamContent || streamError)) {
-    return (
-      <div className="space-y-4">
-        <SSEStream content={streamContent} isStreaming={isStreaming} error={streamError} />
-        {!isStreaming && streamContent && (
-          <GenerationResult
-            content={streamContent}
-            onRegenerate={handleRegenerate}
-          />
-        )}
-        <Button variant="ghost" onClick={() => { resetGeneration(); setShowResult(false); }}>
-          Назад к выбору
-        </Button>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Настройки генерации</CardTitle>
+          <CardTitle className="text-base">Настройки генерации поста</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -184,10 +187,10 @@ export function PostGenerator() {
                 <SelectContent>
                   <SelectItem value={DEFAULT_TEMPLATE_VALUE}>По умолчанию</SelectItem>
                   {templates
-                    .filter((t) => t.type === 'post')
-                    .map((t) => (
-                      <SelectItem key={t.id} value={t.id}>
-                        {t.name}
+                    .filter((template) => template.type === 'post')
+                    .map((template) => (
+                      <SelectItem key={template.id} value={template.id}>
+                        {template.name}
                       </SelectItem>
                     ))}
                 </SelectContent>
@@ -198,13 +201,14 @@ export function PostGenerator() {
               <label className="text-sm font-medium">Провайдер</label>
               <Select value={selectedProvider} onValueChange={setSelectedProvider}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Выбери провайдер" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="openai">OpenAI</SelectItem>
-                  <SelectItem value="anthropic">Anthropic</SelectItem>
-                  <SelectItem value="openrouter">OpenRouter</SelectItem>
-                  <SelectItem value="google">Google</SelectItem>
+                  {providerChoices.map((provider) => (
+                    <SelectItem key={provider.value} value={provider.value}>
+                      {provider.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -213,25 +217,21 @@ export function PostGenerator() {
               <label className="text-sm font-medium">Модель</label>
               <Select value={selectedModel} onValueChange={setSelectedModel}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Выбери модель" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
-                  <SelectItem value="gpt-4o">GPT-4o</SelectItem>
-                  <SelectItem value="claude-3-haiku">Claude 3 Haiku</SelectItem>
-                  <SelectItem value="claude-3-sonnet">Claude 3 Sonnet</SelectItem>
-                  <SelectItem value="gemini-pro">Gemini Pro</SelectItem>
-                  <SelectItem value="openrouter/owl-alpha">OpenRouter Owl Alpha</SelectItem>
-                  <SelectItem value="openrouter/auto">OpenRouter Auto</SelectItem>
-                  <SelectItem value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet (via OR)</SelectItem>
-                  <SelectItem value="openai/gpt-4o">GPT-4o (via OR)</SelectItem>
+                  {modelChoices.map((provider) => (
+                    <SelectItem key={`${provider.id}:${provider.model}`} value={provider.model}>
+                      {provider.model}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
 
           <div className="flex justify-end">
-            <Button size="sm" onClick={handleSaveConfig} disabled={savingConfig}>
+            <Button size="sm" onClick={handleSaveConfig} disabled={savingConfig || providerOptions.length === 0}>
               <Save className="h-4 w-4 mr-1" />
               {savingConfig ? 'Сохранение...' : 'Сохранить конфигурацию'}
             </Button>
@@ -240,25 +240,18 @@ export function PostGenerator() {
       </Card>
 
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium">
-            Выберите статьи ({selectedArticleIds.length} выбрано)
-          </h3>
-          <Button
-            size="sm"
-            onClick={handleGenerate}
-            disabled={selectedArticleIds.length === 0 || isGenerating}
-            loading={isGenerating}
-          >
-            {!isGenerating && <Sparkles className="h-4 w-4" />}
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-sm font-medium">Выберите статьи ({selectedArticleIds.length} выбрано)</h3>
+          <Button size="sm" onClick={handleGenerate} disabled={selectedArticleIds.length === 0 || isGenerating}>
+            <Sparkles className="h-4 w-4" />
             Сгенерировать
           </Button>
         </div>
 
         {isLoading ? (
           <div className="space-y-2">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="h-16 rounded-lg border border-border bg-muted animate-pulse" />
+            {Array.from({ length: 5 }).map((_, index) => (
+              <div key={index} className="h-16 rounded-lg border border-border bg-muted animate-pulse" />
             ))}
           </div>
         ) : articles.length === 0 ? (
@@ -283,7 +276,7 @@ export function PostGenerator() {
                   className="mt-0.5"
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium line-clamp-1">{article.title}</p>
+                  <p className="text-sm font-medium line-clamp-2">{article.title}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {article.source_name} • {article.published_at ? new Date(article.published_at).toLocaleDateString('ru-RU') : 'без даты'}
                   </p>
@@ -293,6 +286,17 @@ export function PostGenerator() {
           </div>
         )}
       </div>
+
+      <GenerationRunDialog
+        open={dialogOpen}
+        requestKey={requestKey}
+        title="Генерация поста"
+        description="Сейчас откроется потоковый результат. Когда текст будет готов, ты сможешь его поправить и скопировать."
+        idleSummary={`Выбрано статей: ${selectedArticleIds.length}. Шаблон и модель уже подставлены из текущих настроек.`}
+        onOpenChange={setDialogOpen}
+        onStart={() => generatePost()}
+        onRegenerate={() => generatePost()}
+      />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { generationApi, type GeneratePostDto, type GenerateDigestDto, type GenerationResult, type GeneratedPost, type GenerationStreamState } from '@shared/api/client';
+import { generationApi, type GeneratePostDto, type GenerateDigestDto, type GeneratedPost, type GenerationStreamState } from '@shared/api/client';
 
 type GenerationType = 'post' | 'digest' | null;
 
@@ -114,6 +114,8 @@ export const useGenerationStore = create<GenerationState & GenerationActions>()(
         try {
           const result = await generationApi.generateDigest({
             agent_id: dto?.agent_id ?? state.selectedAgentId ?? '',
+            article_ids: dto?.article_ids ?? state.selectedArticleIds,
+            article_count: dto?.article_count,
             period: dto?.period ?? state.selectedPeriod,
             template_id: dto?.template_id ?? state.selectedTemplateId ?? undefined,
             provider: dto?.provider ?? state.selectedProvider,

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@shared/ui/card';
 import { Button } from '@shared/ui/button';
 import { Textarea } from '@shared/ui/textarea';
@@ -13,6 +13,11 @@ interface GenerationResultProps {
 export function GenerationResult({ content, onRegenerate, onCopy }: GenerationResultProps) {
   const [editableContent, setEditableContent] = useState(content);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    setEditableContent(content);
+    setCopied(false);
+  }, [content]);
 
   const handleCopy = async () => {
     try {
@@ -51,6 +56,9 @@ export function GenerationResult({ content, onRegenerate, onCopy }: GenerationRe
         </div>
       </CardHeader>
       <CardContent>
+        <p className="mb-3 text-xs text-muted-foreground">
+          Текст можно отредактировать прямо здесь, потом скопировать вручную.
+        </p>
         <Textarea
           value={editableContent}
           onChange={(e) => setEditableContent(e.target.value)}
