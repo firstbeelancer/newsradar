@@ -38,10 +38,11 @@ async function resolveGenerationProvider(
   requestedProvider?: string,
   requestedModel?: string
 ) {
-  const providers = await db.query.aiProviders.findMany({
-    where: and(eq(aiProviders.workspaceId, workspaceId), eq(aiProviders.isActive, true)),
-    orderBy: [desc(aiProviders.updatedAt), desc(aiProviders.createdAt)],
-  });
+  const providers = await db
+    .select()
+    .from(aiProviders)
+    .where(and(eq(aiProviders.workspaceId, workspaceId), eq(aiProviders.isActive, true)))
+    .orderBy(desc(aiProviders.updatedAt), desc(aiProviders.createdAt));
 
   const generationAssigned = providers.filter((provider) => {
     const assignedTo = Array.isArray(provider.assignedTo) ? provider.assignedTo : [];
