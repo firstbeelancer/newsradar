@@ -15,8 +15,8 @@ type SpeechRecognitionCtor = new () => {
   lang: string;
   interimResults: boolean;
   continuous: boolean;
-  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
-  onerror: (() => void) | null;
+  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal?: boolean }> }) => void) | null;
+  onerror: ((event?: { error?: string }) => void) | null;
   onend: (() => void) | null;
   start: () => void;
   stop: () => void;
@@ -35,6 +35,7 @@ export function GenerationResult({ content, onRegenerate, onCopy }: GenerationRe
   const [copied, setCopied] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [speechError, setSpeechError] = useState<string | null>(null);
+  const [interimTranscript, setInterimTranscript] = useState('');
   const recognitionRef = useRef<InstanceType<SpeechRecognitionCtor> | null>(null);
 
   const SpeechRecognitionImpl = useMemo(
@@ -46,6 +47,7 @@ export function GenerationResult({ content, onRegenerate, onCopy }: GenerationRe
     setEditableContent(content);
     setCopied(false);
     setSpeechError(null);
+    setInterimTranscript('');
   }, [content]);
 
   useEffect(() => () => recognitionRef.current?.stop(), []);
@@ -71,6 +73,7 @@ export function GenerationResult({ content, onRegenerate, onCopy }: GenerationRe
   const stopRecording = () => {
     recognitionRef.current?.stop();
     setIsRecording(false);
+    setInterimTranscript('');
   };
 
   const startRecording = () => {
@@ -79,36 +82,63 @@ export function GenerationResult({ content, onRegenerate, onCopy }: GenerationRe
       return;
     }
 
+    if (isRecording) return;
+
+    try {
+      const recognition = new SpeechRecognitionImpl();
+      recognition.lang = 'ru-RU';
+      recognition.interimResults = true;
+      recognition.continuous = true;
+      recognition.onresult = (event) => {
+        let finalText = '';
+        let interimText = '';
+
+        for (const result of Array.from(event.results)) {
+          const transcript = result[0]?.transcript?.trim() ?? '';
+          if (!transcript) continue;
+          if (result.isFinal) {
+            finalText = `${finalText} ${transcript}`.trim();
+          } else {
+            interimText = `${interimText} ${transcript}`.trim();
+          }
+        }
+
+        if (finalText) {
+          setFeedback((current) => `${current}${current ? '\n' : ''}${finalText}`.trim());
+          setInterimTranscript('');
+        } else {
+          setInterimTranscript(interimText);
+        }
+      };
+      recognition.onerror = (event) => {
+        const denied = event?.error === 'not-allowed' || event?.error === 'service-not-allowed';
+        setSpeechError(denied ? 'Браузер не дал доступ к микрофону' : 'Не удалось распознать голосовой комментарий');
+        setIsRecording(false);
+        setInterimTranscript('');
+      };
+      recognition.onend = () => {
+        setIsRecording(false);
+        setInterimTranscript('');
+      };
+
+      recognitionRef.current = recognition;
+      setSpeechError(null);
+      setInterimTranscript('');
+      setIsRecording(true);
+      recognition.start();
+    } catch {
+      setSpeechError('Не удалось запустить запись с микрофона');
+      setIsRecording(false);
+      setInterimTranscript('');
+    }
+  };
+
+  const toggleRecording = () => {
     if (isRecording) {
+      stopRecording();
       return;
     }
-
-    const recognition = new SpeechRecognitionImpl();
-    recognition.lang = 'ru-RU';
-    recognition.interimResults = false;
-    recognition.continuous = false;
-    recognition.onresult = (event) => {
-      const transcript = Array.from(event.results)
-        .map((result) => result[0]?.transcript ?? '')
-        .join(' ')
-        .trim();
-
-      if (transcript) {
-        setFeedback((current) => `${current}${current ? '\n' : ''}${transcript}`.trim());
-      }
-    };
-    recognition.onerror = () => {
-      setSpeechError('Не удалось распознать голосовой комментарий');
-      setIsRecording(false);
-    };
-    recognition.onend = () => {
-      setIsRecording(false);
-    };
-
-    recognitionRef.current = recognition;
-    setSpeechError(null);
-    setIsRecording(true);
-    recognition.start();
+    startRecording();
   };
 
   return (
@@ -116,16 +146,10 @@ export function GenerationResult({ content, onRegenerate, onCopy }: GenerationRe
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between gap-3">
           <CardTitle className="text-base">Готовый текст для Telegram</CardTitle>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={handleCopy}>
-              {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-              {copied ? 'Скопировано' : 'Копировать'}
-            </Button>
-            <Button size="sm" onClick={() => onRegenerate(feedback)} disabled={!feedback.trim()}>
-              <RotateCcw className="h-4 w-4" />
-              Перегенерировать
-            </Button>
-          </div>
+          <Button variant="outline" size="sm" onClick={handleCopy}>
+            {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+            {copied ? 'Скопировано' : 'Копировать'}
+          </Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -142,32 +166,53 @@ export function GenerationResult({ content, onRegenerate, onCopy }: GenerationRe
         </div>
 
         <div className="space-y-2">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <label className="text-sm font-medium">Комментарии к перегенерации</label>
-            <TooltipProvider delayDuration={120}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="icon-sm"
-                    aria-label={isRecording ? 'Остановить диктовку' : 'Начать диктовку'}
-                    onPointerDown={startRecording}
-                    onPointerUp={stopRecording}
-                    onPointerLeave={() => {
-                      if (isRecording) {
-                        stopRecording();
-                      }
-                    }}
-                  >
-                    {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {isRecording ? 'Отпусти, чтобы остановить' : 'Удерживайте, чтобы диктовать'}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <div className="flex items-center gap-2">
+              <TooltipProvider delayDuration={120}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={isRecording ? 'danger' : 'outline'}
+                      size="icon-sm"
+                      aria-pressed={isRecording}
+                      aria-label={isRecording ? 'Остановить запись' : 'Начать запись'}
+                      onClick={toggleRecording}
+                    >
+                      {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {isRecording ? 'Нажми ещё раз, чтобы остановить запись' : 'Нажми, чтобы начать запись'}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <Button size="sm" onClick={() => onRegenerate(feedback)} disabled={!feedback.trim()}>
+                <RotateCcw className="h-4 w-4" />
+                Перегенерировать
+              </Button>
+            </div>
           </div>
+
+          {isRecording && (
+            <div className="flex items-center gap-3 rounded-xl border border-danger/20 bg-danger-light px-3 py-2 text-xs text-danger">
+              <span className="font-medium">Идёт запись</span>
+              <div className="flex h-5 items-center gap-1" aria-hidden="true">
+                {[0, 1, 2, 3, 4, 5, 6].map((bar) => (
+                  <span
+                    key={bar}
+                    className="w-1 rounded-full bg-danger/80 animate-pulse"
+                    style={{
+                      height: `${8 + ((bar * 7) % 13)}px`,
+                      animationDelay: `${bar * 90}ms`,
+                    }}
+                  />
+                ))}
+              </div>
+              {interimTranscript && <span className="min-w-0 truncate text-danger/80">{interimTranscript}</span>}
+            </div>
+          )}
+
           <Textarea
             value={feedback}
             onChange={(event) => setFeedback(event.target.value)}

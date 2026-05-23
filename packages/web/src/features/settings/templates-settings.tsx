@@ -162,14 +162,15 @@ export function TemplatesSettings() {
                       {template.user_prompt}
                     </p>
                   </div>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                    <Button variant="ghost" size="icon-sm" onClick={() => openEdit(template)}>
+                  <div className="flex shrink-0 gap-1">
+                    <Button variant="outline" size="icon-sm" onClick={() => openEdit(template)} title="Редактировать">
                       <Pencil className="h-4 w-4" />
                     </Button>
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       size="icon-sm"
                       onClick={() => { setDeletingTemplate(template); setDeleteDialogOpen(true); }}
+                      title="Удалить"
                     >
                       <Trash2 className="h-4 w-4 text-danger" />
                     </Button>

@@ -114,6 +114,12 @@ interface BackendGeneratedPost {
   title?: string | null;
   content: string;
   type: 'manual' | 'digest' | 'deepsearch' | 'post';
+  articleCount?: number;
+  article_count?: number;
+  articlesSnapshot?: Array<{ id?: string; title?: string; link?: string; score?: number }>;
+  articles_snapshot?: Array<{ id?: string; title?: string; link?: string; score?: number }>;
+  templateId?: string | null;
+  template_id?: string | null;
   modelSnapshot?: string | null;
   model?: string | null;
   provider?: string | null;
@@ -271,13 +277,21 @@ function clampArticleScore(score: number): number {
 }
 
 export function normalizeGeneratedPost(raw: BackendGeneratedPost): GeneratedPost {
+  const articlesSnapshot = raw.articles_snapshot ?? raw.articlesSnapshot ?? [];
+
   return {
     id: raw.id,
+    title: raw.title ?? null,
     type: raw.type === 'manual' ? 'post' : raw.type,
     content: raw.content,
     provider: raw.provider ?? 'AI',
     model: raw.model ?? raw.modelSnapshot ?? 'default',
     metadata: raw.metadata,
+    article_count: raw.article_count ?? raw.articleCount ?? articlesSnapshot.length,
+    article_ids: articlesSnapshot.map((article) => article.id).filter((id): id is string => Boolean(id)),
+    articles_snapshot: articlesSnapshot,
+    template_id: raw.template_id ?? raw.templateId ?? null,
+    agent_id: raw.agent_id ?? raw.agentId ?? null,
     created_at: raw.created_at ?? raw.createdAt ?? new Date(0).toISOString(),
   };
 }
@@ -769,11 +783,17 @@ export interface GenerationStreamState {
 
 export interface GeneratedPost {
   id: string;
+  title?: string | null;
   type: 'post' | 'digest' | 'deepsearch';
   content: string;
   provider: string;
   model: string;
   metadata?: Record<string, unknown>;
+  article_count: number;
+  article_ids: string[];
+  articles_snapshot: Array<{ id?: string; title?: string; link?: string; score?: number }>;
+  template_id?: string | null;
+  agent_id?: string | null;
   created_at: string;
 }
 
@@ -1084,8 +1104,11 @@ export const generationApi = {
     apiGet<BackendCursorResponse<BackendGeneratedPost>>(`/generation/posts?limit=${limit}${cursor ? `&cursor=${cursor}` : ''}`).then((payload) =>
       normalizeCursorResponse(payload, normalizeGeneratedPost)
     ),
+  getPost: (id: string) =>
+    apiGet<BackendGeneratedPost>(`/generation/posts/${id}`).then(normalizeGeneratedPost),
   updatePost: (id: string, content: string) =>
     apiPut<BackendGeneratedPost, { content: string }>(`/generation/posts/${id}`, { content }).then(normalizeGeneratedPost),
+  deletePost: (id: string) => apiDelete<void>(`/generation/posts/${id}`),
 };
 
 export const deepsearchApi = {

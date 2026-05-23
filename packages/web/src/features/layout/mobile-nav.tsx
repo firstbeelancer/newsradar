@@ -12,7 +12,6 @@ import {
   LogOut,
   Crown,
   BarChart3,
-  Bell,
 } from 'lucide-react';
 import { useAuthStore } from '@shared/stores/auth-store';
 import { NotificationBell } from '@/features/notifications/notification-bell';
@@ -28,7 +27,6 @@ const moreMenuItems = [
   { to: '/feed', label: 'Избранное', icon: Bookmark, search: { favorites: '1' } as Record<string, string> },
   { to: '/iboard', label: 'Аналитика', icon: BarChart3 },
   { to: '/subscription', label: 'Подписка', icon: Crown },
-  { to: '/notifications', label: 'Уведомления', icon: Bell },
   { to: '/settings/profile', label: 'Настройки', icon: Settings },
 ];
 

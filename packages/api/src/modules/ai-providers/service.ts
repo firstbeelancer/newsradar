@@ -104,7 +104,10 @@ export async function resolveProviderForProcess(
   const assignedProviders = providers.filter((provider) =>
     normalizeAssignedTo(provider.assignedTo as string[] | undefined).includes(process)
   );
-  const pool = assignedProviders.length > 0 ? assignedProviders : providers;
+  const hasExplicitAssignments = providers.some((provider) =>
+    normalizeAssignedTo(provider.assignedTo as string[] | undefined).length > 0
+  );
+  const pool = assignedProviders.length > 0 ? assignedProviders : (hasExplicitAssignments ? [] : providers);
 
   if (requestedProvider || requestedModel) {
     const explicitMatch = pool.find((provider) => {

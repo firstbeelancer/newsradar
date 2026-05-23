@@ -205,16 +205,16 @@ export function DashboardPage() {
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">Вот что произошло сегодня</p>
         </div>
-        <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
-          <Button variant="danger" size="sm" onClick={handleDeleteAllArticles} loading={deleteAllLoading} className="justify-center">
+        <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
+          <Button variant="danger" size="sm" onClick={handleDeleteAllArticles} loading={deleteAllLoading} className="min-w-0 justify-center px-2 sm:px-3">
             <Trash2 className="h-4 w-4" />
             <span>Удалить</span>
           </Button>
-          <Button variant="outline" size="sm" onClick={handleRescore} loading={rescoreLoading} className="justify-center">
+          <Button variant="outline" size="sm" onClick={handleRescore} loading={rescoreLoading} className="min-w-0 justify-center px-2 sm:px-3">
             <RotateCcw className="h-4 w-4" />
             <span>Рескор</span>
           </Button>
-          <Button size="sm" onClick={() => setCollectDialogOpen(true)} className="justify-center">
+          <Button size="sm" onClick={() => setCollectDialogOpen(true)} className="min-w-0 justify-center px-2 sm:px-3">
             <Plus className="h-4 w-4" />
             <span>Собрать</span>
           </Button>
