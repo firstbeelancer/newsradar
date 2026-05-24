@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { assetPacksApi, workspaceApi, type AssetPack, type WorkspaceConfig } from '@shared/api/client';
 import { Button } from '@shared/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@shared/ui/card';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@shared/ui/dialog';
 import { Input } from '@shared/ui/input';
 import { Textarea } from '@shared/ui/textarea';
 import { useToast } from '@shared/ui/toast';
@@ -24,6 +25,7 @@ export function TelegramAssetsSettings() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isCreatingPack, setIsCreatingPack] = useState(false);
+  const [customPackDialogOpen, setCustomPackDialogOpen] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -108,6 +110,7 @@ export function TelegramAssetsSettings() {
       setSelectedPackId(refreshedPacks.find((pack) => pack.isDefault)?.id ?? refreshedPacks[0]?.id ?? null);
       setCustomPackName('');
       setCustomEmojiText('');
+      setCustomPackDialogOpen(false);
       addToast({
         title: 'Emoji pack создан',
         description: 'Новый набор сразу выбран как default для генерации.',
@@ -218,6 +221,18 @@ export function TelegramAssetsSettings() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-muted/30 p-3">
+            <div>
+              <p className="text-sm font-medium">Кастомные emoji в модалке</p>
+              <p className="text-xs text-muted-foreground">
+                Открой модалку и вставь обычные emoji, кастомные символы или короткие токены.
+              </p>
+            </div>
+            <Button type="button" variant="outline" onClick={() => setCustomPackDialogOpen(true)}>
+              <Plus className="h-4 w-4" />
+              Открыть
+            </Button>
+          </div>
           <Input
             value={customPackName}
             onChange={(event) => setCustomPackName(event.target.value)}
@@ -272,6 +287,39 @@ export function TelegramAssetsSettings() {
           {isSaving ? 'Сохраняю...' : 'Сохранить Telegram-настройки'}
         </Button>
       </div>
+      <Dialog open={customPackDialogOpen} onOpenChange={setCustomPackDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Свой emoji pack</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              value={customPackName}
+              onChange={(event) => setCustomPackName(event.target.value)}
+              placeholder="Например: Cyber neon"
+            />
+            <Textarea
+              value={customEmojiText}
+              onChange={(event) => setCustomEmojiText(event.target.value)}
+              rows={6}
+              placeholder={'🔥 🚨 🧠 📌\n:custom_ai: :custom_alert:'}
+              className="resize-none text-lg leading-relaxed"
+            />
+            <p className="text-xs text-muted-foreground">
+              Разделяй значения пробелами, запятыми или строками. После создания набор сразу станет default для генерации.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setCustomPackDialogOpen(false)} disabled={isCreatingPack}>
+              Отмена
+            </Button>
+            <Button type="button" onClick={handleCreatePack} disabled={isCreatingPack}>
+              <Plus className="h-4 w-4" />
+              {isCreatingPack ? 'Создаю...' : 'Создать и сделать default'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getGenerationCutoffDate, renderPromptTemplate } from '../../src/modules/generation/template-utils.js';
+import { getGenerationCutoffDate, renderPromptTemplate, sanitizeTelegramText } from '../../src/modules/generation/template-utils.js';
 
 describe('generation service helpers', () => {
   it('рендерит шаблон с {{content}} и циклом по articles без сырого шаблонного синтаксиса', () => {
@@ -39,5 +39,9 @@ describe('generation service helpers', () => {
     expect(now - dayCutoff).toBeGreaterThan(20 * 60 * 60 * 1000);
     expect(now - dayCutoff).toBeLessThan(28 * 60 * 60 * 1000);
     expect(now - weekCutoff).toBeGreaterThan(6 * 24 * 60 * 60 * 1000);
+  });
+  it('keeps hashtags only when regeneration feedback explicitly asks for tags', () => {
+    expect(sanitizeTelegramText('Финал #ai #news')).toBe('Финал ai news');
+    expect(sanitizeTelegramText('Финал #ai #news', { allowHashtags: true })).toBe('Финал #ai #news');
   });
 });

@@ -36,7 +36,7 @@ export function ArticleCard({
   onGeneratePost,
 }: ArticleCardProps) {
   const scorePercent = formatScore(article.score);
-  const preview = cleanArticleText(article.description || article.ai_summary || article.content || article.original_description || '');
+  const preview = cleanArticleText(article.ai_summary || article.description || article.content || article.original_description || '');
 
   return (
     <Card

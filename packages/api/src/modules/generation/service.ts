@@ -156,6 +156,7 @@ export async function generatePost(
     articles: selectedArticles,
     type,
     emojiPack,
+    allowHashtags: wantsHashtags(customPrompt),
     operationLogId: operationLog.id,
     userId,
   });
@@ -175,6 +176,7 @@ async function startGeneration(
     articles: typeof articles.$inferSelect[];
     type: string;
     emojiPack: string[];
+    allowHashtags: boolean;
     operationLogId: string;
     userId: string;
   }
@@ -199,7 +201,10 @@ async function startGeneration(
     }
 
     const { content: rawContent, modelUsed } = await callAiProvider(provider, systemPrompt, userPrompt, operationId);
-    const content = ensureLeadingEmoji(sanitizeTelegramText(rawContent), context.emojiPack);
+    const content = ensureLeadingEmoji(
+      sanitizeTelegramText(rawContent, { allowHashtags: context.allowHashtags }),
+      context.emojiPack
+    );
 
     await db
       .insert(generatedPosts)
@@ -423,6 +428,11 @@ function buildGenerationUserPrompt(basePrompt: string, customPrompt?: string): s
   if (!feedback) return basePrompt;
 
   return `${basePrompt}\n\nMANDATORY EDITOR FEEDBACK:\n${feedback}\n\nApply every editor instruction above explicitly. If feedback asks for tags, links, source mentions, structure, or a changed tone, include those changes in the new version.`;
+}
+
+function wantsHashtags(customPrompt?: string): boolean {
+  const normalized = customPrompt?.toLowerCase() ?? "";
+  return /#|хештег|хэштег|hashtag|hashtags|теги|тегов|тегами/.test(normalized);
 }
 
 function buildTelegramSystemPrompt(basePrompt: string, type: GeneratePostInput["type"], emojis: string[]): string {

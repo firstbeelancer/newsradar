@@ -8,7 +8,6 @@
  * ------------------------------------------------------------------
  */
 
-import { complete } from "./ai-client.js";
 import { cleanArticleText } from "./text-cleaner.js";
 
 /**
@@ -51,6 +50,76 @@ export function detectLanguage(text: string): string {
   }
 
   return "unknown";
+}
+
+function splitSentences(text: string): string[] {
+  return text
+    .replace(/\s+/g, " ")
+    .split(/(?<=[.!?。！？])\s+/u)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length > 0);
+}
+
+export function buildExtractiveSummary(text: string, title = "", maxChars = 520): string {
+  const cleaned = cleanArticleText(text);
+  if (!cleaned) return "";
+  if (cleaned.length <= maxChars) return cleaned;
+
+  const titleWords = new Set(
+    title
+      .toLowerCase()
+      .split(/[^\p{L}\p{N}]+/u)
+      .filter((word) => word.length > 3)
+  );
+
+  const sentences = splitSentences(cleaned).slice(0, 14);
+  const scored = sentences
+    .map((sentence, index) => {
+      const words = sentence.toLowerCase().split(/[^\p{L}\p{N}]+/u);
+      const titleHits = words.filter((word) => titleWords.has(word)).length;
+      const lengthScore = sentence.length >= 70 && sentence.length <= 240 ? 2 : 0;
+      return { sentence, index, score: titleHits * 3 + lengthScore + Math.max(0, 4 - index) };
+    })
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .slice(0, 3)
+    .sort((a, b) => a.index - b.index);
+
+  const summary = scored.map((item) => item.sentence).join(" ").trim();
+  return summary.length > maxChars ? `${summary.slice(0, maxChars - 1).trim()}…` : summary;
+}
+
+async function summarizeToRussian(
+  text: string,
+  title: string,
+  workspaceId?: string
+): Promise<string> {
+  const cleaned = cleanArticleText(text);
+  if (!cleaned) return "";
+
+  try {
+    const { complete } = await import("./ai-client.js");
+    const result = await complete({
+      messages: [
+        {
+          role: "system",
+          content:
+            "Ты профессиональный редактор новостной ленты. Сожми материал в 2-3 информативных предложения на русском. Не копируй первое предложение механически, выдели суть, причину и важный контекст. Верни только summary.",
+        },
+        {
+          role: "user",
+          content: `Заголовок: ${title}\n\nМатериал:\n${cleaned.slice(0, 6_000)}`,
+        },
+      ],
+      workspaceId,
+      process: "ingest_analysis",
+      temperature: 0.2,
+      maxTokens: 500,
+    });
+
+    return cleanArticleText(result).slice(0, 700);
+  } catch {
+    return buildExtractiveSummary(cleaned, title);
+  }
 }
 
 async function translateViaGoogleGtx(
@@ -111,6 +180,7 @@ export async function translateToRussian(
   const systemPrompt = `You are a professional translator. Translate the following text from ${detectedLang.toUpperCase()} to Russian (RU). Preserve the original meaning, tone, and formatting. Respond with ONLY the translated text.`;
 
   try {
+    const { complete } = await import("./ai-client.js");
     const result = await complete({
       messages: [
         { role: "system", content: systemPrompt },
@@ -144,33 +214,42 @@ export async function translateArticle(
   title: string;
   description: string;
   content: string;
+  aiSummary: string;
   language: string;
 }> {
-  const detectedLang = detectLanguage(title);
+  const normalizedTitle = cleanArticleText(title);
   const normalizedDescription = cleanArticleText(description ?? "");
   const normalizedContent = cleanArticleText(content ?? "");
-  const sourceBody = normalizedDescription || normalizedContent;
+  const detectedLang = detectLanguage(`${normalizedTitle}\n${normalizedDescription || normalizedContent}`);
+  const sourceBody =
+    normalizedContent.length > normalizedDescription.length + 80
+      ? normalizedContent
+      : normalizedDescription || normalizedContent;
 
   if (detectedLang === "ru") {
+    const aiSummary = await summarizeToRussian(sourceBody, normalizedTitle, workspaceId);
     return {
-      title,
-      description: normalizedDescription || normalizedContent,
+      title: normalizedTitle,
+      description: aiSummary || normalizedDescription || normalizedContent,
       content: normalizedContent,
+      aiSummary,
       language: "ru",
     };
   }
 
   const [translatedTitle, translatedBody] = await Promise.all([
-    translateToRussian(title, detectedLang, workspaceId),
+    translateToRussian(normalizedTitle, detectedLang, workspaceId),
     sourceBody
       ? translateToRussian(sourceBody, detectedLang, workspaceId)
       : Promise.resolve(""),
   ]);
+  const translatedSummary = await summarizeToRussian(translatedBody || sourceBody, translatedTitle || normalizedTitle, workspaceId);
 
   return {
-    title: translatedTitle || title,
-    description: translatedBody || sourceBody,
+    title: translatedTitle || normalizedTitle,
+    description: translatedSummary || translatedBody || sourceBody,
     content: translatedBody || normalizedContent,
+    aiSummary: translatedSummary || buildExtractiveSummary(translatedBody || sourceBody, translatedTitle || normalizedTitle),
     language: "ru",
   };
 }

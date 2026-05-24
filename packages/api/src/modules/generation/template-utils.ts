@@ -22,7 +22,7 @@ export function buildArticleContent(articlesForPrompt: PromptArticle[]): string 
     .join('\n\n---\n\n');
 }
 
-export function sanitizeTelegramText(text: string): string {
+export function sanitizeTelegramText(text: string, options: { allowHashtags?: boolean } = {}): string {
   let sanitized = text.replace(/\r\n/g, '\n');
 
   sanitized = sanitized
@@ -31,10 +31,13 @@ export function sanitizeTelegramText(text: string): string {
     .replace(/__(.*?)__/g, '$1')
     .replace(/`{1,3}([^`]+)`{1,3}/g, '$1')
     .replace(/^\s*[-*]\s+/gm, '• ')
-    .replace(/(^|\s)#([^\s#]+)/g, '$1$2')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+
+  if (!options.allowHashtags) {
+    sanitized = sanitized.replace(/(^|\s)#([^\s#]+)/g, '$1$2').trim();
+  }
 
   return sanitized;
 }
