@@ -1134,6 +1134,8 @@ export const scoringApi = {
 
 export const assetPacksApi = {
   list: () => apiGet<AssetPack[]>('/asset-packs'),
+  create: (data: { name: string; description?: string; emojis: string | string[]; setDefault?: boolean }) =>
+    apiPost<AssetPack>('/asset-packs', data),
   setDefault: (packId: string) => apiPost<AssetPack>('/asset-packs/default', { packId }),
 };
 
@@ -1168,6 +1170,13 @@ export interface WorkspaceConfig {
   };
   telegram?: {
     stickerPacks?: string[];
+  };
+  generation?: {
+    provider?: string;
+    model?: string;
+    postTemplateId?: string | null;
+    digestTemplateId?: string | null;
+    period?: 'day' | 'week' | 'month';
   };
   [key: string]: unknown;
 }

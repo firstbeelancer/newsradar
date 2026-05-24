@@ -29,6 +29,21 @@ declare global {
   }
 }
 
+export function composeRegenerationPrompt(feedback: string, currentDraft: string) {
+  const trimmedFeedback = feedback.trim();
+  const trimmedDraft = currentDraft.trim();
+
+  return [
+    'MANDATORY editor feedback:',
+    trimmedFeedback,
+    '',
+    'Current generated draft to revise:',
+    trimmedDraft || '(empty draft)',
+    '',
+    'Regenerate the text. Apply every editor instruction explicitly. If the editor asks for tags, links, sources, structure, tone, or length, those requirements are mandatory.',
+  ].join('\n');
+}
+
 export function GenerationResult({ content, onRegenerate, onCopy }: GenerationResultProps) {
   const [editableContent, setEditableContent] = useState(content);
   const [feedback, setFeedback] = useState('');
@@ -187,7 +202,7 @@ export function GenerationResult({ content, onRegenerate, onCopy }: GenerationRe
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
-              <Button size="sm" onClick={() => onRegenerate(feedback)} disabled={!feedback.trim()}>
+              <Button size="sm" onClick={() => onRegenerate(composeRegenerationPrompt(feedback, editableContent))} disabled={!feedback.trim()}>
                 <RotateCcw className="h-4 w-4" />
                 Перегенерировать
               </Button>

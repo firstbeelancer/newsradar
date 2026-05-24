@@ -2,17 +2,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import { assetItems, assetPacks } from "../../db/schema.js";
 import { AppError } from "../../middleware/error-handler.js";
-
-const DEFAULT_EMOJI_ITEMS = [
-  { name: "breaking", value: "🚨", label: "Breaking" },
-  { name: "hot", value: "🔥", label: "Hot" },
-  { name: "insight", value: "🧠", label: "Insight" },
-  { name: "important", value: "📌", label: "Important" },
-  { name: "stats", value: "📊", label: "Stats" },
-  { name: "watch", value: "👀", label: "Watch" },
-  { name: "action", value: "⚡", label: "Action" },
-  { name: "done", value: "✅", label: "Done" },
-];
+import { DEFAULT_EMOJI_ITEMS, normalizeEmojiValues } from "./defaults.js";
 
 export interface AssetPackDto {
   id: string;
@@ -35,14 +25,19 @@ async function ensureDefaultEmojiPack(workspaceId: string) {
     where: and(eq(assetPacks.workspaceId, workspaceId), eq(assetPacks.isDefault, true)),
   });
 
-  if (existingDefault) return existingDefault;
+  if (existingDefault) {
+    if (existingDefault.name === "Default Telegram Emoji Pack") {
+      await ensureDefaultItems(existingDefault.id);
+    }
+    return existingDefault;
+  }
 
   const [createdPack] = await db
     .insert(assetPacks)
     .values({
       workspaceId,
       name: "Default Telegram Emoji Pack",
-      description: "Дефолтный набор эмодзи для генерации постов в Telegram",
+      description: "Дефолтный расширенный набор emoji для генерации постов в Telegram",
       isDefault: true,
       itemCount: DEFAULT_EMOJI_ITEMS.length,
     })
@@ -58,6 +53,71 @@ async function ensureDefaultEmojiPack(workspaceId: string) {
       position: index,
     }))
   );
+
+  return createdPack;
+}
+
+async function ensureDefaultItems(packId: string) {
+  const existingItems = await db
+    .select({ name: assetItems.name })
+    .from(assetItems)
+    .where(and(eq(assetItems.packId, packId), eq(assetItems.type, "emoji")));
+  const existingNames = new Set(existingItems.map((item) => item.name));
+  const missing = DEFAULT_EMOJI_ITEMS.filter((item) => !existingNames.has(item.name));
+
+  if (missing.length > 0) {
+    await db.insert(assetItems).values(
+      missing.map((item, index) => ({
+        packId,
+        type: "emoji",
+        name: item.name,
+        value: item.value,
+        label: item.label,
+        position: existingItems.length + index,
+      }))
+    );
+  }
+
+  await db
+    .update(assetPacks)
+    .set({ itemCount: existingItems.length + missing.length, updatedAt: new Date() })
+    .where(eq(assetPacks.id, packId));
+}
+
+export async function createAssetPack(
+  workspaceId: string,
+  data: { name: string; description?: string | null; emojis: string[] | string; setDefault?: boolean }
+) {
+  const emojis = normalizeEmojiValues(data.emojis);
+  if (emojis.length === 0) {
+    throw new AppError(400, "Emoji pack must contain at least one emoji", "ASSET_PACK_EMPTY");
+  }
+
+  const [createdPack] = await db
+    .insert(assetPacks)
+    .values({
+      workspaceId,
+      name: data.name.trim(),
+      description: data.description?.trim() || null,
+      isDefault: false,
+      itemCount: emojis.length,
+    })
+    .returning();
+
+  await db.insert(assetItems).values(
+    emojis.map((emoji, index) => ({
+      packId: createdPack.id,
+      type: "emoji",
+      name: `emoji_${index + 1}`,
+      value: emoji,
+      label: emoji,
+      position: index,
+    }))
+  );
+
+  if (data.setDefault) {
+    return setDefaultAssetPack(workspaceId, createdPack.id);
+  }
 
   return createdPack;
 }

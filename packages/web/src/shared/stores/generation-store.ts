@@ -64,6 +64,43 @@ const initialState: GenerationState = {
   error: null,
 };
 
+type DigestRequestState = Pick<
+  GenerationState,
+  | 'selectedArticleIds'
+  | 'selectedAgentId'
+  | 'selectedPeriod'
+  | 'selectedTemplateId'
+  | 'selectedProvider'
+  | 'selectedModel'
+  | 'lastDigestRequest'
+>;
+
+export function buildGenerateDigestRequest(
+  state: DigestRequestState,
+  dto?: Partial<GenerateDigestDto>
+): GenerateDigestDto {
+  const articleIds =
+    dto?.article_ids
+    ?? (state.selectedArticleIds.length > 0 ? state.selectedArticleIds : state.lastDigestRequest?.article_ids);
+  const agentId = dto?.agent_id ?? state.selectedAgentId ?? state.lastDigestRequest?.agent_id ?? undefined;
+  const articleCount = dto?.article_count ?? state.lastDigestRequest?.article_count;
+  const period = dto?.period ?? state.selectedPeriod ?? state.lastDigestRequest?.period ?? 'day';
+  const templateId = dto?.template_id ?? state.selectedTemplateId ?? state.lastDigestRequest?.template_id ?? undefined;
+  const provider = dto?.provider ?? state.selectedProvider ?? state.lastDigestRequest?.provider;
+  const model = dto?.model ?? state.selectedModel ?? state.lastDigestRequest?.model;
+
+  return {
+    ...(agentId ? { agent_id: agentId } : {}),
+    ...(articleIds && articleIds.length > 0 ? { article_ids: articleIds } : {}),
+    ...(articleCount !== undefined ? { article_count: articleCount } : {}),
+    period,
+    ...(templateId ? { template_id: templateId } : {}),
+    ...(dto?.custom_prompt ? { custom_prompt: dto.custom_prompt } : {}),
+    ...(provider ? { provider } : {}),
+    ...(model ? { model } : {}),
+  };
+}
+
 export const useGenerationStore = create<GenerationState & GenerationActions>()(
   persist(
     (set, get) => ({
@@ -119,25 +156,7 @@ export const useGenerationStore = create<GenerationState & GenerationActions>()(
 
       generateDigest: async (dto) => {
         const state = get();
-        const articleIds =
-          dto?.article_ids
-          ?? (state.selectedArticleIds.length > 0 ? state.selectedArticleIds : state.lastDigestRequest?.article_ids);
-        const agentId = dto?.agent_id ?? state.selectedAgentId ?? state.lastDigestRequest?.agent_id ?? '';
-        const articleCount = dto?.article_count ?? state.lastDigestRequest?.article_count;
-        const period = dto?.period ?? state.selectedPeriod ?? state.lastDigestRequest?.period ?? 'day';
-        const templateId = dto?.template_id ?? state.selectedTemplateId ?? state.lastDigestRequest?.template_id ?? undefined;
-        const provider = dto?.provider ?? state.selectedProvider ?? state.lastDigestRequest?.provider;
-        const model = dto?.model ?? state.selectedModel ?? state.lastDigestRequest?.model;
-        const request: GenerateDigestDto = {
-          agent_id: agentId,
-          article_ids: articleIds,
-          article_count: articleCount,
-          period,
-          template_id: templateId,
-          custom_prompt: dto?.custom_prompt,
-          provider,
-          model,
-        };
+        const request = buildGenerateDigestRequest(state, dto);
 
         set({ isGenerating: true, error: null, streamContent: '', generationResult: '', opId: null });
         try {
@@ -146,13 +165,13 @@ export const useGenerationStore = create<GenerationState & GenerationActions>()(
             opId: result.op_id,
             isGenerating: false,
             lastDigestRequest: {
-              agent_id: agentId,
-              article_ids: articleIds,
-              article_count: articleCount,
-              period,
-              template_id: templateId,
-              provider,
-              model,
+              agent_id: request.agent_id,
+              article_ids: request.article_ids,
+              article_count: request.article_count,
+              period: request.period,
+              template_id: request.template_id,
+              provider: request.provider,
+              model: request.model,
             },
           });
         } catch (err) {

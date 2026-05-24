@@ -69,6 +69,13 @@ function sliderFillStyle(value: number): CSSProperties {
   return { '--slider-pct': `${pct}%` } as CSSProperties;
 }
 
+export function parseScoreModifierInput(value: string): number {
+  const normalized = value.trim().replace(',', '.');
+  if (!normalized) return 0;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 interface AgentFormProps {
   agent: Agent | null;
   open: boolean;
@@ -636,12 +643,10 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
                       <div className="space-y-1">
                         <Label className="text-[11px] text-muted-foreground">Модификатор score</Label>
                         <input
-                          type="number"
-                          step={1}
-                          min={-100}
-                          max={100}
+                          type="text"
+                          inputMode="decimal"
                           value={cf.scoreModifier ?? 0}
-                          onChange={(e) => updateChipFilter(i, 'scoreModifier', Number(e.target.value))}
+                          onChange={(e) => updateChipFilter(i, 'scoreModifier', parseScoreModifierInput(e.target.value))}
                           className={cn(
                             'w-full rounded-lg border bg-card px-2.5 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-accent',
                             (cf.scoreModifier ?? 0) > 0 ? 'border-green-300 text-green-700' :

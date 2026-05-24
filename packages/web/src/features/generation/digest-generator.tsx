@@ -8,7 +8,7 @@ import { Checkbox } from '@shared/ui/checkbox';
 import { useGenerationStore } from '@shared/stores/generation-store';
 import { useSettingsStore } from '@shared/stores/settings-store';
 import { useToast } from '@shared/ui/toast';
-import { articlesApi, apiGet, apiPut } from '@shared/api/client';
+import { articlesApi, apiGet, apiPut, workspaceApi, type WorkspaceConfig } from '@shared/api/client';
 import { Newspaper, Save } from 'lucide-react';
 import { GenerationRunDialog } from './generation-run-dialog';
 
@@ -68,7 +68,10 @@ export function DigestGenerator() {
 
     void (async () => {
       try {
-        const providers = await apiGet<AIProviderOption[]>('/ai-providers');
+        const [providers, workspace] = await Promise.all([
+          apiGet<AIProviderOption[]>('/ai-providers'),
+          workspaceApi.get(),
+        ]);
         if (cancelled) return;
 
         const generationProviders = (Array.isArray(providers) ? providers : []).filter((provider) => {
@@ -78,10 +81,15 @@ export function DigestGenerator() {
 
         setProviderOptions(generationProviders);
 
-        const active = generationProviders[0];
+        const savedGeneration = workspace.config.generation;
+        const active = generationProviders.find(
+          (provider) => provider.provider === savedGeneration?.provider && provider.model === savedGeneration?.model
+        ) ?? generationProviders[0];
         if (active) {
           initFromProvider(active.provider, active.model);
         }
+        setSelectedTemplateId(savedGeneration?.digestTemplateId ?? null);
+        setSelectedPeriod(savedGeneration?.period ?? 'day');
       } catch {
         setProviderOptions([]);
       }
@@ -90,7 +98,7 @@ export function DigestGenerator() {
     return () => {
       cancelled = true;
     };
-  }, [initFromProvider]);
+  }, [initFromProvider, setSelectedPeriod, setSelectedTemplateId]);
 
   const { data, isLoading } = useArticlesForSelection();
   const articles = data?.pages.flatMap((page) => page.data) ?? [];
@@ -148,10 +156,21 @@ export function DigestGenerator() {
 
     setSavingConfig(true);
     try {
+      const workspace = await workspaceApi.get();
       await apiPut(`/ai-providers/${targetProvider.id}`, {
         model: selectedModel,
         assignedTo: Array.from(new Set([...(targetProvider.assignedTo ?? []), 'generation'])),
       });
+      await workspaceApi.updateConfig({
+        ...workspace.config,
+        generation: {
+          ...(workspace.config.generation ?? {}),
+          provider: targetProvider.provider,
+          model: selectedModel,
+          digestTemplateId: selectedTemplateId ?? null,
+          period: selectedPeriod,
+        },
+      } as WorkspaceConfig);
       addToast({
         title: 'Конфигурация сохранена',
         description: `Дайджест будет собираться через ${targetProvider.name}.`,

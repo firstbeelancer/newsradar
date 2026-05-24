@@ -22,15 +22,16 @@ function getUserSub(req: { user?: unknown }) {
 function normalizeGenerationBody(body: unknown) {
   if (!body || typeof body !== "object") return body;
   const raw = body as Record<string, unknown>;
+  const nonEmpty = (value: unknown) => (typeof value === "string" && value.trim() === "" ? undefined : value);
   return {
     ...raw,
-    agentId: raw.agentId ?? raw.agent_id,
-    templateId: raw.templateId ?? raw.template_id,
+    agentId: nonEmpty(raw.agentId ?? raw.agent_id),
+    templateId: nonEmpty(raw.templateId ?? raw.template_id),
     articleIds: raw.articleIds ?? raw.article_ids,
     articleCount: raw.articleCount ?? raw.article_count,
-    customPrompt: raw.customPrompt ?? raw.custom_prompt,
-    provider: raw.provider,
-    model: raw.model,
+    customPrompt: nonEmpty(raw.customPrompt ?? raw.custom_prompt),
+    provider: nonEmpty(raw.provider),
+    model: nonEmpty(raw.model),
     period: raw.period,
   };
 }

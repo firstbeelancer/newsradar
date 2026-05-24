@@ -422,7 +422,7 @@ function buildGenerationUserPrompt(basePrompt: string, customPrompt?: string): s
   const feedback = customPrompt?.trim();
   if (!feedback) return basePrompt;
 
-  return `${basePrompt}\n\nКомментарии редактора:\n${feedback}\n\nСделай новую версию с учетом комментариев.`;
+  return `${basePrompt}\n\nMANDATORY EDITOR FEEDBACK:\n${feedback}\n\nApply every editor instruction above explicitly. If feedback asks for tags, links, source mentions, structure, or a changed tone, include those changes in the new version.`;
 }
 
 function buildTelegramSystemPrompt(basePrompt: string, type: GeneratePostInput["type"], emojis: string[]): string {
