@@ -22,6 +22,19 @@ export function buildArticleContent(articlesForPrompt: PromptArticle[]): string 
     .join('\n\n---\n\n');
 }
 
+export function buildCompactArticleContext(articlesForPrompt: PromptArticle[]): string {
+  return articlesForPrompt
+    .map((article, index) => {
+      const summary = article.aiSummary || article.description || article.content || '';
+      return [
+        `Статья ${index + 1}: ${article.title}`,
+        article.link ? `Оригинал: ${article.link}` : null,
+        summary ? `Краткий контекст: ${summary.slice(0, 700)}` : null,
+      ].filter(Boolean).join('\n');
+    })
+    .join('\n\n---\n\n');
+}
+
 export function sanitizeTelegramText(text: string, options: { allowHashtags?: boolean } = {}): string {
   let sanitized = text.replace(/\r\n/g, '\n');
 

@@ -10,6 +10,7 @@ import { getDefaultEmojiValues } from "../asset-packs/service.js";
 import { resolveProviderForProcess } from "../ai-providers/service.js";
 import {
   buildArticleContent,
+  buildCompactArticleContext,
   ensureLeadingEmoji,
   getGenerationCutoffDate,
   renderPromptTemplate,
@@ -118,7 +119,10 @@ export async function generatePost(
   const baseUserPrompt =
     renderPromptTemplate(template?.userPrompt, selectedArticles)
     ?? `На основе следующих статей создай ${type === "digest" ? "дайджест" : "пост"}:\n\n${articleTexts}`;
-  const userPrompt = buildGenerationUserPrompt(baseUserPrompt, customPrompt);
+  const effectiveBaseUserPrompt = isRegenerationPrompt(customPrompt)
+    ? buildRegenerationBasePrompt(selectedArticles)
+    : baseUserPrompt;
+  const userPrompt = buildGenerationUserPrompt(effectiveBaseUserPrompt, customPrompt);
 
   const provider = await resolveProviderForProcess(workspaceId, "generation", requestedProvider, requestedModel);
   const operationLog = await createOperationLog({
@@ -244,16 +248,17 @@ async function startGeneration(
       },
     });
   } catch (err) {
+    const errorMessage = formatGenerationError(err);
     const errorOp = streamStore.get(operationId);
     if (errorOp) {
       errorOp.status = "error";
-      errorOp.error = err instanceof Error ? err.message : "Generation failed";
+      errorOp.error = errorMessage;
       streamStore.set(operationId, errorOp);
     }
 
     await updateOperationLog(context.operationLogId, context.userId, {
       status: "error",
-      message: err instanceof Error ? err.message : "Generation failed",
+      message: errorMessage,
       finishedAt: new Date(),
       metadata: {
         articleCount: context.articles.length,
@@ -273,7 +278,7 @@ async function callAiProvider(
   const baseUrl = provider.baseUrl ?? getDefaultBaseUrl(provider.provider);
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 120000);
+  const timeout = setTimeout(() => controller.abort(), 240000);
 
   try {
     if (provider.provider === "openai" || provider.provider === "openrouter") {
@@ -421,6 +426,27 @@ function pushStreamChunk(operationId: string, content: string) {
   op.chunks.push(content.slice(0, 200));
   op.content = content;
   streamStore.set(operationId, op);
+}
+
+function isRegenerationPrompt(customPrompt?: string): boolean {
+  return /Current generated draft to revise:/i.test(customPrompt ?? "");
+}
+
+function buildRegenerationBasePrompt(selectedArticles: typeof articles.$inferSelect[]): string {
+  return [
+    "Use this compact source context while revising the existing draft.",
+    "If the editor asks for the original link, attach the exact Original URL from this context.",
+    "If the editor asks for tags or hashtags, add concise relevant hashtags at the end.",
+    "",
+    buildCompactArticleContext(selectedArticles),
+  ].join("\n");
+}
+
+function formatGenerationError(err: unknown): string {
+  if (err instanceof Error && err.name === "AbortError") {
+    return "AI generation timed out. Попробуй ещё раз или сократи комментарий к регенерации.";
+  }
+  return err instanceof Error ? err.message : "Generation failed";
 }
 
 function buildGenerationUserPrompt(basePrompt: string, customPrompt?: string): string {

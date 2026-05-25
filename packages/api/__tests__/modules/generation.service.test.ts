@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getGenerationCutoffDate, renderPromptTemplate, sanitizeTelegramText } from '../../src/modules/generation/template-utils.js';
+import { buildCompactArticleContext, getGenerationCutoffDate, renderPromptTemplate, sanitizeTelegramText } from '../../src/modules/generation/template-utils.js';
 
 describe('generation service helpers', () => {
   it('рендерит шаблон с {{content}} и циклом по articles без сырого шаблонного синтаксиса', () => {
@@ -43,5 +43,20 @@ describe('generation service helpers', () => {
   it('keeps hashtags only when regeneration feedback explicitly asks for tags', () => {
     expect(sanitizeTelegramText('Финал #ai #news')).toBe('Финал ai news');
     expect(sanitizeTelegramText('Финал #ai #news', { allowHashtags: true })).toBe('Финал #ai #news');
+  });
+
+  it('keeps original links in compact regeneration context without full article bloat', () => {
+    const context = buildCompactArticleContext([
+      {
+        title: 'AI agents on Wall Street',
+        aiSummary: 'Banks are embedding AI engineers into workflows.',
+        content: 'x'.repeat(2000),
+        link: 'https://example.com/original',
+      },
+    ]);
+
+    expect(context).toContain('https://example.com/original');
+    expect(context).toContain('Banks are embedding AI engineers');
+    expect(context.length).toBeLessThan(1000);
   });
 });
