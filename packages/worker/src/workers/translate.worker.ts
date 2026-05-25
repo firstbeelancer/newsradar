@@ -11,6 +11,7 @@ import { db } from "../db/index.js";
 import { articles } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import { detectLanguage, translateArticle } from "../lib/translator.js";
+import { fetchArticleText } from "../lib/article-extractor.js";
 import { setAiTelemetryError } from "../lib/ai-client.js";
 import { ingestAnalysisQueue } from "../connection/redis.js";
 import type { Job } from "bullmq";
@@ -44,6 +45,7 @@ export async function processTranslate(
       description: articles.description,
       content: articles.content,
       aiSummary: articles.aiSummary,
+      link: articles.link,
       workspaceId: articles.workspaceId,
       originalTitle: articles.originalTitle,
       originalDescription: articles.originalDescription,
@@ -61,7 +63,7 @@ export async function processTranslate(
   // Detect language from content
   const sourceTitle = force ? article.originalTitle ?? article.title : article.title;
   const sourceDescription = force ? article.originalDescription ?? article.description : article.description;
-  const sourceContent = article.content;
+  const sourceContent = article.content ?? (force ? await fetchArticleText(article.link) : "");
   const detectedLang = detectLanguage(sourceTitle);
 
   // If already Russian or detection says Russian, skip translation

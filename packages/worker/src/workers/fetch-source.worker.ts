@@ -14,6 +14,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { parseRssFeed } from "../lib/rss-parser.js";
 import { parseTelegramChannel } from "../lib/telegram-parser.js";
 import { checkRawDedup, computeRawHash } from "../lib/dedup.js";
+import { fetchArticleText } from "../lib/article-extractor.js";
 import { rawDedupQueue } from "../connection/redis.js";
 import type { Job } from "bullmq";
 import type { Logger } from "pino";
@@ -103,13 +104,20 @@ export async function processFetchSource(
           continue;
         }
 
+        const fetchedContent =
+          item.content || item.description
+            ? ""
+            : await fetchArticleText(item.link);
+        const articleDescription = item.description || fetchedContent.slice(0, 700);
+        const articleContent = item.content || fetchedContent || item.description;
+
         // Insert new article
         const [article] = await db
           .insert(articles)
           .values({
             title: item.title,
-            description: item.description,
-            content: item.content || item.description,
+            description: articleDescription,
+            content: articleContent,
             link: item.link,
             guid: item.guid || item.link,
             publishedAt: item.pubDate,
