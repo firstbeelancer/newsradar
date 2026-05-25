@@ -1,20 +1,20 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../db/index.js";
-import { aiProviders, articles, contentTemplates, generatedPosts, workspaces } from "../../db/schema.js";
+import { articles, contentTemplates, generatedPosts, workspaces } from "../../db/schema.js";
 import type { GeneratedPost } from "../../db/types.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { decodeCursor, encodeCursor } from "../../lib/pagination.js";
 import type { Cursor, PaginatedResult } from "../../lib/pagination.js";
-import { createOperationLog, updateOperationLog } from "../operation-logs/service.js";
+import { createOperationLog } from "../operation-logs/service.js";
 import { getDefaultEmojiValues } from "../asset-packs/service.js";
 import { resolveProviderForProcess } from "../ai-providers/service.js";
+import { getGenerateDigestQueue, getGeneratePostQueue } from "../../lib/queues.js";
+import { setGenerationState } from "./progress.js";
 import {
   buildArticleContent,
   buildCompactArticleContext,
-  ensureLeadingEmoji,
   getGenerationCutoffDate,
   renderPromptTemplate,
-  sanitizeTelegramText,
 } from "./template-utils.js";
 
 export interface GeneratePostInput {
@@ -29,18 +29,6 @@ export interface GeneratePostInput {
   period?: "day" | "week" | "month";
   type: "manual" | "digest" | "deepsearch";
 }
-
-export interface StreamOperation {
-  id: string;
-  status: "pending" | "generating" | "completed" | "error";
-  content: string;
-  error?: string;
-  chunks: string[];
-  operationLogId?: string;
-  userId?: string;
-}
-
-const streamStore = new Map<string, StreamOperation>();
 
 export async function generatePost(
   input: GeneratePostInput,
@@ -100,6 +88,9 @@ export async function generatePost(
   }
 
   const articleTexts = buildArticleContent(selectedArticles);
+  if (selectedArticles.length === 0) {
+    throw new AppError(400, "\u0414\u043b\u044f \u0433\u0435\u043d\u0435\u0440\u0430\u0446\u0438\u0438 \u043d\u0443\u0436\u043d\u0430 \u0445\u043e\u0442\u044f \u0431\u044b \u043e\u0434\u043d\u0430 \u0441\u0442\u0430\u0442\u044c\u044f", "GENERATION_ARTICLES_REQUIRED");
+  }
 
   const workspace = await db.query.workspaces.findFirst({
     where: eq(workspaces.id, workspaceId),
@@ -144,302 +135,46 @@ export async function generatePost(
     },
   });
 
-  streamStore.set(operationId, {
-    id: operationId,
+  await setGenerationState(operationId, {
     status: "pending",
     content: "",
     chunks: [],
-    operationLogId: operationLog.id,
-    userId,
   });
 
-  void startGeneration(operationId, systemPrompt, userPrompt, provider, {
+  const jobData = {
+    operationId,
+    operationLogId: operationLog.id,
+    userId,
     workspaceId,
     agentId,
     templateId: template?.id ?? null,
-    articles: selectedArticles,
+    articleIds: selectedArticles.map((article) => article.id),
+    articleCount: selectedArticles.length,
     type,
+    systemPrompt,
+    userPrompt,
+    requestedProvider,
+    requestedModel: provider?.model ?? requestedModel,
     emojiPack,
     allowHashtags: wantsHashtags(customPrompt),
-    operationLogId: operationLog.id,
-    userId,
+    title: selectedArticles[0]?.title ?? "Generated post",
+    articlesSnapshot: selectedArticles.map((article) => ({
+      id: article.id,
+      title: article.title,
+      link: article.link,
+      score: article.score,
+    })),
+  };
+
+  const queue = type === "digest" ? getGenerateDigestQueue() : getGeneratePostQueue();
+  await queue.add(`${type}-${operationId}`, jobData, {
+    jobId: operationId,
+    removeOnComplete: { age: 60 * 60 * 24, count: 1000 },
+    removeOnFail: { age: 60 * 60 * 24 * 7, count: 1000 },
   });
 
   return { operationId, status: "queued" };
 }
-
-async function startGeneration(
-  operationId: string,
-  systemPrompt: string,
-  userPrompt: string,
-  provider: typeof aiProviders.$inferSelect | undefined,
-  context: {
-    workspaceId: string;
-    agentId?: string;
-    templateId: string | null;
-    articles: typeof articles.$inferSelect[];
-    type: string;
-    emojiPack: string[];
-    allowHashtags: boolean;
-    operationLogId: string;
-    userId: string;
-  }
-): Promise<void> {
-  const op = streamStore.get(operationId);
-  if (!op) return;
-
-  op.status = "generating";
-  streamStore.set(operationId, op);
-  await updateOperationLog(context.operationLogId, context.userId, {
-    status: "running",
-    message: context.type === "digest" ? "Собираю финальный дайджест" : "Собираю финальный пост",
-  });
-
-  try {
-    if (!provider) {
-      throw new AppError(503, "Для генерации не найден активный AI-провайдер", "GENERATION_PROVIDER_NOT_FOUND");
-    }
-
-    if (!provider.apiKeyEncrypted) {
-      throw new AppError(503, "Для выбранного AI-провайдера не настроен API-ключ", "GENERATION_PROVIDER_KEY_MISSING");
-    }
-
-    const { content: rawContent, modelUsed } = await callAiProvider(provider, systemPrompt, userPrompt, operationId);
-    const content = ensureLeadingEmoji(
-      sanitizeTelegramText(rawContent, { allowHashtags: context.allowHashtags }),
-      context.emojiPack
-    );
-
-    await db
-      .insert(generatedPosts)
-      .values({
-        workspaceId: context.workspaceId,
-        agentId: context.agentId ?? null,
-        templateId: context.templateId,
-        type: context.type as "manual" | "digest" | "deepsearch",
-        title: context.articles[0]?.title ?? "Generated post",
-        content,
-        articleCount: context.articles.length,
-        articlesSnapshot: context.articles.map((article) => ({
-          id: article.id,
-          title: article.title,
-          link: article.link,
-          score: article.score,
-        })),
-        promptSnapshot: userPrompt,
-        modelSnapshot: modelUsed,
-      })
-      .returning();
-
-    const finalOp = streamStore.get(operationId);
-    if (finalOp) {
-      finalOp.status = "completed";
-      finalOp.content = content;
-      streamStore.set(operationId, finalOp);
-    }
-
-    await updateOperationLog(context.operationLogId, context.userId, {
-      status: "completed",
-      message: context.type === "digest" ? "Дайджест готов" : "Пост готов",
-      finishedAt: new Date(),
-      metadata: {
-        articleCount: context.articles.length,
-        preview: content.slice(0, 280),
-      },
-    });
-  } catch (err) {
-    const errorMessage = formatGenerationError(err);
-    const errorOp = streamStore.get(operationId);
-    if (errorOp) {
-      errorOp.status = "error";
-      errorOp.error = errorMessage;
-      streamStore.set(operationId, errorOp);
-    }
-
-    await updateOperationLog(context.operationLogId, context.userId, {
-      status: "error",
-      message: errorMessage,
-      finishedAt: new Date(),
-      metadata: {
-        articleCount: context.articles.length,
-      },
-    });
-  }
-}
-
-async function callAiProvider(
-  provider: typeof aiProviders.$inferSelect,
-  systemPrompt: string,
-  userPrompt: string,
-  operationId: string
-): Promise<{ content: string; modelUsed: string }> {
-  const { decrypt } = await import("../../lib/encryption.js");
-  const apiKey = decrypt(provider.apiKeyEncrypted!);
-  const baseUrl = provider.baseUrl ?? getDefaultBaseUrl(provider.provider);
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 120000);
-
-  try {
-    if (provider.provider === "openai" || provider.provider === "openrouter") {
-      const result = await requestOpenAiCompatibleCompletion({
-        provider,
-        apiKey,
-        baseUrl,
-        systemPrompt,
-        userPrompt,
-        signal: controller.signal,
-      });
-      pushStreamChunk(operationId, result.content);
-      return result;
-    }
-
-    if (provider.provider === "anthropic") {
-      const response = await fetch(`${baseUrl}/messages`, {
-        method: "POST",
-        headers: {
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: provider.model,
-          max_tokens: 4000,
-          system: systemPrompt,
-          messages: [{ role: "user", content: userPrompt }],
-        }),
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Anthropic error ${response.status}: ${error.slice(0, 500)}`);
-      }
-
-      const data = (await response.json()) as {
-        content?: Array<{ text?: string }>;
-      };
-
-      const content = data.content?.[0]?.text ?? "";
-      pushStreamChunk(operationId, content);
-      return {
-        content,
-        modelUsed: provider.model,
-      };
-    }
-
-    throw new AppError(400, `Провайдер ${provider.provider} пока не поддерживает генерацию через этот endpoint`, "GENERATION_PROVIDER_UNSUPPORTED");
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-function shouldRetryOpenRouterWithAuto(
-  provider: typeof aiProviders.$inferSelect,
-  status: number,
-  errorText: string
-) {
-  if (provider.provider !== "openrouter" || provider.model === "openrouter/auto") {
-    return false;
-  }
-
-  if (status === 429 || status >= 500) {
-    return true;
-  }
-
-  const normalized = errorText.toLowerCase();
-  return (
-    normalized.includes("provider returned error") ||
-    normalized.includes("temporarily rate-limited") ||
-    normalized.includes("temporarily unavailable") ||
-    normalized.includes("no endpoints found") ||
-    normalized.includes("model not found")
-  );
-}
-
-function formatProviderError(status: number, errorText: string) {
-  if (status === 429) {
-    return "AI-провайдер временно упёрся в лимит запросов. Попробуй ещё раз через минуту или переключи модель.";
-  }
-
-  if (status >= 500) {
-    return "AI-провайдер сейчас отвечает нестабильно. Попробуй повторить генерацию чуть позже.";
-  }
-
-  return `AI provider error ${status}: ${errorText.slice(0, 500)}`;
-}
-
-async function requestOpenAiCompatibleCompletion(params: {
-  provider: typeof aiProviders.$inferSelect;
-  apiKey: string;
-  baseUrl: string;
-  systemPrompt: string;
-  userPrompt: string;
-  signal: AbortSignal;
-  modelOverride?: string;
-}): Promise<{ content: string; modelUsed: string }> {
-  const model = params.modelOverride ?? params.provider.model;
-  const response = await fetch(`${params.baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${params.apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: params.systemPrompt },
-        { role: "user", content: params.userPrompt },
-      ],
-      temperature: 0.7,
-      max_tokens: 4000,
-    }),
-    signal: params.signal,
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    if (shouldRetryOpenRouterWithAuto(params.provider, response.status, errorText)) {
-      return requestOpenAiCompatibleCompletion({
-        ...params,
-        modelOverride: "openrouter/auto",
-      });
-    }
-
-    throw new Error(formatProviderError(response.status, errorText));
-  }
-
-  const data = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-  const content = data.choices?.[0]?.message?.content?.trim() ?? "";
-
-  if (!content && params.provider.provider === "openrouter" && model !== "openrouter/auto") {
-    return requestOpenAiCompatibleCompletion({
-      ...params,
-      modelOverride: "openrouter/auto",
-    });
-  }
-
-  if (!content) {
-    throw new Error("AI provider returned an empty response. Попробуй повторить генерацию или выбери другую модель.");
-  }
-
-  return {
-    content,
-    modelUsed: model,
-  };
-}
-
-function pushStreamChunk(operationId: string, content: string) {
-  const op = streamStore.get(operationId);
-  if (!op) return;
-
-  op.chunks.push(content.slice(0, 200));
-  op.content = content;
-  streamStore.set(operationId, op);
-}
-
 function isRegenerationPrompt(customPrompt?: string): boolean {
   return /Current generated draft to revise:/i.test(customPrompt ?? "");
 }
@@ -452,13 +187,6 @@ function buildRegenerationBasePrompt(selectedArticles: typeof articles.$inferSel
     "",
     buildCompactArticleContext(selectedArticles),
   ].join("\n");
-}
-
-function formatGenerationError(err: unknown): string {
-  if (err instanceof Error && err.name === "AbortError") {
-    return "AI generation timed out. Попробуй ещё раз или сократи комментарий к регенерации.";
-  }
-  return err instanceof Error ? err.message : "Generation failed";
 }
 
 function buildGenerationUserPrompt(basePrompt: string, customPrompt?: string): string {
@@ -495,29 +223,6 @@ function buildTelegramSystemPrompt(basePrompt: string, type: GeneratePostInput["
 ${type === "digest"
     ? "Для дайджеста сгруппируй материалы по смыслу и оставь только самое важное."
     : "Для поста сделай сильный заход, затем 2-4 коротких абзаца по сути и финальный вывод."}`.trim();
-}
-
-function getDefaultBaseUrl(provider: string): string {
-  switch (provider) {
-    case "openai":
-      return "https://api.openai.com/v1";
-    case "anthropic":
-      return "https://api.anthropic.com/v1";
-    case "openrouter":
-      return "https://openrouter.ai/api/v1";
-    case "google":
-      return "https://generativelanguage.googleapis.com/v1";
-    default:
-      return "https://api.openai.com/v1";
-  }
-}
-
-export function getStreamOperation(operationId: string): StreamOperation | undefined {
-  return streamStore.get(operationId);
-}
-
-export function cleanupStreamOperation(operationId: string): void {
-  streamStore.delete(operationId);
 }
 
 export async function listGeneratedPosts(

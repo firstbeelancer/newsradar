@@ -5,13 +5,12 @@ import { AppError } from "../../middleware/error-handler.js";
 import { paginationQuerySchema } from "../../lib/pagination.js";
 import {
   generatePost,
-  getStreamOperation,
-  cleanupStreamOperation,
   listGeneratedPosts,
   getGeneratedPost,
   updateGeneratedPost,
   deleteGeneratedPost,
 } from "./service.js";
+import { getGenerationState, subscribeGenerationState } from "./progress.js";
 
 const router = Router();
 
@@ -127,34 +126,37 @@ router.get("/stream/:operationId", authMiddleware, async (req, res, next) => {
     res.flushHeaders?.();
     res.write(`:ok\n\n`);
 
-    const interval = setInterval(() => {
-      const op = getStreamOperation(operationId);
-
-      if (!op) {
-        res.write(`data: ${JSON.stringify({ status: "error", error: "Operation not found" })}\n\n`);
-        clearInterval(interval);
-        res.end();
-        return;
-      }
-
+    const writeState = (op: { status: string; content?: string; chunks?: string[]; error?: string }) => {
       res.write(
         `data: ${JSON.stringify({
           status: op.status,
-          content: op.content,
-          chunks: op.chunks,
+          content: op.content ?? "",
+          chunks: op.chunks ?? [],
           error: op.error,
         })}\n\n`
       );
 
       if (op.status === "completed" || op.status === "error") {
-        clearInterval(interval);
-        cleanupStreamOperation(operationId);
         res.end();
       }
-    }, 1000);
+    };
 
-    req.on("close", () => clearInterval(interval));
-    req.on("error", () => clearInterval(interval));
+    const cleanup = await subscribeGenerationState(operationId, writeState);
+    const initial = await getGenerationState(operationId);
+    if (initial) {
+      writeState(initial);
+      if (initial.status === "completed" || initial.status === "error") {
+        await cleanup();
+        return;
+      }
+    }
+
+    req.on("close", () => {
+      void cleanup();
+    });
+    req.on("error", () => {
+      void cleanup();
+    });
   } catch (err) {
     next(err);
   }
