@@ -92,6 +92,49 @@ function ensureLeadingEmoji(text: string, emojis: string[]): string {
   return `${emojis[0] ?? "📰"} ${trimmed}`;
 }
 
+function appendFallbackHashtags(content: string, jobData: PreparedGenerationJob): string {
+  if (!jobData.allowHashtags || /(^|\s)#[\p{L}\p{N}_-]+/u.test(content)) {
+    return content;
+  }
+
+  const sourceText = [
+    jobData.title,
+    ...jobData.articlesSnapshot.map((article) => article.title),
+    content.slice(0, 600),
+  ].join(" ");
+
+  const stopWords = new Set([
+    "что",
+    "как",
+    "для",
+    "или",
+    "это",
+    "the",
+    "and",
+    "with",
+    "from",
+    "into",
+    "inside",
+    "про",
+    "при",
+    "над",
+    "под",
+    "без",
+    "после",
+  ]);
+
+  const tags = Array.from(sourceText.matchAll(/[\p{L}\p{N}][\p{L}\p{N}_-]{2,}/gu))
+    .map((match) => match[0])
+    .map((word) => word.replace(/^[^A-Za-zА-Яа-я0-9]+|[^A-Za-zА-Яа-я0-9]+$/g, ""))
+    .filter((word) => word.length >= 3 && !stopWords.has(word.toLowerCase()))
+    .filter((word, index, words) => words.findIndex((item) => item.toLowerCase() === word.toLowerCase()) === index)
+    .slice(0, 6)
+    .map((word) => `#${word.replace(/-/g, "")}`);
+
+  if (tags.length === 0) return content;
+  return `${content.trim()}\n\n${tags.join(" ")}`;
+}
+
 function formatGenerationError(err: unknown): string {
   if (err instanceof Error && err.name === "AbortError") {
     return "AI generation timed out. Попробуй ещё раз или сократи комментарий к регенерации.";
@@ -171,10 +214,10 @@ export async function processPreparedGeneration(
       throw new Error("AI provider returned an empty response. Попробуй повторить генерацию или выбери другую модель.");
     }
 
-    const content = ensureLeadingEmoji(
+    const content = appendFallbackHashtags(ensureLeadingEmoji(
       sanitizeTelegramText(rawContent, { allowHashtags: Boolean(jobData.allowHashtags) }),
       jobData.emojiPack ?? []
-    );
+    ), jobData);
 
     const [post] = await db
       .insert(generatedPosts)
