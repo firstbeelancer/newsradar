@@ -412,9 +412,21 @@ async function requestOpenAiCompatibleCompletion(params: {
   const data = (await response.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
   };
+  const content = data.choices?.[0]?.message?.content?.trim() ?? "";
+
+  if (!content && params.provider.provider === "openrouter" && model !== "openrouter/auto") {
+    return requestOpenAiCompatibleCompletion({
+      ...params,
+      modelOverride: "openrouter/auto",
+    });
+  }
+
+  if (!content) {
+    throw new Error("AI provider returned an empty response. Попробуй повторить генерацию или выбери другую модель.");
+  }
 
   return {
-    content: data.choices?.[0]?.message?.content ?? "",
+    content,
     modelUsed: model,
   };
 }
