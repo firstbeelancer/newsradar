@@ -10,7 +10,7 @@
 import { db } from "../db/index.js";
 import { articles } from "../db/schema.js";
 import { eq } from "drizzle-orm";
-import { detectLanguage, translateArticle } from "../lib/translator.js";
+import { buildTitleOnlyPreview, detectLanguage, translateArticle } from "../lib/translator.js";
 import { fetchArticleText } from "../lib/article-extractor.js";
 import { setAiTelemetryError } from "../lib/ai-client.js";
 import { ingestAnalysisQueue } from "../connection/redis.js";
@@ -134,11 +134,19 @@ export async function processTranslate(
     const errorMessage = err instanceof Error ? err.message : String(err);
     setAiTelemetryError(`Translation pipeline fallback: ${errorMessage}`);
     logger.error({ articleId, err: errorMessage }, "Translation failed");
+    const fallbackPreview =
+      article.aiSummary ||
+      article.description ||
+      sourceContent ||
+      buildTitleOnlyPreview(article.title || sourceTitle);
 
     // Even on failure, continue pipeline with original text
     await db
       .update(articles)
       .set({
+        description: fallbackPreview,
+        content: sourceContent || article.content || null,
+        aiSummary: fallbackPreview,
         language: detectedLang,
         detectedLang: detectedLang,
         needsTranslation: true,
