@@ -278,7 +278,7 @@ async function callAiProvider(
   const baseUrl = provider.baseUrl ?? getDefaultBaseUrl(provider.provider);
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 240000);
+  const timeout = setTimeout(() => controller.abort(), 120000);
 
   try {
     if (provider.provider === "openai" || provider.provider === "openrouter") {
