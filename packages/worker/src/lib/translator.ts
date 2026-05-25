@@ -88,6 +88,12 @@ export function buildExtractiveSummary(text: string, title = "", maxChars = 520)
   return summary.length > maxChars ? `${summary.slice(0, maxChars - 1).trim()}…` : summary;
 }
 
+export function buildTitleOnlyPreview(title: string): string {
+  const cleanedTitle = cleanArticleText(title);
+  if (!cleanedTitle) return "";
+  return `Короткая новость по теме: ${cleanedTitle}.`;
+}
+
 async function summarizeToRussian(
   text: string,
   title: string,
@@ -228,11 +234,12 @@ export async function translateArticle(
 
   if (detectedLang === "ru") {
     const aiSummary = await summarizeToRussian(sourceBody, normalizedTitle, workspaceId);
+    const fallbackPreview = buildTitleOnlyPreview(normalizedTitle);
     return {
       title: normalizedTitle,
-      description: aiSummary || normalizedDescription || normalizedContent,
+      description: aiSummary || normalizedDescription || normalizedContent || fallbackPreview,
       content: normalizedContent,
-      aiSummary,
+      aiSummary: aiSummary || normalizedDescription || normalizedContent || fallbackPreview,
       language: "ru",
     };
   }
@@ -244,12 +251,13 @@ export async function translateArticle(
       : Promise.resolve(""),
   ]);
   const translatedSummary = await summarizeToRussian(translatedBody || sourceBody, translatedTitle || normalizedTitle, workspaceId);
+  const fallbackPreview = buildTitleOnlyPreview(translatedTitle || normalizedTitle);
 
   return {
     title: translatedTitle || normalizedTitle,
-    description: translatedSummary || translatedBody || sourceBody,
+    description: translatedSummary || translatedBody || sourceBody || fallbackPreview,
     content: translatedBody || normalizedContent,
-    aiSummary: translatedSummary || buildExtractiveSummary(translatedBody || sourceBody, translatedTitle || normalizedTitle),
+    aiSummary: translatedSummary || buildExtractiveSummary(translatedBody || sourceBody, translatedTitle || normalizedTitle) || fallbackPreview,
     language: "ru",
   };
 }

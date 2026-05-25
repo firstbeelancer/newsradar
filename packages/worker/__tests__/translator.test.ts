@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildExtractiveSummary, detectLanguage } from '../src/lib/translator.js';
+import { buildExtractiveSummary, buildTitleOnlyPreview, detectLanguage } from '../src/lib/translator.js';
 
 describe('translator helpers', () => {
   it('detects English from title and body text', () => {
@@ -19,5 +19,11 @@ describe('translator helpers', () => {
     expect(summary).toContain('принтер');
     expect(summary.split('.').filter(Boolean).length).toBeGreaterThan(1);
     expect(summary).not.toBe('Первое предложение короткое.');
+  });
+  it('builds a non-empty preview when RSS has only a title', () => {
+    const preview = buildTitleOnlyPreview('Anthropic и OpenAI стремятся внедрить инженеров в рабочие процессы Уолл-стрит');
+
+    expect(preview).toContain('Anthropic');
+    expect(preview.length).toBeGreaterThan(40);
   });
 });
