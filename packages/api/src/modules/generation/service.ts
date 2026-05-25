@@ -448,7 +448,7 @@ function buildRegenerationBasePrompt(selectedArticles: typeof articles.$inferSel
   return [
     "Use this compact source context while revising the existing draft.",
     "If the editor asks for the original link, attach the exact Original URL from this context.",
-    "If the editor asks for tags or hashtags, add concise relevant hashtags at the end.",
+    "If the editor asks for tags or hashtags, add concise relevant hashtags at the end in #tag format.",
     "",
     buildCompactArticleContext(selectedArticles),
   ].join("\n");
@@ -464,12 +464,18 @@ function formatGenerationError(err: unknown): string {
 function buildGenerationUserPrompt(basePrompt: string, customPrompt?: string): string {
   const feedback = customPrompt?.trim();
   if (!feedback) return basePrompt;
+  const tagInstruction = wantsHashtags(feedback)
+    ? "\nThe editor asked for tags. Add 3-6 relevant hashtags at the end, each starting with #."
+    : "";
 
-  return `${basePrompt}\n\nMANDATORY EDITOR FEEDBACK:\n${feedback}\n\nApply every editor instruction above explicitly. If feedback asks for tags, links, source mentions, structure, or a changed tone, include those changes in the new version.`;
+  return `${basePrompt}\n\nMANDATORY EDITOR FEEDBACK:\n${feedback}${tagInstruction}\n\nApply every editor instruction above explicitly. If feedback asks for tags, links, source mentions, structure, or a changed tone, include those changes in the new version.`;
 }
 
 function wantsHashtags(customPrompt?: string): boolean {
   const normalized = customPrompt?.toLowerCase() ?? "";
+  if (/#|\btags?\b|хештег|хэштег|hashtag|hashtags|теги|тегов|тегами/.test(normalized)) {
+    return true;
+  }
   return /#|хештег|хэштег|hashtag|hashtags|теги|тегов|тегами/.test(normalized);
 }
 
