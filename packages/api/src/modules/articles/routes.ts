@@ -15,6 +15,7 @@ import {
 } from "./service.js";
 import { createOperationLog } from "../operation-logs/service.js";
 import { getTranslateQueue } from "../../lib/queues.js";
+import { getLatestDeepSearchForArticle } from "../deepsearch/service.js";
 
 const router = Router();
 
@@ -125,6 +126,19 @@ router.get("/:id/score", authMiddleware, async (req, res, next) => {
     if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
 
     const result = await getArticleWithScore(req.params.id, workspaceId);
+    res.json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Get latest DeepSearch result for article
+router.get("/:id/deepsearch", authMiddleware, async (req, res, next) => {
+  try {
+    const workspaceId = req.query.workspaceId as string;
+    if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
+
+    const result = await getLatestDeepSearchForArticle(String(req.params.id), workspaceId);
     res.json({ success: true, data: result });
   } catch (err) {
     next(err);

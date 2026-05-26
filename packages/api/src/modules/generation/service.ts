@@ -6,7 +6,7 @@ import { AppError } from "../../middleware/error-handler.js";
 import { decodeCursor, encodeCursor } from "../../lib/pagination.js";
 import type { Cursor, PaginatedResult } from "../../lib/pagination.js";
 import { createOperationLog } from "../operation-logs/service.js";
-import { getDefaultEmojiValues } from "../asset-packs/service.js";
+import { getDefaultEmojiItems, type EmojiPromptItem } from "../asset-packs/service.js";
 import { resolveProviderForProcess } from "../ai-providers/service.js";
 import { getGenerateDigestQueue, getGeneratePostQueue } from "../../lib/queues.js";
 import { setGenerationState } from "./progress.js";
@@ -105,8 +105,9 @@ export async function generatePost(
       ? (workspacePrompts?.digest_generation ?? "Ты — профессиональный аналитик новостей. Подготовь готовый к отправке дайджест на русском языке.")
       : (workspacePrompts?.post_generation ?? "Ты — сильный редактор Telegram-канала. Подготовь готовый к отправке пост на русском языке.");
 
-  const emojiPack = await getDefaultEmojiValues(workspaceId);
-  const systemPrompt = buildTelegramSystemPrompt(template?.systemPrompt ?? defaultSystemPrompt, type, emojiPack);
+  const emojiItems = await getDefaultEmojiItems(workspaceId);
+  const emojiPack = emojiItems.map((item) => item.value);
+  const systemPrompt = buildTelegramSystemPrompt(template?.systemPrompt ?? defaultSystemPrompt, type, emojiItems);
   const baseUserPrompt =
     renderPromptTemplate(template?.userPrompt, selectedArticles)
     ?? `На основе следующих статей создай ${type === "digest" ? "дайджест" : "пост"}:\n\n${articleTexts}`;
@@ -207,8 +208,66 @@ function wantsHashtags(customPrompt?: string): boolean {
   return /#|хештег|хэштег|hashtag|hashtags|теги|тегов|тегами/.test(normalized);
 }
 
-function buildTelegramSystemPrompt(basePrompt: string, type: GeneratePostInput["type"], emojis: string[]): string {
-  const emojiList = emojis.join(" ");
+function describeEmoji(item: EmojiPromptItem): string {
+  const semanticByName: Record<string, string> = {
+    breaking: "urgent or breaking news",
+    hot: "hot trend or strong public attention",
+    insight: "analysis, reasoning, model behavior, expert context",
+    important: "important point, key takeaway, editor note",
+    stats: "numbers, metrics, charts, research data",
+    watch: "something to monitor",
+    action: "fast action, launch, practical step",
+    done: "confirmed result, completion, positive outcome",
+    news: "neutral news item",
+    search: "research, verification, DeepSearch",
+    warning: "risk, warning, uncertainty",
+    security: "security, privacy, protection, vulnerabilities",
+    bug: "bug, exploit, incident, technical failure",
+    lock: "access, credentials, closed systems, safety",
+    key: "key fact, access, security key, unlock",
+    robot: "AI agents, automation, robotics",
+    rocket: "launch, fast growth, ambitious release",
+    tools: "tools, engineering, implementation",
+    chart_up: "growth, increase, market rise",
+    chart_down: "decline, reduction, market drop",
+    money: "business, funding, revenue, prices",
+    idea: "idea, hypothesis, creative angle",
+    target: "goal, audience, targeting, focus",
+    link: "source link, reference, connection",
+    world: "global context, international news",
+    time: "deadline, timing, schedule",
+    spark: "notable detail, creative accent",
+    question: "open question, uncertainty",
+    memo: "note, checklist, document",
+    folder: "archive, dataset, collection",
+    mail: "communication, email, outreach",
+    megaphone: "announcement, PR, public statement",
+    pin: "location, pinned point, important marker",
+    star: "highlight, quality, leader",
+    trophy: "achievement, award, benchmark win",
+    health: "medicine, health, wellbeing",
+    science: "science, research, experiment",
+    design: "design, art, visual work",
+    construction: "building, infrastructure, work in progress",
+    calendar: "date, event, schedule",
+  };
+
+  return semanticByName[item.name] ?? item.label ?? "custom emoji; use only when its symbol clearly fits the meaning";
+}
+
+function buildEmojiGuide(items: EmojiPromptItem[]): string {
+  if (items.length === 0) return "- 📰 (news): neutral news item";
+  return items
+    .map((item) => {
+      const label = item.label && item.label !== item.value ? `, ${item.label}` : "";
+      return `- ${item.value} (${item.name}${label}): ${describeEmoji(item)}`;
+    })
+    .join("\n");
+}
+
+function buildTelegramSystemPrompt(basePrompt: string, type: GeneratePostInput["type"], emojiItems: EmojiPromptItem[]): string {
+  const emojiList = emojiItems.map((item) => item.value).join(" ");
+  const emojiGuide = buildEmojiGuide(emojiItems);
 
   return `${basePrompt}
 
@@ -219,6 +278,11 @@ function buildTelegramSystemPrompt(basePrompt: string, type: GeneratePostInput["
 - Пиши короткими абзацами, живо и по делу.
 - Используй эмодзи только из этого набора: ${emojiList || "🚨 🔥 🧠 📌 📊 👀 ⚡ ✅"}.
 - Итог должен быть сразу пригоден для копирования и отправки без ручной чистки.
+
+EMOJI MEANING MAP:
+${emojiGuide}
+
+Emoji selection rule: choose emoji by meaning from the map above, not by list order. Do not keep reusing the first emojis unless they are semantically correct.
 
 ${type === "digest"
     ? "Для дайджеста сгруппируй материалы по смыслу и оставь только самое важное."

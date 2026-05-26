@@ -121,7 +121,7 @@ export function FeedPage() {
       });
       addToast({
         title: 'DeepSearch запущен',
-        description: `Операция ${result.op_id} уже в работе. Смотри статус-бар и раздел генерации.`,
+        description: `Операция ${result.op_id} уже в работе. Смотри статус-бар и журнал событий.`,
         variant: 'success',
       });
     } catch (error) {

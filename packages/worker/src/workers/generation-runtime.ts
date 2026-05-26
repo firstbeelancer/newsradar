@@ -89,7 +89,8 @@ function ensureLeadingEmoji(text: string, emojis: string[]): string {
   const trimmed = text.trim();
   if (!trimmed) return trimmed;
   if (/^\p{Extended_Pictographic}/u.test(trimmed)) return trimmed;
-  return `${emojis[0] ?? "📰"} ${trimmed}`;
+  const fallbackEmoji = emojis.find((emoji) => emoji === "📰") ?? emojis.find((emoji) => emoji === "📌") ?? emojis[0] ?? "📰";
+  return `${fallbackEmoji} ${trimmed}`;
 }
 
 function appendFallbackHashtags(content: string, jobData: PreparedGenerationJob): string {
@@ -230,7 +231,11 @@ export async function processPreparedGeneration(
         content,
         articleCount: jobData.articleCount,
         articlesSnapshot: jobData.articlesSnapshot,
-        promptSnapshot: jobData.userPrompt,
+        promptSnapshot: JSON.stringify({
+          systemPrompt: jobData.systemPrompt,
+          userPrompt: jobData.userPrompt,
+          emojiPack: jobData.emojiPack ?? [],
+        }),
         modelSnapshot: jobData.requestedModel ?? "platform-ai",
       })
       .returning();

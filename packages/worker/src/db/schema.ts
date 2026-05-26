@@ -460,3 +460,32 @@ export const usageCounters = pgTable(
     check("usage_counters_type_check", sql`${table.type} IN ('favorites', 'collections', 'digests', 'deepsearches', 'posts')`),
   ]
 );
+
+export const deepsearchResults = pgTable(
+  "deepsearch_results",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .references(() => workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    agentId: uuid("agent_id")
+      .references(() => agents.id, { onDelete: "cascade" })
+      .notNull(),
+    query: text("query").notNull(),
+    status: varchar("status", { length: 20 }).default("pending").notNull(),
+    findings: jsonb("findings").default({}).notNull(),
+    reportText: text("report_text"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("deepsearch_results_workspace_id_idx").on(table.workspaceId),
+    index("deepsearch_results_agent_id_idx").on(table.agentId),
+    index("deepsearch_results_status_idx").on(table.status),
+    index("deepsearch_results_created_at_idx").on(table.createdAt),
+    check("deepsearch_results_status_check", sql`${table.status} IN ('pending', 'running', 'completed', 'failed')`),
+  ]
+);

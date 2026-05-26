@@ -20,6 +20,12 @@ export interface AssetPackDto {
   }>;
 }
 
+export interface EmojiPromptItem {
+  name: string;
+  value: string;
+  label: string | null;
+}
+
 async function ensureDefaultEmojiPack(workspaceId: string) {
   const existingDefault = await db.query.assetPacks.findFirst({
     where: and(eq(assetPacks.workspaceId, workspaceId), eq(assetPacks.isDefault, true)),
@@ -182,19 +188,25 @@ export async function setDefaultAssetPack(workspaceId: string, packId: string) {
 }
 
 export async function getDefaultEmojiValues(workspaceId: string): Promise<string[]> {
+  return (await getDefaultEmojiItems(workspaceId)).map((item) => item.value);
+}
+
+export async function getDefaultEmojiItems(workspaceId: string): Promise<EmojiPromptItem[]> {
   await ensureDefaultEmojiPack(workspaceId);
 
   const pack = await db.query.assetPacks.findFirst({
     where: and(eq(assetPacks.workspaceId, workspaceId), eq(assetPacks.isDefault, true)),
   });
 
-  if (!pack) return DEFAULT_EMOJI_ITEMS.map((item) => item.value);
+  if (!pack) return DEFAULT_EMOJI_ITEMS.map((item) => ({ ...item, label: item.label ?? null }));
 
   const items = await db
-    .select({ value: assetItems.value })
+    .select({ name: assetItems.name, value: assetItems.value, label: assetItems.label })
     .from(assetItems)
     .where(and(eq(assetItems.packId, pack.id), eq(assetItems.type, "emoji")))
     .orderBy(asc(assetItems.position), asc(assetItems.createdAt));
 
-  return items.length > 0 ? items.map((item) => item.value) : DEFAULT_EMOJI_ITEMS.map((item) => item.value);
+  return items.length > 0
+    ? items
+    : DEFAULT_EMOJI_ITEMS.map((item) => ({ ...item, label: item.label ?? null }));
 }

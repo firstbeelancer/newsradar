@@ -2,8 +2,11 @@ import { Router } from "express";
 import { z } from "zod";
 import { authMiddleware } from "../../middleware/auth.js";
 import { AppError } from "../../middleware/error-handler.js";
-import { getArticleById } from "../articles/service.js";
-import { generatePost } from "../generation/service.js";
+import {
+  getDeepSearchResult,
+  getLatestDeepSearchForArticle,
+  startDeepSearch,
+} from "./service.js";
 
 const router = Router();
 
@@ -25,38 +28,24 @@ const startDeepSearchSchema = z.preprocess(
   })
 );
 
+function requireWorkspaceId(value: unknown): string {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
+  }
+  return value;
+}
+
 router.post("/", authMiddleware, async (req, res, next) => {
   try {
-    const workspaceId = req.query.workspaceId as string;
-    if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
-
+    const workspaceId = requireWorkspaceId(req.query.workspaceId);
     const input = startDeepSearchSchema.parse(req.body);
-    const article = await getArticleById(input.articleId, workspaceId);
-
-    const customPrompt = input.customPrompt ?? [
-      "Сделай DeepSearch-исследование по новости ниже на русском языке.",
-      "Структура результата:",
-      "1. Что произошло.",
-      "2. Почему это важно.",
-      "3. Возможные последствия.",
-      "4. Что проверить дополнительно.",
-      "5. Короткий редакторский вывод.",
-      "",
-      `Заголовок: ${article.title}`,
-      article.description ? `Описание: ${article.description}` : "",
-      `Ссылка: ${article.link}`,
-    ].filter(Boolean).join("\n");
-
-    const result = await generatePost(
-      {
-        workspaceId,
-        agentId: input.agentId ?? article.agentId,
-        articleIds: [article.id],
-        customPrompt,
-        type: "deepsearch",
-      },
-      req.user!.sub
-    );
+    const result = await startDeepSearch({
+      workspaceId,
+      userId: (req.user as { sub: string }).sub,
+      articleId: input.articleId,
+      agentId: input.agentId,
+      customPrompt: input.customPrompt,
+    });
 
     res.status(202).json({ success: true, data: result });
   } catch (err) {
@@ -64,15 +53,24 @@ router.post("/", authMiddleware, async (req, res, next) => {
   }
 });
 
-router.get("/:operationId", authMiddleware, async (req, res) => {
-  res.json({
-    success: true,
-    data: {
-      operationId: req.params.operationId,
-      streamUrl: `/api/v1/generation/stream/${req.params.operationId}`,
-      message: "DeepSearch выполняется через общий stream генерации.",
-    },
-  });
+router.get("/article/:articleId/latest", authMiddleware, async (req, res, next) => {
+  try {
+    const workspaceId = requireWorkspaceId(req.query.workspaceId);
+    const result = await getLatestDeepSearchForArticle(String(req.params.articleId), workspaceId);
+    res.json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/:resultId", authMiddleware, async (req, res, next) => {
+  try {
+    const workspaceId = requireWorkspaceId(req.query.workspaceId);
+    const result = await getDeepSearchResult(String(req.params.resultId), workspaceId);
+    res.json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
 });
 
 export default router;

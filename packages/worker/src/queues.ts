@@ -44,6 +44,7 @@ import { processSemanticDedup, type SemanticDedupJob } from "./workers/semantic-
 import { processScoreArticle, type ScoreArticleJob } from "./workers/score-article.worker.js";
 import { processGeneratePost, type GeneratePostJob } from "./workers/generate-post.worker.js";
 import { processGenerateDigest, type GenerateDigestJob } from "./workers/generate-digest.worker.js";
+import { processDeepsearch, type DeepsearchJob } from "./workers/deepsearch.worker.js";
 import { processCleanup, type CleanupJob } from "./workers/cleanup.worker.js";
 import { processFavoritesCleanup, type FavoritesCleanupJob } from "./workers/favorites-cleanup.worker.js";
 import { processPostsCleanup, type PostsCleanupJob } from "./workers/posts-cleanup.worker.js";
@@ -233,12 +234,9 @@ export function registerWorkers(logger: Logger): Worker[] {
   attachWorkerLogging(generateDigestWorker, logger);
 
   /* 9. deepsearch — stub (not in Layer 2-4 scope) */
-  const deepsearchWorker = createWorker(
+  const deepsearchWorker = createWorker<DeepsearchJob>(
     DEEPSEARCH_QUEUE_NAME,
-    async (job) => {
-      logger.debug({ jobId: job.id }, "Deepsearch job received (stub)");
-      return { status: "skipped" };
-    },
+    async (job) => processDeepsearch(job, logger),
     { concurrency: 1 }
   );
   attachWorkerLogging(deepsearchWorker, logger);
