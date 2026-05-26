@@ -13,20 +13,21 @@ import {
   Crown,
   BarChart3,
   History,
+  Bell,
 } from 'lucide-react';
 import { useAuthStore } from '@shared/stores/auth-store';
-import { NotificationBell } from '@/features/notifications/notification-bell';
 
 const mainNavItems = [
   { to: '/', label: 'Главная', icon: LayoutDashboard },
   { to: '/agents', label: 'Агенты', icon: Bot },
   { to: '/feed', label: 'Лента', icon: Newspaper },
   { to: '/generation', label: 'Генерация', icon: Sparkles },
+  { to: '/history', label: 'История', icon: History },
 ];
 
 const moreMenuItems = [
   { to: '/feed', label: 'Избранное', icon: Bookmark, search: { favorites: '1' } as Record<string, string> },
-  { to: '/history', label: 'История', icon: History },
+  { to: '/notifications', label: 'Уведомления', icon: Bell },
   { to: '/iboard', label: 'Аналитика', icon: BarChart3 },
   { to: '/subscription', label: 'Подписка', icon: Crown },
   { to: '/settings/profile', label: 'Настройки', icon: Settings },
@@ -63,10 +64,6 @@ export function MobileNav() {
             </Link>
           );
         })}
-
-        <div className="flex min-w-[56px] flex-col items-center justify-center">
-          <NotificationBell />
-        </div>
 
         <button
           className={cn(

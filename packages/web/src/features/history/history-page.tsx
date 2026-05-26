@@ -3,6 +3,7 @@ import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
 import { Card, CardContent } from '@shared/ui/card';
+import { Checkbox } from '@shared/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@shared/ui/dialog';
 import { Skeleton } from '@shared/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shared/ui/tabs';
@@ -10,7 +11,7 @@ import { Textarea } from '@shared/ui/textarea';
 import { useToast } from '@shared/ui/toast';
 import { deepsearchApi, generationApi, type DeepSearchResult, type GeneratedPost } from '@shared/api/client';
 import { cn, formatDateTime } from '@shared/lib/utils';
-import { Check, Copy, FileSearch, FileText, Newspaper, Save, Trash2 } from 'lucide-react';
+import { Check, Copy, FileSearch, FileText, Newspaper, Save, Trash2, type LucideIcon } from 'lucide-react';
 
 const PAGE_SIZE = 20;
 
@@ -44,8 +45,14 @@ export function HistoryPage() {
   const { addToast } = useToast();
   const postsQuery = useGeneratedPosts();
   const deepSearchQuery = useDeepSearchHistory();
-  const posts: GeneratedPost[] = postsQuery.data?.pages.flatMap((page) => page.data) ?? [];
-  const deepSearchResults: DeepSearchResult[] = deepSearchQuery.data?.pages.flatMap((page) => page.data) ?? [];
+  const posts: GeneratedPost[] = useMemo(
+    () => postsQuery.data?.pages.flatMap((page) => page.data) ?? [],
+    [postsQuery.data]
+  );
+  const deepSearchResults: DeepSearchResult[] = useMemo(
+    () => deepSearchQuery.data?.pages.flatMap((page) => page.data) ?? [],
+    [deepSearchQuery.data]
+  );
 
   const [selectedPost, setSelectedPost] = useState<GeneratedPost | null>(null);
   const [selectedDeepSearch, setSelectedDeepSearch] = useState<DeepSearchResult | null>(null);
@@ -54,6 +61,15 @@ export function HistoryPage() {
   const [saving, setSaving] = useState(false);
   const [deletingPost, setDeletingPost] = useState(false);
   const [deletingDeepSearch, setDeletingDeepSearch] = useState(false);
+  const [activeTab, setActiveTab] = useState<'posts' | 'deepsearch'>('posts');
+  const [selectedPostIds, setSelectedPostIds] = useState<Set<string>>(() => new Set());
+  const [selectedDeepSearchIds, setSelectedDeepSearchIds] = useState<Set<string>>(() => new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const visiblePostIds = useMemo(() => posts.map((post) => post.id), [posts]);
+  const visibleDeepSearchIds = useMemo(() => deepSearchResults.map((result) => result.id), [deepSearchResults]);
+  const allVisiblePostsSelected = visiblePostIds.length > 0 && visiblePostIds.every((id) => selectedPostIds.has(id));
+  const allVisibleDeepSearchSelected = visibleDeepSearchIds.length > 0 && visibleDeepSearchIds.every((id) => selectedDeepSearchIds.has(id));
 
   const selectedDeepSearchSources = useMemo(
     () => selectedDeepSearch ? sourceList(selectedDeepSearch) : [],
@@ -64,6 +80,20 @@ export function HistoryPage() {
     setEditorContent(selectedPost?.content ?? '');
     setCopied(false);
   }, [selectedPost]);
+
+  useEffect(() => {
+    setSelectedPostIds((current) => {
+      const filtered = [...current].filter((id) => visiblePostIds.includes(id));
+      return filtered.length === current.size ? current : new Set(filtered);
+    });
+  }, [visiblePostIds]);
+
+  useEffect(() => {
+    setSelectedDeepSearchIds((current) => {
+      const filtered = [...current].filter((id) => visibleDeepSearchIds.includes(id));
+      return filtered.length === current.size ? current : new Set(filtered);
+    });
+  }, [visibleDeepSearchIds]);
 
   const openPost = async (post: GeneratedPost) => {
     setSelectedPost(post);
@@ -81,6 +111,42 @@ export function HistoryPage() {
     } catch {
       setSelectedDeepSearch(result);
     }
+  };
+
+  const togglePostSelection = (id: string) => {
+    setSelectedPostIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleDeepSearchSelection = (id: string) => {
+    setSelectedDeepSearchIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAllVisiblePosts = () => {
+    setSelectedPostIds((current) => {
+      const next = new Set(current);
+      if (allVisiblePostsSelected) visiblePostIds.forEach((id) => next.delete(id));
+      else visiblePostIds.forEach((id) => next.add(id));
+      return next;
+    });
+  };
+
+  const toggleAllVisibleDeepSearch = () => {
+    setSelectedDeepSearchIds((current) => {
+      const next = new Set(current);
+      if (allVisibleDeepSearchSelected) visibleDeepSearchIds.forEach((id) => next.delete(id));
+      else visibleDeepSearchIds.forEach((id) => next.add(id));
+      return next;
+    });
   };
 
   const copyPost = async () => {
@@ -151,17 +217,61 @@ export function HistoryPage() {
     }
   };
 
+  const deleteSelectedPosts = async () => {
+    const ids = [...selectedPostIds];
+    if (ids.length === 0 || !window.confirm(`Удалить выбранные посты (${ids.length}) из истории?`)) return;
+    setBulkDeleting(true);
+    try {
+      await Promise.all(ids.map((id) => generationApi.deletePost(id)));
+      setSelectedPostIds(new Set());
+      if (selectedPost && ids.includes(selectedPost.id)) setSelectedPost(null);
+      await queryClient.invalidateQueries({ queryKey: ['history', 'generated-posts'] });
+      addToast({ title: `Удалено постов: ${ids.length}`, variant: 'success' });
+    } catch (error) {
+      addToast({
+        title: 'Не удалось удалить выбранные посты',
+        description: error instanceof Error ? error.message : undefined,
+        variant: 'danger',
+      });
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
+  const deleteSelectedDeepSearch = async () => {
+    const ids = [...selectedDeepSearchIds];
+    if (ids.length === 0 || !window.confirm(`Удалить выбранные отчёты DeepSearch (${ids.length})?`)) return;
+    setBulkDeleting(true);
+    try {
+      await Promise.all(ids.map((id) => deepsearchApi.delete(id)));
+      setSelectedDeepSearchIds(new Set());
+      if (selectedDeepSearch && ids.includes(selectedDeepSearch.id)) setSelectedDeepSearch(null);
+      await queryClient.invalidateQueries({ queryKey: ['history', 'deepsearch'] });
+      addToast({ title: `Удалено отчётов DeepSearch: ${ids.length}`, variant: 'success' });
+    } catch (error) {
+      addToast({
+        title: 'Не удалось удалить выбранные отчёты',
+        description: error instanceof Error ? error.message : undefined,
+        variant: 'danger',
+      });
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">История</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Сгенерированные посты и отчёты DeepSearch в одном месте.</p>
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">История</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Посты: {posts.length} · DeepSearch: {deepSearchResults.length}</p>
+        </div>
       </div>
 
-      <Tabs defaultValue="posts" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="posts">Посты</TabsTrigger>
-          <TabsTrigger value="deepsearch">DeepSearch</TabsTrigger>
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'posts' | 'deepsearch')} className="space-y-4">
+        <TabsList className="w-full justify-start sm:w-auto">
+          <TabsTrigger value="posts" className="flex-1 sm:flex-none">Посты</TabsTrigger>
+          <TabsTrigger value="deepsearch" className="flex-1 sm:flex-none">DeepSearch</TabsTrigger>
         </TabsList>
 
         <TabsContent value="posts" className="space-y-3">
@@ -170,18 +280,31 @@ export function HistoryPage() {
           ) : posts.length === 0 ? (
             <EmptyState title="Пока нет постов" description="Сгенерированные посты появятся здесь." icon={FileText} />
           ) : (
-            posts.map((post) => (
-              <button key={post.id} type="button" onClick={() => void openPost(post)} className="block w-full text-left">
+            <>
+              <BulkToolbar
+                selectedCount={selectedPostIds.size}
+                totalCount={posts.length}
+                allVisibleSelected={allVisiblePostsSelected}
+                loading={bulkDeleting && activeTab === 'posts'}
+                onToggleAll={toggleAllVisiblePosts}
+                onClear={() => setSelectedPostIds(new Set())}
+                onDelete={() => void deleteSelectedPosts()}
+              />
+              {posts.map((post) => (
                 <HistoryCard
+                  key={post.id}
                   icon={post.type === 'digest' ? Newspaper : FileText}
                   tone={post.type === 'digest' ? 'warning' : 'primary'}
                   badge={post.type === 'digest' ? 'Дайджест' : 'Пост'}
                   title={post.title || post.content.slice(0, 120)}
                   body={post.content}
                   meta={`${formatDateTime(post.created_at)} · ${post.article_count} статей`}
+                  selected={selectedPostIds.has(post.id)}
+                  onSelect={() => togglePostSelection(post.id)}
+                  onOpen={() => void openPost(post)}
                 />
-              </button>
-            ))
+              ))}
+            </>
           )}
           {postsQuery.hasNextPage && (
             <LoadMore loading={postsQuery.isFetchingNextPage} onClick={() => postsQuery.fetchNextPage()} />
@@ -194,18 +317,31 @@ export function HistoryPage() {
           ) : deepSearchResults.length === 0 ? (
             <EmptyState title="Пока нет отчётов DeepSearch" description="Запусти DeepSearch из карточки статьи." icon={FileSearch} />
           ) : (
-            deepSearchResults.map((result) => (
-              <button key={result.id} type="button" onClick={() => void openDeepSearch(result)} className="block w-full text-left">
+            <>
+              <BulkToolbar
+                selectedCount={selectedDeepSearchIds.size}
+                totalCount={deepSearchResults.length}
+                allVisibleSelected={allVisibleDeepSearchSelected}
+                loading={bulkDeleting && activeTab === 'deepsearch'}
+                onToggleAll={toggleAllVisibleDeepSearch}
+                onClear={() => setSelectedDeepSearchIds(new Set())}
+                onDelete={() => void deleteSelectedDeepSearch()}
+              />
+              {deepSearchResults.map((result) => (
                 <HistoryCard
+                  key={result.id}
                   icon={FileSearch}
                   tone="purple"
                   badge={result.status}
                   title={result.query || String(result.findings?.articleTitle ?? 'DeepSearch')}
                   body={result.report_text || result.error || 'Отчёт ещё формируется.'}
                   meta={`${formatDateTime(result.created_at)} · источников: ${sourceList(result).length}`}
+                  selected={selectedDeepSearchIds.has(result.id)}
+                  onSelect={() => toggleDeepSearchSelection(result.id)}
+                  onOpen={() => void openDeepSearch(result)}
                 />
-              </button>
-            ))
+              ))}
+            </>
           )}
           {deepSearchQuery.hasNextPage && (
             <LoadMore loading={deepSearchQuery.isFetchingNextPage} onClick={() => deepSearchQuery.fetchNextPage()} />
@@ -278,43 +414,95 @@ export function HistoryPage() {
 }
 
 function HistoryCard(props: {
-  icon: typeof FileText;
+  icon: LucideIcon;
   tone: 'primary' | 'warning' | 'purple';
   badge: string;
   title: string;
   body: string;
   meta: string;
+  selected: boolean;
+  onSelect: () => void;
+  onOpen: () => void;
 }) {
   const Icon = props.icon;
   return (
-    <Card className="transition-all hover:border-accent/40 hover:shadow-md">
-      <CardContent className="p-4">
-        <div className="flex items-start gap-3">
-          <div
-            className={cn(
-              'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg',
-              props.tone === 'primary' && 'bg-primary-light text-primary',
-              props.tone === 'warning' && 'bg-warning-light text-warning',
-              props.tone === 'purple' && 'bg-purple-50 text-purple-600'
-            )}
+    <Card
+      className={cn(
+        'transition-all hover:border-accent/40 hover:shadow-md',
+        props.selected && 'border-accent/60 bg-cyan-50/50 shadow-md shadow-cyan-100'
+      )}
+    >
+      <CardContent className="p-0">
+        <div className="flex items-stretch">
+          <label
+            className="flex cursor-pointer items-start justify-center px-3 py-4 sm:px-4"
+            onClick={(event) => event.stopPropagation()}
+            aria-label="Выбрать запись"
           >
-            <Icon className="h-5 w-5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className="text-[10px]">{props.badge}</Badge>
-              <span className="text-xs text-muted-foreground">{props.meta}</span>
+            <Checkbox checked={props.selected} onCheckedChange={props.onSelect} />
+          </label>
+          <button type="button" onClick={props.onOpen} className="min-w-0 flex-1 py-4 pr-4 text-left sm:pr-5">
+            <div className="flex items-start gap-3">
+              <div
+                className={cn(
+                  'hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg sm:flex',
+                  props.tone === 'primary' && 'bg-primary-light text-primary',
+                  props.tone === 'warning' && 'bg-warning-light text-warning',
+                  props.tone === 'purple' && 'bg-purple-50 text-purple-600'
+                )}
+              >
+                <Icon className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline" className="text-[10px]">{props.badge}</Badge>
+                  <span className="text-xs text-muted-foreground">{props.meta}</span>
+                </div>
+                <p className="mt-1 truncate text-sm font-medium">{props.title}</p>
+                <p className="mt-1 line-clamp-3 text-sm leading-relaxed">{props.body}</p>
+              </div>
             </div>
-            <p className="mt-1 truncate text-sm font-medium">{props.title}</p>
-            <p className="mt-1 line-clamp-3 text-sm leading-relaxed">{props.body}</p>
-          </div>
+          </button>
         </div>
       </CardContent>
     </Card>
   );
 }
 
-function EmptyState(props: { title: string; description: string; icon: typeof FileText }) {
+function BulkToolbar(props: {
+  selectedCount: number;
+  totalCount: number;
+  allVisibleSelected: boolean;
+  loading: boolean;
+  onToggleAll: () => void;
+  onClear: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="sticky top-3 z-10 flex flex-col gap-2 rounded-2xl border border-cyan-100 bg-white/88 p-3 shadow-sm shadow-blue-950/5 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Checkbox checked={props.allVisibleSelected} onCheckedChange={props.onToggleAll} disabled={props.totalCount === 0 || props.loading} />
+        <button type="button" onClick={props.onToggleAll} disabled={props.totalCount === 0 || props.loading} className="font-medium text-foreground disabled:opacity-50">
+          {props.allVisibleSelected ? 'Снять выбор' : 'Выбрать всё'}
+        </button>
+        <span>· выбрано {props.selectedCount}</span>
+      </div>
+      <div className="flex gap-2">
+        {props.selectedCount > 0 && (
+          <Button variant="ghost" size="sm" onClick={props.onClear} disabled={props.loading}>
+            Очистить
+          </Button>
+        )}
+        <Button variant="danger" size="sm" onClick={props.onDelete} loading={props.loading} disabled={props.selectedCount === 0}>
+          <Trash2 className="h-4 w-4" />
+          Удалить
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function EmptyState(props: { title: string; description: string; icon: LucideIcon }) {
   const Icon = props.icon;
   return (
     <Card>
