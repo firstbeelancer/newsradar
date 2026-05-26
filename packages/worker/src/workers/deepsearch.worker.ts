@@ -2,9 +2,11 @@ import { and, desc, eq, ne } from "drizzle-orm";
 import type { Job } from "bullmq";
 import type { Logger } from "pino";
 import { db } from "../db/index.js";
-import { articles, deepsearchResults, operationLogs } from "../db/schema.js";
+import { articles, deepsearchResults, operationLogs, workspaces } from "../db/schema.js";
 import { complete } from "../lib/ai-client.js";
 import { fetchArticleText } from "../lib/article-extractor.js";
+import { decrypt } from "../lib/encryption.js";
+import { runWebSearch, type WebSearchProvider, type WebSearchSettings, type WebSearchSource } from "../lib/web-search.js";
 
 export interface DeepsearchJob {
   resultId: string;
@@ -16,6 +18,14 @@ export interface DeepsearchJob {
   customPrompt?: string;
 }
 
+interface StoredDeepsearchWebSearchSettings {
+  provider?: WebSearchProvider;
+  apiKeyEncrypted?: string;
+  baseUrl?: string;
+  model?: string;
+  maxResults?: number;
+}
+
 async function updateOperationLog(
   operationLogId: string,
   data: { status: string; message?: string; finishedAt?: Date; metadata?: Record<string, unknown> }
@@ -25,6 +35,30 @@ async function updateOperationLog(
 
 function compactText(value: string | null | undefined, limit: number): string {
   return (value ?? "").replace(/\s+/g, " ").trim().slice(0, limit);
+}
+
+function readWebSearchSettings(config: unknown): WebSearchSettings {
+  const root = (config && typeof config === "object" ? config : {}) as Record<string, unknown>;
+  const stored = (root.deepsearchWebSearch && typeof root.deepsearchWebSearch === "object"
+    ? root.deepsearchWebSearch
+    : {}) as StoredDeepsearchWebSearchSettings;
+
+  let apiKey: string | undefined;
+  if (stored.apiKeyEncrypted) {
+    try {
+      apiKey = decrypt(stored.apiKeyEncrypted);
+    } catch {
+      apiKey = undefined;
+    }
+  }
+
+  return {
+    provider: stored.provider ?? "disabled",
+    apiKey,
+    baseUrl: stored.baseUrl,
+    model: stored.model,
+    maxResults: stored.maxResults,
+  };
 }
 
 function buildArticleBlock(article: typeof articles.$inferSelect, fetchedText: string): string {
@@ -41,7 +75,9 @@ function buildArticleBlock(article: typeof articles.$inferSelect, fetchedText: s
     .join("\n");
 }
 
-function buildRelatedBlock(related: Array<Pick<typeof articles.$inferSelect, "id" | "title" | "description" | "aiSummary" | "link" | "score">>): string {
+function buildRelatedBlock(
+  related: Array<Pick<typeof articles.$inferSelect, "id" | "title" | "description" | "aiSummary" | "link" | "score">>
+): string {
   if (related.length === 0) return "No related articles in the local feed.";
 
   return related
@@ -58,36 +94,75 @@ function buildRelatedBlock(related: Array<Pick<typeof articles.$inferSelect, "id
     .join("\n\n");
 }
 
+function buildExternalSourcesBlock(sources: WebSearchSource[]): string {
+  if (sources.length === 0) {
+    return "External web search is disabled or returned no sources.";
+  }
+
+  return sources
+    .map((source, index) =>
+      [
+        `${index + 1}. ${source.title}`,
+        source.snippet ? `Context: ${compactText(source.snippet, 700)}` : null,
+        `URL: ${source.url}`,
+      ]
+        .filter(Boolean)
+        .join("\n")
+    )
+    .join("\n\n");
+}
+
+function buildSearchQuery(article: typeof articles.$inferSelect): string {
+  const title = article.title.length < 180 ? `"${article.title}"` : article.title;
+  const description = compactText(article.description ?? article.aiSummary, 180);
+  return [title, description].filter(Boolean).join(" ");
+}
+
 function buildDeepSearchPrompt(params: {
   article: typeof articles.$inferSelect;
   fetchedText: string;
   related: Array<Pick<typeof articles.$inferSelect, "id" | "title" | "description" | "aiSummary" | "link" | "score">>;
+  externalSources: WebSearchSource[];
+  webSearchProvider: WebSearchProvider;
+  webSearchError?: string;
   customPrompt?: string;
 }): string {
   const editorRequest = params.customPrompt?.trim()
     ? `\n\nAdditional editor request:\n${params.customPrompt.trim()}`
     : "";
 
+  const webSearchStatus = params.webSearchError
+    ? `External web search error: ${params.webSearchError}`
+    : `External web search provider: ${params.webSearchProvider}`;
+
   return `Run DeepSearch for this news item in Russian.
 
-Use only the provided article data, fetched page text, and related local feed items. If the source data is thin, say what is missing instead of inventing facts.
+Use the article data, fetched page text, related local feed items, and external sources below. If source data is thin or external search is unavailable, say what is missing instead of inventing facts.
 
 Main article:
 ${buildArticleBlock(params.article, params.fetchedText)}
 
 Related local articles:
 ${buildRelatedBlock(params.related)}
+
+${webSearchStatus}
+External sources:
+${buildExternalSourcesBlock(params.externalSources)}
 ${editorRequest}
 
-Return a concise research report with these sections:
+Return an analytical research report with these sections:
 1. Что произошло.
 2. Почему это важно.
-3. Контекст и связанные сигналы.
-4. Что может быть дальше.
-5. Что проверить редактору.
-6. Короткий вывод.
+3. Ключевые сущности и факты.
+4. Кросс-проверка по локальной базе и внешним источникам.
+5. Что говорят другие источники и где есть расхождения.
+6. Насколько широко история разошлась по сети.
+7. Что может быть дальше.
+8. Что проверить редактору.
+9. Источники.
+10. Короткий вывод.
 
-Do not write a Telegram post. Do not add hashtags. Keep source URLs visible when they help verify the report.`;
+Do not write a Telegram post. Do not add hashtags. Keep source URLs visible. Base the final opinion on the original article, local database context, and external sources when they are available.`;
 }
 
 export async function processDeepsearch(
@@ -106,7 +181,7 @@ export async function processDeepsearch(
 
   await updateOperationLog(operationLogId, {
     status: "running",
-    message: "DeepSearch анализирует статью",
+    message: "DeepSearch анализирует статью и ищет внешние источники",
   });
 
   try {
@@ -118,7 +193,7 @@ export async function processDeepsearch(
       throw new Error("Article not found for DeepSearch");
     }
 
-    const [fetchedText, related] = await Promise.all([
+    const [fetchedText, related, workspace] = await Promise.all([
       fetchArticleText(article.link),
       db
         .select({
@@ -133,9 +208,37 @@ export async function processDeepsearch(
         .where(and(eq(articles.workspaceId, workspaceId), eq(articles.agentId, agentId), ne(articles.id, articleId)))
         .orderBy(desc(articles.score), desc(articles.createdAt))
         .limit(5),
+      db.query.workspaces.findFirst({ where: eq(workspaces.id, workspaceId) }),
     ]);
 
-    const prompt = buildDeepSearchPrompt({ article, fetchedText, related, customPrompt });
+    const webSearchSettings = readWebSearchSettings(workspace?.config);
+    let externalSources: WebSearchSource[] = [];
+    let webSearchError: string | undefined;
+
+    try {
+      externalSources = await runWebSearch(buildSearchQuery(article), webSearchSettings);
+    } catch (err) {
+      webSearchError = err instanceof Error ? err.message : "External web search failed";
+      logger.warn({ resultId, articleId, err: webSearchError }, "DeepSearch external web search failed");
+    }
+
+    const externalSourcesWithText = await Promise.all(
+      externalSources.map(async (source) => ({
+        ...source,
+        snippet: compactText([source.snippet, await fetchArticleText(source.url)].filter(Boolean).join(" "), 1_600),
+      }))
+    );
+
+    const prompt = buildDeepSearchPrompt({
+      article,
+      fetchedText,
+      related,
+      externalSources: externalSourcesWithText,
+      webSearchProvider: webSearchSettings.provider,
+      webSearchError,
+      customPrompt,
+    });
+
     const reportText = (await complete({
       workspaceId,
       process: "deepsearch",
@@ -162,7 +265,11 @@ export async function processDeepsearch(
       articleUrl: article.link,
       fetchedTextChars: fetchedText.length,
       relatedArticleIds: related.map((item) => item.id),
-      promptVersion: "deepsearch-worker-v1",
+      externalSources: externalSourcesWithText,
+      externalSourceCount: externalSourcesWithText.length,
+      webSearchProvider: webSearchSettings.provider,
+      webSearchError,
+      promptVersion: "deepsearch-worker-v2-web-search",
     };
 
     await db
@@ -184,6 +291,9 @@ export async function processDeepsearch(
         resultId,
         articleId,
         relatedArticleIds: related.map((item) => item.id),
+        externalSourceCount: externalSourcesWithText.length,
+        webSearchProvider: webSearchSettings.provider,
+        webSearchError,
         preview: reportText.slice(0, 280),
       },
     });

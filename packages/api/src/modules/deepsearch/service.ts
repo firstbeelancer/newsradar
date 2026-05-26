@@ -1,8 +1,9 @@
-import { and, desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, lt, ne } from "drizzle-orm";
 import { db } from "../../db/index.js";
-import { articles, deepsearchResults } from "../../db/schema.js";
+import { articles, deepsearchResults, workspaces } from "../../db/schema.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { getDeepsearchQueue } from "../../lib/queues.js";
+import { encrypt, decrypt } from "../../lib/encryption.js";
 import { getArticleById } from "../articles/service.js";
 import { createOperationLog } from "../operation-logs/service.js";
 
@@ -12,6 +13,60 @@ export interface StartDeepSearchInput {
   articleId: string;
   agentId?: string;
   customPrompt?: string;
+}
+
+export type DeepsearchWebSearchProvider = "disabled" | "brave" | "tavily" | "serpapi" | "perplexity";
+
+export interface DeepsearchWebSearchSettingsInput {
+  provider: DeepsearchWebSearchProvider;
+  apiKey?: string;
+  clearApiKey?: boolean;
+  baseUrl?: string;
+  model?: string;
+  maxResults?: number;
+}
+
+export interface DeepsearchWebSearchSettingsView {
+  provider: DeepsearchWebSearchProvider;
+  hasApiKey: boolean;
+  baseUrl?: string;
+  model?: string;
+  maxResults: number;
+}
+
+interface StoredDeepsearchWebSearchSettings {
+  provider?: DeepsearchWebSearchProvider;
+  apiKeyEncrypted?: string;
+  baseUrl?: string;
+  model?: string;
+  maxResults?: number;
+}
+
+function normalizeMaxResults(value: unknown): number {
+  const numberValue = Number(value ?? 8);
+  if (!Number.isFinite(numberValue)) return 8;
+  return Math.max(1, Math.min(Math.trunc(numberValue), 20));
+}
+
+function workspaceConfig(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? value as Record<string, unknown> : {};
+}
+
+function storedWebSearchSettings(config: unknown): StoredDeepsearchWebSearchSettings {
+  const root = workspaceConfig(config);
+  return root.deepsearchWebSearch && typeof root.deepsearchWebSearch === "object"
+    ? root.deepsearchWebSearch as StoredDeepsearchWebSearchSettings
+    : {};
+}
+
+function toSettingsView(settings: StoredDeepsearchWebSearchSettings): DeepsearchWebSearchSettingsView {
+  return {
+    provider: settings.provider ?? "disabled",
+    hasApiKey: Boolean(settings.apiKeyEncrypted),
+    baseUrl: settings.baseUrl,
+    model: settings.model,
+    maxResults: normalizeMaxResults(settings.maxResults),
+  };
 }
 
 export async function startDeepSearch(input: StartDeepSearchInput) {
@@ -95,6 +150,49 @@ export async function getDeepSearchResult(id: string, workspaceId: string) {
   return result;
 }
 
+export async function listDeepSearchResults(workspaceId: string, options?: { cursor?: string; limit?: number; agentId?: string }) {
+  const limit = Math.max(1, Math.min(options?.limit ?? 20, 50));
+  const conditions = [eq(deepsearchResults.workspaceId, workspaceId)];
+
+  if (options?.agentId) {
+    conditions.push(eq(deepsearchResults.agentId, options.agentId));
+  }
+
+  if (options?.cursor) {
+    const cursorDate = new Date(options.cursor);
+    if (!Number.isNaN(cursorDate.getTime())) {
+      conditions.push(lt(deepsearchResults.createdAt, cursorDate));
+    }
+  }
+
+  const rows = await db
+    .select()
+    .from(deepsearchResults)
+    .where(and(...conditions))
+    .orderBy(desc(deepsearchResults.createdAt))
+    .limit(limit + 1);
+
+  const page = rows.slice(0, limit);
+  const nextCursor = rows.length > limit ? page.at(-1)?.createdAt?.toISOString() ?? null : null;
+
+  return {
+    data: page,
+    next_cursor: nextCursor,
+    has_more: Boolean(nextCursor),
+  };
+}
+
+export async function deleteDeepSearchResult(id: string, workspaceId: string) {
+  const [deleted] = await db
+    .delete(deepsearchResults)
+    .where(and(eq(deepsearchResults.id, id), eq(deepsearchResults.workspaceId, workspaceId)))
+    .returning({ id: deepsearchResults.id });
+
+  if (!deleted) {
+    throw new AppError(404, "DeepSearch result not found", "DEEPSEARCH_NOT_FOUND");
+  }
+}
+
 export async function getLatestDeepSearchForArticle(articleId: string, workspaceId: string) {
   const article = await getArticleById(articleId, workspaceId);
   const rows = await db
@@ -114,6 +212,70 @@ export async function getLatestDeepSearchForArticle(articleId: string, workspace
   }
 
   return result;
+}
+
+export async function getDeepsearchWebSearchSettings(workspaceId: string) {
+  const workspace = await db.query.workspaces.findFirst({
+    where: eq(workspaces.id, workspaceId),
+  });
+
+  if (!workspace) {
+    throw new AppError(404, "Workspace not found", "WORKSPACE_NOT_FOUND");
+  }
+
+  return toSettingsView(storedWebSearchSettings(workspace.config));
+}
+
+export async function updateDeepsearchWebSearchSettings(workspaceId: string, input: DeepsearchWebSearchSettingsInput) {
+  const workspace = await db.query.workspaces.findFirst({
+    where: eq(workspaces.id, workspaceId),
+  });
+
+  if (!workspace) {
+    throw new AppError(404, "Workspace not found", "WORKSPACE_NOT_FOUND");
+  }
+
+  const currentConfig = workspaceConfig(workspace.config);
+  const currentSettings = storedWebSearchSettings(workspace.config);
+  const nextSettings: StoredDeepsearchWebSearchSettings = {
+    ...currentSettings,
+    provider: input.provider,
+    baseUrl: input.baseUrl?.trim() || undefined,
+    model: input.model?.trim() || undefined,
+    maxResults: normalizeMaxResults(input.maxResults),
+  };
+
+  if (input.clearApiKey) {
+    delete nextSettings.apiKeyEncrypted;
+  } else if (input.apiKey?.trim()) {
+    nextSettings.apiKeyEncrypted = encrypt(input.apiKey.trim());
+  }
+
+  const [updated] = await db
+    .update(workspaces)
+    .set({
+      config: {
+        ...currentConfig,
+        deepsearchWebSearch: nextSettings,
+      },
+      updatedAt: new Date(),
+    })
+    .where(eq(workspaces.id, workspaceId))
+    .returning();
+
+  return toSettingsView(storedWebSearchSettings(updated.config));
+}
+
+export async function resolveDeepsearchWebSearchApiKey(workspaceId: string, transientApiKey?: string): Promise<string | undefined> {
+  if (transientApiKey?.trim()) return transientApiKey.trim();
+
+  const workspace = await db.query.workspaces.findFirst({
+    where: eq(workspaces.id, workspaceId),
+  });
+  const stored = storedWebSearchSettings(workspace?.config);
+
+  if (!stored.apiKeyEncrypted) return undefined;
+  return decrypt(stored.apiKeyEncrypted);
 }
 
 export async function listRelatedArticlesForDeepSearch(articleId: string, workspaceId: string, agentId: string) {

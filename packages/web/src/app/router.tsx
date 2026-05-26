@@ -14,6 +14,7 @@ import { FeedPage } from '@/features/feed/feed-page';
 import { ArticleDetail } from '@/features/feed/article-detail';
 import { GenerationPage } from '@/features/generation/generation-page';
 import { GeneratedPostsPage } from '@/features/generation/generated-posts-page';
+import { HistoryPage } from '@/features/history/history-page';
 import { SettingsLayout } from '@/features/settings/settings-layout';
 import { ProfileSettings } from '@/features/settings/profile-settings';
 import { AgentsSettings } from '@/features/settings/agents-settings';
@@ -21,6 +22,7 @@ import { TemplatesSettings } from '@/features/settings/templates-settings';
 import { AIProvidersSettings } from '@/features/settings/ai-providers-settings';
 import { PromptsSettings } from '@/features/settings/prompts-settings';
 import { TelegramAssetsSettings } from '@/features/settings/telegram-assets-settings';
+import { DeepSearchSettings } from '@/features/settings/deepsearch-settings';
 import { SubscriptionPage } from '@/features/subscriptions/subscription-page';
 import { IBoardPage } from '@/features/iboard/iboard-page';
 import { NotificationsPage } from '@/features/notifications/notifications-page';
@@ -155,6 +157,12 @@ const generatedPostsRoute = createRoute({
   component: GeneratedPostsPage,
 });
 
+const historyRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/history',
+  component: HistoryPage,
+});
+
 // ─── Subscription ────────────────────────────────────────────────────────────
 
 const subscriptionRoute = createRoute({
@@ -237,6 +245,12 @@ const settingsTelegramAssetsRoute = createRoute({
   component: TelegramAssetsSettings,
 });
 
+const settingsDeepSearchRoute = createRoute({
+  getParentRoute: () => settingsLayoutRoute,
+  path: 'deepsearch',
+  component: DeepSearchSettings,
+});
+
 // ─── Route Tree ──────────────────────────────────────────────────────────────
 
 const routeTree = rootRoute.addChildren([
@@ -252,6 +266,7 @@ const routeTree = rootRoute.addChildren([
     searchRoute,
     generationRoute,
     generatedPostsRoute,
+    historyRoute,
     subscriptionRoute,
     iboardRoute,
     analyticsRoute,
@@ -264,6 +279,7 @@ const routeTree = rootRoute.addChildren([
       settingsAIProvidersRoute,
       settingsPromptsRoute,
       settingsTelegramAssetsRoute,
+      settingsDeepSearchRoute,
     ]),
   ]),
   loginRoute,

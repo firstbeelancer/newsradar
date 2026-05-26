@@ -15,6 +15,7 @@ import {
   LogOut,
   Crown,
   BarChart3,
+  History,
 } from 'lucide-react';
 
 const navItems = [
@@ -22,6 +23,7 @@ const navItems = [
   { to: '/agents', label: 'Агенты', icon: Bot },
   { to: '/feed', label: 'Лента', icon: Newspaper },
   { to: '/generation', label: 'Генерация', icon: Sparkles },
+  { to: '/history', label: 'История', icon: History },
   { to: '/feed', label: 'Избранное', icon: Bookmark, search: { favorites: '1' } },
   { to: '/iboard', label: 'Аналитика', icon: BarChart3 },
   { to: '/subscription', label: 'Подписка', icon: Crown },

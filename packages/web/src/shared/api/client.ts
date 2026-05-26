@@ -159,6 +159,8 @@ interface BackendOperationLog {
 
 interface BackendDeepSearchResult {
   id: string;
+  agentId?: string | null;
+  agent_id?: string | null;
   status: 'pending' | 'running' | 'completed' | 'failed' | string;
   query?: string;
   findings?: Record<string, unknown>;
@@ -344,6 +346,7 @@ export function normalizeGenerationResult(
 export function normalizeDeepSearchResult(raw: BackendDeepSearchResult): DeepSearchResult {
   return {
     id: raw.id,
+    agent_id: raw.agent_id ?? raw.agentId ?? null,
     status: raw.status as DeepSearchResult['status'],
     query: raw.query,
     findings: raw.findings,
@@ -812,6 +815,7 @@ export interface DeepSearchStartResult extends GenerationResult {
 
 export interface DeepSearchResult {
   id: string;
+  agent_id?: string | null;
   status: 'pending' | 'running' | 'queued' | 'completed' | 'failed' | string;
   query?: string;
   findings?: Record<string, unknown>;
@@ -820,6 +824,24 @@ export interface DeepSearchResult {
   created_at: string;
   started_at?: string | null;
   finished_at?: string | null;
+}
+
+export type DeepSearchWebSearchProvider = 'disabled' | 'brave' | 'tavily' | 'serpapi' | 'perplexity';
+
+export interface DeepSearchWebSearchSettings {
+  provider: DeepSearchWebSearchProvider;
+  hasApiKey: boolean;
+  apiKey?: string;
+  clearApiKey?: boolean;
+  baseUrl?: string;
+  model?: string;
+  maxResults: number;
+}
+
+export interface DeepSearchWebSearchTestResult {
+  ok: boolean;
+  message: string;
+  resultCount?: number;
 }
 
 export interface GenerationStreamState {
@@ -1159,6 +1181,10 @@ export const generationApi = {
 };
 
 export const deepsearchApi = {
+  list: (cursor?: string, limit = 20) =>
+    apiGet<BackendCursorResponse<BackendDeepSearchResult>>(`/deepsearch?limit=${limit}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`).then((payload) =>
+      normalizeCursorResponse(payload, normalizeDeepSearchResult)
+    ),
   start: (data: StartDeepSearchDto) =>
     apiPost<{ operationId?: string; op_id?: string; resultId?: string; operationLogId?: string; status?: string; content?: string; error?: string }, {
       articleId: string;
@@ -1176,6 +1202,12 @@ export const deepsearchApi = {
   get: (id: string) => apiGet<BackendDeepSearchResult>(`/deepsearch/${id}`).then(normalizeDeepSearchResult),
   latestForArticle: (articleId: string) =>
     apiGet<BackendDeepSearchResult>(`/articles/${articleId}/deepsearch`).then(normalizeDeepSearchResult),
+  delete: (id: string) => apiDelete<void>(`/deepsearch/${id}`),
+  getWebSearchSettings: () => apiGet<DeepSearchWebSearchSettings>('/deepsearch/settings/web-search'),
+  updateWebSearchSettings: (settings: DeepSearchWebSearchSettings) =>
+    apiPut<DeepSearchWebSearchSettings, Partial<DeepSearchWebSearchSettings>>('/deepsearch/settings/web-search', settings),
+  testWebSearchSettings: (settings: Partial<DeepSearchWebSearchSettings> & { query?: string }) =>
+    apiPost<DeepSearchWebSearchTestResult, Partial<DeepSearchWebSearchSettings> & { query?: string }>('/deepsearch/settings/web-search/test', settings),
 };
 
 // Scoring (workspace-level defaults)
@@ -1231,6 +1263,13 @@ export interface WorkspaceConfig {
     postTemplateId?: string | null;
     digestTemplateId?: string | null;
     period?: 'day' | 'week' | 'month';
+  };
+  deepsearchWebSearch?: {
+    provider?: DeepSearchWebSearchProvider;
+    hasApiKey?: boolean;
+    baseUrl?: string;
+    model?: string;
+    maxResults?: number;
   };
   [key: string]: unknown;
 }

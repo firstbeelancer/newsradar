@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation } from '@tanstack/react-router';
-import { Bot, Cpu, FileText, MessageSquare, SmilePlus, User } from 'lucide-react';
+import { Bot, Cpu, FileText, MessageSquare, SearchCheck, SmilePlus, User } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 
 const settingsNav = [
@@ -9,6 +9,7 @@ const settingsNav = [
   { to: '/settings/ai-providers', label: 'AI провайдеры', icon: Cpu },
   { to: '/settings/prompts', label: 'Промпты', icon: MessageSquare },
   { to: '/settings/telegram-assets', label: 'Emoji и стикеры', icon: SmilePlus },
+  { to: '/settings/deepsearch', label: 'DeepSearch', icon: SearchCheck },
 ];
 
 export function SettingsLayout() {

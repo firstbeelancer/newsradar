@@ -12,6 +12,7 @@ import {
   LogOut,
   Crown,
   BarChart3,
+  History,
 } from 'lucide-react';
 import { useAuthStore } from '@shared/stores/auth-store';
 import { NotificationBell } from '@/features/notifications/notification-bell';
@@ -25,6 +26,7 @@ const mainNavItems = [
 
 const moreMenuItems = [
   { to: '/feed', label: 'Избранное', icon: Bookmark, search: { favorites: '1' } as Record<string, string> },
+  { to: '/history', label: 'История', icon: History },
   { to: '/iboard', label: 'Аналитика', icon: BarChart3 },
   { to: '/subscription', label: 'Подписка', icon: Crown },
   { to: '/settings/profile', label: 'Настройки', icon: Settings },
