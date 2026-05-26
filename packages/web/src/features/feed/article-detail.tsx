@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { Card, CardContent, CardHeader, CardTitle } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
@@ -6,7 +6,7 @@ import { Button } from '@shared/ui/button';
 import { Skeleton } from '@shared/ui/skeleton';
 import { useArticlesStore } from '@shared/stores/articles-store';
 import { useGenerationStore } from '@shared/stores/generation-store';
-import { deepsearchApi } from '@shared/api/client';
+import { ApiError, deepsearchApi, type DeepSearchResult } from '@shared/api/client';
 import { useToast } from '@shared/ui/toast';
 import {
   ArrowLeft,
@@ -17,6 +17,7 @@ import {
   BarChart3,
   Search,
   Sparkles,
+  Loader2,
 } from 'lucide-react';
 import { cn, formatDateTime, cleanArticleText } from '@shared/lib/utils';
 
@@ -39,10 +40,42 @@ export function ArticleDetail({ articleId }: ArticleDetailProps) {
   const { addToast } = useToast();
   const { setSelectedArticleIds, resetGeneration } = useGenerationStore();
   const { currentArticle, isLoading, fetchArticle, toggleFavorite } = useArticlesStore();
+  const [deepSearchResult, setDeepSearchResult] = useState<DeepSearchResult | null>(null);
+  const [isDeepSearchStarting, setIsDeepSearchStarting] = useState(false);
 
   useEffect(() => {
     void fetchArticle(articleId);
   }, [articleId, fetchArticle]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void deepsearchApi.latestForArticle(articleId)
+      .then((result) => {
+        if (!cancelled) setDeepSearchResult(result);
+      })
+      .catch((error) => {
+        if (!cancelled && !(error instanceof ApiError && error.status === 404)) {
+          setDeepSearchResult(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [articleId]);
+
+  useEffect(() => {
+    if (!deepSearchResult || !['queued', 'pending', 'running'].includes(deepSearchResult.status)) return;
+
+    const interval = window.setInterval(() => {
+      void deepsearchApi.get(deepSearchResult.id)
+        .then(setDeepSearchResult)
+        .catch(() => undefined);
+    }, 5000);
+
+    return () => window.clearInterval(interval);
+  }, [deepSearchResult]);
 
   if (isLoading && !currentArticle) {
     return (
@@ -81,11 +114,25 @@ export function ArticleDetail({ articleId }: ArticleDetailProps) {
     );
 
   const handleDeepSearch = async () => {
+    setIsDeepSearchStarting(true);
     try {
       const result = await deepsearchApi.start({
         article_id: currentArticle.id,
         agent_id: currentArticle.agent_id || undefined,
       });
+      const resultId = result.result_id ?? result.op_id;
+      if (resultId) {
+        setDeepSearchResult({
+          id: resultId,
+          status: result.status,
+          query: currentArticle.title,
+          report_text: null,
+          error: null,
+          created_at: new Date().toISOString(),
+          started_at: null,
+          finished_at: null,
+        });
+      }
       addToast({
         title: 'DeepSearch запущен',
         description: `Операция ${result.op_id} уже в работе. Смотри статус-бар и журнал событий.`,
@@ -97,6 +144,8 @@ export function ArticleDetail({ articleId }: ArticleDetailProps) {
         description: error instanceof Error ? error.message : 'Не удалось запустить DeepSearch',
         variant: 'danger',
       });
+    } finally {
+      setIsDeepSearchStarting(false);
     }
   };
 
@@ -165,8 +214,8 @@ export function ArticleDetail({ articleId }: ArticleDetailProps) {
               {currentArticle.is_favorite ? 'В избранном' : 'В избранное'}
             </Button>
             <Button variant="outline" size="sm" onClick={handleDeepSearch} className="justify-center">
-              <Search className="h-4 w-4" />
-              DeepSearch
+              {isDeepSearchStarting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+              {deepSearchResult ? 'Обновить DeepSearch' : 'DeepSearch'}
             </Button>
             <a href={currentArticle.url} target="_blank" rel="noopener noreferrer" className="block">
               <Button variant="outline" size="sm" className="w-full justify-center">
@@ -177,6 +226,50 @@ export function ArticleDetail({ articleId }: ArticleDetailProps) {
           </div>
         </CardContent>
       </Card>
+
+      {deepSearchResult && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between gap-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Search className="h-4 w-4 text-purple-500" />
+                DeepSearch
+              </CardTitle>
+              <Badge
+                variant={
+                  deepSearchResult.status === 'completed'
+                    ? 'success'
+                    : deepSearchResult.status === 'failed'
+                      ? 'danger'
+                      : 'warning'
+                }
+              >
+                {deepSearchResult.status === 'completed'
+                  ? 'Готово'
+                  : deepSearchResult.status === 'failed'
+                    ? 'Ошибка'
+                    : 'В работе'}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {deepSearchResult.status === 'completed' && deepSearchResult.report_text ? (
+              <div className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                {deepSearchResult.report_text}
+              </div>
+            ) : deepSearchResult.status === 'failed' ? (
+              <p className="text-sm text-danger">
+                {deepSearchResult.error || 'DeepSearch завершился с ошибкой.'}
+              </p>
+            ) : (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                DeepSearch анализирует статью. Отчёт появится здесь автоматически.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

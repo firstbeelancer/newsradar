@@ -157,6 +157,22 @@ interface BackendOperationLog {
   finished_at?: string | null;
 }
 
+interface BackendDeepSearchResult {
+  id: string;
+  status: 'pending' | 'running' | 'completed' | 'failed' | string;
+  query?: string;
+  findings?: Record<string, unknown>;
+  reportText?: string | null;
+  report_text?: string | null;
+  error?: string | null;
+  createdAt?: string;
+  created_at?: string;
+  startedAt?: string | null;
+  started_at?: string | null;
+  finishedAt?: string | null;
+  finished_at?: string | null;
+}
+
 interface BackendDashboardSummary {
   totalArticles?: number;
   total_articles?: number;
@@ -322,6 +338,20 @@ export function normalizeGenerationResult(
     status: (payload.status as GenerationResult['status']) ?? 'pending',
     content: payload.content,
     error: payload.error,
+  };
+}
+
+export function normalizeDeepSearchResult(raw: BackendDeepSearchResult): DeepSearchResult {
+  return {
+    id: raw.id,
+    status: raw.status as DeepSearchResult['status'],
+    query: raw.query,
+    findings: raw.findings,
+    report_text: raw.report_text ?? raw.reportText ?? null,
+    error: raw.error ?? null,
+    created_at: raw.created_at ?? raw.createdAt ?? new Date(0).toISOString(),
+    started_at: raw.started_at ?? raw.startedAt ?? null,
+    finished_at: raw.finished_at ?? raw.finishedAt ?? null,
   };
 }
 
@@ -775,6 +805,23 @@ export interface GenerationResult {
   error?: string;
 }
 
+export interface DeepSearchStartResult extends GenerationResult {
+  result_id?: string;
+  operation_log_id?: string;
+}
+
+export interface DeepSearchResult {
+  id: string;
+  status: 'pending' | 'running' | 'queued' | 'completed' | 'failed' | string;
+  query?: string;
+  findings?: Record<string, unknown>;
+  report_text?: string | null;
+  error?: string | null;
+  created_at: string;
+  started_at?: string | null;
+  finished_at?: string | null;
+}
+
 export interface GenerationStreamState {
   status: 'pending' | 'generating' | 'completed' | 'error';
   content: string;
@@ -1113,7 +1160,7 @@ export const generationApi = {
 
 export const deepsearchApi = {
   start: (data: StartDeepSearchDto) =>
-    apiPost<{ operationId?: string; op_id?: string; status?: string; content?: string; error?: string }, {
+    apiPost<{ operationId?: string; op_id?: string; resultId?: string; operationLogId?: string; status?: string; content?: string; error?: string }, {
       articleId: string;
       agentId?: string;
       customPrompt?: string;
@@ -1121,7 +1168,14 @@ export const deepsearchApi = {
       articleId: data.article_id,
       agentId: data.agent_id,
       customPrompt: data.custom_prompt,
-    }).then(normalizeGenerationResult),
+    }).then((payload): DeepSearchStartResult => ({
+      ...normalizeGenerationResult(payload),
+      result_id: payload.resultId ?? payload.operationId ?? payload.op_id,
+      operation_log_id: payload.operationLogId,
+    })),
+  get: (id: string) => apiGet<BackendDeepSearchResult>(`/deepsearch/${id}`).then(normalizeDeepSearchResult),
+  latestForArticle: (articleId: string) =>
+    apiGet<BackendDeepSearchResult>(`/articles/${articleId}/deepsearch`).then(normalizeDeepSearchResult),
 };
 
 // Scoring (workspace-level defaults)
