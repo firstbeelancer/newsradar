@@ -65,6 +65,13 @@ WHERE "article_id" IS NULL
   AND "findings" ? 'articleId'
   AND ("findings"->>'articleId') ~* '^[0-9a-f-]{36}$';
 
+UPDATE "deepsearch_results" ds
+SET "article_id" = NULL
+WHERE ds."article_id" IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM "articles" a WHERE a."id" = ds."article_id"
+  );
+
 UPDATE "deepsearch_results"
 SET "completed_at" = COALESCE("completed_at", "finished_at")
 WHERE "status" = 'completed' AND "completed_at" IS NULL;
