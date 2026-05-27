@@ -4,6 +4,8 @@
 ALTER TABLE "generated_posts" ADD COLUMN IF NOT EXISTS "generated_text" text;
 ALTER TABLE "generated_posts" ADD COLUMN IF NOT EXISTS "edited_text" text;
 ALTER TABLE "generated_posts" ADD COLUMN IF NOT EXISTS "article_ids" uuid[] DEFAULT '{}'::uuid[] NOT NULL;
+ALTER TABLE "generated_posts" ADD COLUMN IF NOT EXISTS "prompt_snapshot_json" jsonb DEFAULT '{}'::jsonb NOT NULL;
+ALTER TABLE "generated_posts" ADD COLUMN IF NOT EXISTS "model_snapshot_json" jsonb DEFAULT '{}'::jsonb NOT NULL;
 ALTER TABLE "generated_posts" ADD COLUMN IF NOT EXISTS "article_snapshot" jsonb DEFAULT '{}'::jsonb NOT NULL;
 ALTER TABLE "generated_posts" ADD COLUMN IF NOT EXISTS "asset_snapshot" jsonb DEFAULT '{}'::jsonb NOT NULL;
 ALTER TABLE "generated_posts" ADD COLUMN IF NOT EXISTS "copied_at" timestamptz;
@@ -28,42 +30,10 @@ SET "status" = CASE
   ELSE COALESCE("status", 'draft')
 END;
 
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'generated_posts'
-      AND column_name = 'prompt_snapshot'
-      AND data_type <> 'jsonb'
-  ) THEN
-    ALTER TABLE "generated_posts"
-      ALTER COLUMN "prompt_snapshot" DROP DEFAULT,
-      ALTER COLUMN "prompt_snapshot" TYPE jsonb
-      USING CASE
-        WHEN "prompt_snapshot" IS NULL OR btrim("prompt_snapshot"::text) = '' THEN '{}'::jsonb
-        ELSE "prompt_snapshot"::jsonb
-      END,
-      ALTER COLUMN "prompt_snapshot" SET DEFAULT '{}'::jsonb,
-      ALTER COLUMN "prompt_snapshot" SET NOT NULL;
-  END IF;
-
-  IF EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'generated_posts'
-      AND column_name = 'model_snapshot'
-      AND data_type <> 'jsonb'
-  ) THEN
-    ALTER TABLE "generated_posts"
-      ALTER COLUMN "model_snapshot" DROP DEFAULT,
-      ALTER COLUMN "model_snapshot" TYPE jsonb
-      USING CASE
-        WHEN "model_snapshot" IS NULL OR btrim("model_snapshot"::text) = '' THEN '{}'::jsonb
-        ELSE jsonb_build_object('model', "model_snapshot"::text)
-      END,
-      ALTER COLUMN "model_snapshot" SET DEFAULT '{}'::jsonb,
-      ALTER COLUMN "model_snapshot" SET NOT NULL;
-  END IF;
-END $$;
+UPDATE "generated_posts"
+SET "model_snapshot_json" = jsonb_build_object('model', "model_snapshot")
+WHERE "model_snapshot" IS NOT NULL
+  AND "model_snapshot_json" = '{}'::jsonb;
 
 CREATE INDEX IF NOT EXISTS "generated_posts_fts_idx"
 ON "generated_posts"

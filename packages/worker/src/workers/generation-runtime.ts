@@ -237,12 +237,18 @@ export async function processPreparedGeneration(
           articleIds: jobData.articleIds,
           articles: jobData.articlesSnapshot,
         },
-        promptSnapshot: {
+        promptSnapshot: JSON.stringify({
+          systemPrompt: jobData.systemPrompt,
+          userPrompt: jobData.userPrompt,
+          emojiPack: jobData.emojiPack ?? [],
+        }),
+        modelSnapshot: jobData.requestedModel ?? "platform-ai",
+        promptSnapshotJson: {
           systemPrompt: jobData.systemPrompt,
           userPrompt: jobData.userPrompt,
           emojiPack: jobData.emojiPack ?? [],
         },
-        modelSnapshot: {
+        modelSnapshotJson: {
           provider: provider ?? "platform-ai",
           model: jobData.requestedModel ?? "platform-ai",
           process: "generation",
