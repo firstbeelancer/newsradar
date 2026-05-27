@@ -8,8 +8,8 @@
  */
 
 import { db } from "../db/index.js";
-import { articles, workspaces, usageCounters } from "../db/schema.js";
-import { eq, and, sql, desc, asc } from "drizzle-orm";
+import { articles, favoriteArticles, workspaces } from "../db/schema.js";
+import { eq, and, sql, asc, lt } from "drizzle-orm";
 import type { Job } from "bullmq";
 import type { Logger } from "pino";
 
@@ -56,12 +56,32 @@ export async function processFavoritesCleanup(
   }
 
   const limit = getFavoritesLimit(workspace.plan);
+  const now = new Date();
+
+  const expired = await db
+    .delete(favoriteArticles)
+    .where(
+      and(
+        eq(favoriteArticles.workspaceId, workspaceId),
+        eq(favoriteArticles.ttlMode, "30d"),
+        lt(favoriteArticles.expiresAt, now)
+      )
+    )
+    .returning({ articleId: favoriteArticles.articleId });
+
+  if (expired.length > 0) {
+    const expiredIds = expired.map((item) => item.articleId);
+    await db
+      .update(articles)
+      .set({ isFavorite: false, updatedAt: now })
+      .where(sql`${articles.id} = ANY(${expiredIds})`);
+  }
 
   // Count current favorites
   const countResult = await db
     .select({ count: sql<number>`count(*)` })
-    .from(articles)
-    .where(and(eq(articles.workspaceId, workspaceId), eq(articles.isFavorite, true)));
+    .from(favoriteArticles)
+    .where(eq(favoriteArticles.workspaceId, workspaceId));
 
   const total = Number(countResult[0]?.count ?? 0);
 
@@ -74,15 +94,24 @@ export async function processFavoritesCleanup(
   const overflow = total - limit;
 
   const toRemove = await db
-    .select({ id: articles.id })
-    .from(articles)
-    .where(and(eq(articles.workspaceId, workspaceId), eq(articles.isFavorite, true)))
-    .orderBy(asc(articles.updatedAt))
+    .select({ id: favoriteArticles.articleId })
+    .from(favoriteArticles)
+    .where(eq(favoriteArticles.workspaceId, workspaceId))
+    .orderBy(asc(favoriteArticles.createdAt))
     .limit(overflow);
 
   const idsToRemove = toRemove.map((r) => r.id);
 
   if (idsToRemove.length > 0) {
+    await db
+      .delete(favoriteArticles)
+      .where(
+        and(
+          eq(favoriteArticles.workspaceId, workspaceId),
+          sql`${favoriteArticles.articleId} = ANY(${idsToRemove})`
+        )
+      );
+
     await db
       .update(articles)
       .set({ isFavorite: false, updatedAt: new Date() })

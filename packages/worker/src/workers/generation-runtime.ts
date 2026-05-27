@@ -229,14 +229,28 @@ export async function processPreparedGeneration(
         type: jobData.type,
         title: jobData.title ?? "Generated post",
         content,
+        generatedText: content,
         articleCount: jobData.articleCount,
+        articleIds: jobData.articleIds,
         articlesSnapshot: jobData.articlesSnapshot,
-        promptSnapshot: JSON.stringify({
+        articleSnapshot: {
+          articleIds: jobData.articleIds,
+          articles: jobData.articlesSnapshot,
+        },
+        promptSnapshot: {
           systemPrompt: jobData.systemPrompt,
           userPrompt: jobData.userPrompt,
           emojiPack: jobData.emojiPack ?? [],
-        }),
-        modelSnapshot: jobData.requestedModel ?? "platform-ai",
+        },
+        modelSnapshot: {
+          provider: provider ?? "platform-ai",
+          model: jobData.requestedModel ?? "platform-ai",
+          process: "generation",
+        },
+        assetSnapshot: {
+          emojiPack: jobData.emojiPack ?? [],
+        },
+        status: "draft",
       })
       .returning();
 

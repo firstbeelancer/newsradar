@@ -461,14 +461,21 @@ export const generatedPosts = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     title: text("title"),
     content: text("content").notNull(),
+    generatedText: text("generated_text"),
+    editedText: text("edited_text"),
     type: varchar("type", { length: 20 }).notNull(),
     articleCount: integer("article_count").default(0).notNull(),
+    articleIds: uuid("article_ids").array().default(sql`'{}'::uuid[]`).notNull(),
     templateId: uuid("template_id").references(() => contentTemplates.id, { onDelete: "set null" }),
     articlesSnapshot: jsonb("articles_snapshot").default("[]").notNull(),
-    promptSnapshot: text("prompt_snapshot"),
-    modelSnapshot: varchar("model_snapshot", { length: 100 }),
+    promptSnapshot: jsonb("prompt_snapshot").default({}).notNull(),
+    modelSnapshot: jsonb("model_snapshot").default({}).notNull(),
+    articleSnapshot: jsonb("article_snapshot").default({}).notNull(),
+    assetSnapshot: jsonb("asset_snapshot").default({}).notNull(),
     isEdited: boolean("is_edited").default(false).notNull(),
     isCopied: boolean("is_copied").default(false).notNull(),
+    copiedAt: timestamp("copied_at", { withTimezone: true }),
+    status: varchar("status", { length: 16 }).default("draft").notNull(),
     workspaceId: uuid("workspace_id")
       .references(() => workspaces.id, { onDelete: "cascade" })
       .notNull(),
@@ -482,7 +489,12 @@ export const generatedPosts = pgTable(
     index("generated_posts_template_id_idx").on(table.templateId),
     index("generated_posts_type_idx").on(table.type),
     index("generated_posts_created_at_idx").on(table.createdAt),
+    index("generated_posts_fts_idx").using(
+      "gin",
+      sql`to_tsvector('russian', COALESCE(${table.title}, '') || ' ' || COALESCE(${table.editedText}, ${table.generatedText}, ${table.content}, ''))`
+    ),
     check("generated_posts_type_check", sql`${table.type} IN ('manual', 'digest', 'deepsearch')`),
+    check("generated_posts_status_check", sql`${table.status} IN ('draft', 'edited', 'copied', 'archived')`),
   ]
 );
 
@@ -681,21 +693,29 @@ export const deepsearchResults = pgTable(
     workspaceId: uuid("workspace_id")
       .references(() => workspaces.id, { onDelete: "cascade" })
       .notNull(),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
     agentId: uuid("agent_id")
       .references(() => agents.id, { onDelete: "cascade" })
       .notNull(),
+    articleId: uuid("article_id").references(() => articles.id, { onDelete: "cascade" }),
+    aiProviderId: uuid("ai_provider_id").references(() => aiProviders.id, { onDelete: "set null" }),
     query: text("query").notNull(),
     status: varchar("status", { length: 20 }).default("pending").notNull(), // pending, running, completed, failed
     findings: jsonb("findings").default({}).notNull(),
     reportText: text("report_text"),
     startedAt: timestamp("started_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    failedAt: timestamp("failed_at", { withTimezone: true }),
     error: text("error"),
+    errorMessage: text("error_message"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     index("deepsearch_results_workspace_id_idx").on(table.workspaceId),
+    index("deepsearch_results_article_id_idx").on(table.articleId),
+    index("deepsearch_results_user_id_idx").on(table.userId),
     index("deepsearch_results_agent_id_idx").on(table.agentId),
     index("deepsearch_results_status_idx").on(table.status),
     index("deepsearch_results_created_at_idx").on(table.createdAt),

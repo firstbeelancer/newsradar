@@ -7,6 +7,8 @@
  * ------------------------------------------------------------------
  */
 
+import { safeFetchText } from "./safe-fetch.js";
+
 export interface TelegramItem {
   title: string;
   content: string;
@@ -128,20 +130,15 @@ export async function parseTelegramChannel(
 ): Promise<TelegramParseResult> {
   const url = resolveChannelUrl(usernameOrUrl);
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30_000);
-
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.0",
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
-      },
-      signal: controller.signal,
-    });
+  const { response, text: html } = await safeFetchText(url, {
+    timeoutMs: 30_000,
+    maxBytes: 1_500_000,
+    userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.0 NewsRadar/1.0",
+    headers: {
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.5",
+    },
+  });
 
     if (!response.ok) {
       if (response.status === 404) {
@@ -150,7 +147,6 @@ export async function parseTelegramChannel(
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
-    const html = await response.text();
     if (!html.includes('class="tgme_widget_message"')) {
       // Check if channel has no posts or is private
       if (html.includes("If you have <strong>Telegram</strong>, you can contact")) {
@@ -221,7 +217,4 @@ export async function parseTelegramChannel(
     });
 
     return { items, channelTitle };
-  } finally {
-    clearTimeout(timeout);
-  }
 }

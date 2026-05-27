@@ -358,7 +358,9 @@ export async function updateGeneratedPost(
     .update(generatedPosts)
     .set({
       ...data,
+      editedText: data.content,
       isEdited: true,
+      status: "edited",
       updatedAt: new Date(),
     })
     .where(and(eq(generatedPosts.id, id), eq(generatedPosts.workspaceId, workspaceId)))
@@ -374,9 +376,10 @@ export async function deleteGeneratedPost(id: string, workspaceId: string) {
 }
 
 export async function markAsCopied(id: string, workspaceId: string) {
+  const copiedAt = new Date();
   const [updated] = await db
     .update(generatedPosts)
-    .set({ isCopied: true, updatedAt: new Date() })
+    .set({ isCopied: true, copiedAt, status: "copied", updatedAt: copiedAt })
     .where(and(eq(generatedPosts.id, id), eq(generatedPosts.workspaceId, workspaceId)))
     .returning();
   return updated;

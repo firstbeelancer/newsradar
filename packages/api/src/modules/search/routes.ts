@@ -45,7 +45,7 @@ router.get("/generated", authMiddleware, async (req, res, next) => {
 
     const conditions = [
       eq(generatedPosts.workspaceId, workspaceId),
-      sql`to_tsvector('russian', COALESCE(${generatedPosts.title}, '') || ' ' || ${generatedPosts.content}) @@ to_tsquery('russian', ${tsQuery})`,
+      sql`to_tsvector('russian', COALESCE(${generatedPosts.title}, '') || ' ' || COALESCE(${generatedPosts.editedText}, ${generatedPosts.generatedText}, ${generatedPosts.content}, '')) @@ to_tsquery('russian', ${tsQuery})`,
     ];
 
     if (cursor) {

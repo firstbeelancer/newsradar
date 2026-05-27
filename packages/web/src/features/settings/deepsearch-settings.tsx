@@ -15,6 +15,7 @@ const PROVIDERS: Array<{ value: DeepSearchWebSearchProvider; label: string }> = 
   { value: 'tavily', label: 'Tavily' },
   { value: 'serpapi', label: 'SerpAPI' },
   { value: 'perplexity', label: 'Perplexity' },
+  { value: 'grok', label: 'Grok / xAI compatible' },
 ];
 
 const DEFAULT_SETTINGS: DeepSearchWebSearchSettings = {

@@ -218,6 +218,57 @@ export async function updateProvider(
   return updated;
 }
 
+export async function duplicateProvider(id: string, workspaceId: string) {
+  const existing = await getProviderById(id, workspaceId);
+  const [copy] = await db
+    .insert(aiProviders)
+    .values({
+      name: `${existing.name} copy`,
+      type: existing.type,
+      provider: existing.provider,
+      baseUrl: existing.baseUrl,
+      apiKeyEncrypted: existing.apiKeyEncrypted,
+      model: existing.model,
+      isActive: existing.isActive,
+      assignedTo: [],
+      workspaceId,
+    })
+    .returning();
+
+  return {
+    ...copy,
+    assignedTo: [],
+    apiKeyEncrypted: undefined,
+    hasKey: Boolean(copy.apiKeyEncrypted),
+  };
+}
+
+export async function assignProviderProcesses(
+  id: string,
+  workspaceId: string,
+  processes: string[]
+) {
+  const assignedTo = normalizeAssignedTo(processes);
+  const [updated] = await db
+    .update(aiProviders)
+    .set({ assignedTo, updatedAt: new Date() })
+    .where(and(eq(aiProviders.id, id), eq(aiProviders.workspaceId, workspaceId)))
+    .returning();
+
+  if (!updated) {
+    throw new AppError(404, "AI provider not found", "PROVIDER_NOT_FOUND");
+  }
+
+  await clearProcessAssignments(workspaceId, id, assignedTo);
+
+  return {
+    ...updated,
+    assignedTo,
+    apiKeyEncrypted: undefined,
+    hasKey: Boolean(updated.apiKeyEncrypted),
+  };
+}
+
 export async function deleteProvider(id: string, workspaceId: string) {
   await getProviderById(id, workspaceId);
   await db.delete(aiProviders).where(and(eq(aiProviders.id, id), eq(aiProviders.workspaceId, workspaceId)));

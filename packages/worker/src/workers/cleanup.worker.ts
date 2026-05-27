@@ -11,7 +11,7 @@
  */
 
 import { db, executeRaw } from "../db/index.js";
-import { articles, generatedPosts, operationLogs } from "../db/schema.js";
+import { articles, favoriteArticles, generatedPosts, operationLogs } from "../db/schema.js";
 import { sql, lt, and, eq } from "drizzle-orm";
 import type { Job } from "bullmq";
 import type { Logger } from "pino";
@@ -46,6 +46,10 @@ export async function processCleanup(
       and(
         lt(articles.createdAt, articleThreshold),
         eq(articles.isFavorite, false),
+        sql`NOT EXISTS (
+          SELECT 1 FROM ${favoriteArticles}
+          WHERE ${favoriteArticles.articleId} = ${articles.id}
+        )`,
         // Only delete articles that have been processed through the pipeline
         sql`${articles.status} IN ('deduped', 'scored', 'published', 'archived')`
       )

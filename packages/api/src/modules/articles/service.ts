@@ -1,6 +1,6 @@
 import { eq, and, desc, asc, sql, type SQL } from "drizzle-orm";
 import { db } from "../../db/index.js";
-import { articles, articleScores, sources } from "../../db/schema.js";
+import { articles, articleScores, favoriteArticles, sources, workspaces } from "../../db/schema.js";
 import { AppError } from "../../middleware/error-handler.js";
 import type { PaginatedResult, Cursor } from "../../lib/pagination.js";
 import { encodeCursor, decodeCursor } from "../../lib/pagination.js";
@@ -235,7 +235,65 @@ export async function searchArticles(
 
 // ─── Favorites ───
 
-export async function addToFavorite(id: string, workspaceId: string) {
+function favoriteLimitForPlan(plan: string): number {
+  return plan === "pro" || plan === "enterprise" ? 1000 : 100;
+}
+
+function favoriteExpiresAt(ttlMode: "30d" | "forever"): Date | null {
+  if (ttlMode === "forever") return null;
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 30);
+  return expiresAt;
+}
+
+export async function addToFavorite(
+  id: string,
+  workspaceId: string,
+  options: { ttlMode?: "30d" | "forever"; note?: string } = {}
+) {
+  const article = await getArticleById(id, workspaceId);
+  const ttlMode = options.ttlMode ?? "30d";
+
+  const workspace = await db.query.workspaces.findFirst({
+    where: eq(workspaces.id, workspaceId),
+    columns: { plan: true },
+  });
+  const limit = favoriteLimitForPlan(workspace?.plan ?? "free");
+  const countResult = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(favoriteArticles)
+    .where(eq(favoriteArticles.workspaceId, workspaceId));
+  const currentCount = Number(countResult[0]?.count ?? 0);
+
+  const existing = await db.query.favoriteArticles.findFirst({
+    where: and(eq(favoriteArticles.workspaceId, workspaceId), eq(favoriteArticles.articleId, id)),
+  });
+
+  if (!existing && currentCount >= limit) {
+    throw new AppError(403, `Favorites limit reached: ${currentCount}/${limit}`, "FAVORITES_LIMIT_REACHED");
+  }
+
+  await db
+    .insert(favoriteArticles)
+    .values({
+      workspaceId,
+      articleId: id,
+      agentId: article.agentId,
+      sourceId: article.sourceId,
+      ttlMode,
+      expiresAt: favoriteExpiresAt(ttlMode),
+      note: options.note,
+      scoreAtFavorite: article.score,
+    })
+    .onConflictDoUpdate({
+      target: [favoriteArticles.workspaceId, favoriteArticles.articleId],
+      set: {
+        ttlMode,
+        expiresAt: favoriteExpiresAt(ttlMode),
+        note: options.note,
+      },
+    });
+
   const [updated] = await db
     .update(articles)
     .set({ isFavorite: true, updatedAt: new Date() })
@@ -250,6 +308,10 @@ export async function addToFavorite(id: string, workspaceId: string) {
 }
 
 export async function removeFromFavorite(id: string, workspaceId: string) {
+  await db
+    .delete(favoriteArticles)
+    .where(and(eq(favoriteArticles.workspaceId, workspaceId), eq(favoriteArticles.articleId, id)));
+
   const [updated] = await db
     .update(articles)
     .set({ isFavorite: false, updatedAt: new Date() })

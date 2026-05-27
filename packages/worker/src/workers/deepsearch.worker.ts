@@ -279,6 +279,7 @@ export async function processDeepsearch(
         findings,
         reportText,
         finishedAt,
+        completedAt: finishedAt,
         updatedAt: finishedAt,
       })
       .where(and(eq(deepsearchResults.id, resultId), eq(deepsearchResults.workspaceId, workspaceId)));
@@ -309,7 +310,9 @@ export async function processDeepsearch(
       .set({
         status: "failed",
         error,
+        errorMessage: error,
         finishedAt,
+        failedAt: finishedAt,
         updatedAt: finishedAt,
       })
       .where(and(eq(deepsearchResults.id, resultId), eq(deepsearchResults.workspaceId, workspaceId)));

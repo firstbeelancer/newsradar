@@ -1,4 +1,5 @@
 import { cleanArticleText } from "./text-cleaner.js";
+import { safeFetchText } from "./safe-fetch.js";
 
 /**
  * ------------------------------------------------------------------
@@ -137,24 +138,19 @@ function parseDate(dateStr: string): Date | null {
 }
 
 export async function parseRssFeed(url: string): Promise<RssParseResult> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30_000);
+  const { response, text: xml } = await safeFetchText(url, {
+    timeoutMs: 30_000,
+    maxBytes: 1_500_000,
+    userAgent: "NewsRadar/1.0 RSS Fetcher",
+    headers: {
+      Accept: "application/rss+xml, application/xml, text/xml, application/atom+xml, */*",
+    },
+  });
 
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        "User-Agent": "NewsRadar/1.0 RSS Fetcher",
-        Accept: "application/rss+xml, application/xml, text/xml, application/atom+xml, */*",
-      },
-      signal: controller.signal,
-    });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  }
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const xml = await response.text();
     if (!xml.trim()) {
       throw new Error("Empty RSS feed response");
     }
@@ -189,7 +185,4 @@ export async function parseRssFeed(url: string): Promise<RssParseResult> {
       feedTitle: String(parsed.title ?? ""),
       feedDescription: String(parsed.description ?? ""),
     };
-  } finally {
-    clearTimeout(timeout);
-  }
 }

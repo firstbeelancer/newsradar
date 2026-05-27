@@ -15,7 +15,7 @@ export interface StartDeepSearchInput {
   customPrompt?: string;
 }
 
-export type DeepsearchWebSearchProvider = "disabled" | "brave" | "tavily" | "serpapi" | "perplexity";
+export type DeepsearchWebSearchProvider = "disabled" | "brave" | "tavily" | "serpapi" | "perplexity" | "grok";
 
 export interface DeepsearchWebSearchSettingsInput {
   provider: DeepsearchWebSearchProvider;
@@ -81,7 +81,9 @@ export async function startDeepSearch(input: StartDeepSearchInput) {
     .insert(deepsearchResults)
     .values({
       workspaceId: input.workspaceId,
+      userId: input.userId,
       agentId,
+      articleId: article.id,
       query: article.title,
       status: "pending",
       findings: {

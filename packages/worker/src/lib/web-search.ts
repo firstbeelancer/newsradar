@@ -1,4 +1,4 @@
-export type WebSearchProvider = "disabled" | "brave" | "tavily" | "serpapi" | "perplexity";
+export type WebSearchProvider = "disabled" | "brave" | "tavily" | "serpapi" | "perplexity" | "grok";
 
 export interface WebSearchSettings {
   provider: WebSearchProvider;
@@ -28,6 +28,21 @@ interface BraveSearchResponse {
   };
 }
 
+interface CompatibleSource {
+  title?: string;
+  url?: string;
+  snippet?: string;
+}
+
+interface CompatibleSearchResponse {
+  choices?: Array<{
+    message?: {
+      content?: string;
+    };
+  }>;
+  citations?: string[];
+}
+
 type FetchLike = typeof fetch;
 
 function clampMaxResults(value: number | undefined): number {
@@ -55,6 +70,88 @@ function normalizeBraveResult(result: BraveSearchResult): WebSearchSource | null
   };
 }
 
+function normalizeCompatibleSource(source: CompatibleSource, provider: WebSearchProvider): WebSearchSource | null {
+  if (!source.url || !source.title) return null;
+  return {
+    title: source.title,
+    url: source.url,
+    snippet: compactSnippet([source.snippet]),
+    provider,
+  };
+}
+
+function parseCompatibleSources(body: CompatibleSearchResponse, provider: WebSearchProvider): WebSearchSource[] {
+  const content = body.choices?.[0]?.message?.content?.trim();
+  if (content) {
+    const jsonMatch = /```json\s*([\s\S]*?)\s*```/i.exec(content);
+    const rawJson = jsonMatch?.[1] ?? content;
+    try {
+      const parsed = JSON.parse(rawJson) as { sources?: CompatibleSource[] };
+      return (parsed.sources ?? [])
+        .map((source) => normalizeCompatibleSource(source, provider))
+        .filter((source): source is WebSearchSource => Boolean(source));
+    } catch {
+      // Fall through to citations.
+    }
+  }
+
+  return (body.citations ?? []).map((url, index) => ({
+    title: `Source ${index + 1}`,
+    url,
+    snippet: "",
+    provider,
+  }));
+}
+
+function compatibleEndpoint(baseUrl: string | undefined, provider: WebSearchProvider): string {
+  const fallback = provider === "grok" ? "https://api.x.ai/v1" : "https://api.perplexity.ai";
+  const normalized = (baseUrl?.trim() || fallback).replace(/\/+$/, "");
+  return normalized.endsWith("/chat/completions") ? normalized : `${normalized}/chat/completions`;
+}
+
+async function runCompatibleSearch(
+  query: string,
+  settings: WebSearchSettings,
+  fetchImpl: FetchLike,
+  provider: WebSearchProvider
+): Promise<WebSearchSource[]> {
+  const endpoint = compatibleEndpoint(settings.baseUrl, provider);
+  const model = settings.model?.trim() || (provider === "grok" ? "grok-3-mini" : "sonar");
+  const maxResults = clampMaxResults(settings.maxResults);
+
+  const response = await fetchImpl(endpoint, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${settings.apiKey?.trim()}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a web research adapter. Return only JSON: {\"sources\":[{\"title\":\"...\",\"url\":\"https://...\",\"snippet\":\"...\"}]}. Use real source URLs only.",
+        },
+        {
+          role: "user",
+          content: `Find up to ${maxResults} reliable external sources for this news query: ${query}`,
+        },
+      ],
+      temperature: 0.1,
+      max_tokens: 1200,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`${provider} web search failed with HTTP ${response.status}`);
+  }
+
+  const body = (await response.json()) as CompatibleSearchResponse;
+  return parseCompatibleSources(body, provider).slice(0, maxResults);
+}
+
 export async function runWebSearch(
   query: string,
   settings: WebSearchSettings,
@@ -66,6 +163,10 @@ export async function runWebSearch(
 
   if (provider === "disabled" || !apiKey || !query.trim()) {
     return [];
+  }
+
+  if (provider === "perplexity" || provider === "grok") {
+    return runCompatibleSearch(query, settings, fetchImpl, provider);
   }
 
   if (provider !== "brave") {

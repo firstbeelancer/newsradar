@@ -8,6 +8,8 @@ import {
   getProviderById,
   listProviders,
   updateProvider,
+  duplicateProvider,
+  assignProviderProcesses,
   deleteProvider,
   testProviderConnection,
 } from "./service.js";
@@ -34,6 +36,11 @@ const updateSchema = z.object({
   apiKey: z.string().optional(),
   isActive: z.boolean().optional(),
   assignedTo: z.array(z.enum(AI_PROVIDER_PROCESS_VALUES)).optional(),
+});
+
+const assignSchema = z.object({
+  providerId: z.string().uuid(),
+  assignedTo: z.array(z.enum(AI_PROVIDER_PROCESS_VALUES)),
 });
 
 // ─── Routes ───
@@ -84,6 +91,31 @@ router.get("/:id", authMiddleware, async (req, res, next) => {
         hasKey: !!apiKeyEncrypted,
       },
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/assign", authMiddleware, async (req, res, next) => {
+  try {
+    const workspaceId = req.query.workspaceId as string;
+    if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
+
+    const input = assignSchema.parse(req.body);
+    const provider = await assignProviderProcesses(input.providerId, workspaceId, input.assignedTo);
+    res.json({ success: true, data: provider });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/:id/duplicate", authMiddleware, async (req, res, next) => {
+  try {
+    const workspaceId = req.query.workspaceId as string;
+    if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
+
+    const provider = await duplicateProvider(req.params.id, workspaceId);
+    res.status(201).json({ success: true, data: provider });
   } catch (err) {
     next(err);
   }

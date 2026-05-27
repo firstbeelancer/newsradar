@@ -33,6 +33,11 @@ const listQuerySchema = z.object({
   sortOrder: z.enum(["asc", "desc"]).optional(),
 });
 
+const favoriteBodySchema = z.object({
+  ttlMode: z.enum(["30d", "forever"]).optional(),
+  note: z.string().max(1000).optional(),
+}).optional();
+
 // ─── Routes ───
 
 // List articles (with filters)
@@ -151,7 +156,11 @@ router.post("/:id/favorite", authMiddleware, async (req, res, next) => {
     const workspaceId = req.query.workspaceId as string;
     if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
 
-    const article = await addToFavorite(req.params.id, workspaceId);
+    const input = favoriteBodySchema.parse(req.body);
+    const article = await addToFavorite(req.params.id, workspaceId, {
+      ttlMode: input?.ttlMode,
+      note: input?.note,
+    });
     res.json({ success: true, data: article });
   } catch (err) {
     next(err);

@@ -1,4 +1,5 @@
 import { cleanArticleText, stripHtml } from "./text-cleaner.js";
+import { safeFetchText } from "./safe-fetch.js";
 
 const MAX_HTML_BYTES = 1_500_000;
 const MAX_EXTRACTED_CHARS = 8_000;
@@ -50,17 +51,15 @@ export function extractArticleTextFromHtml(html: string): string {
 export async function fetchArticleText(url: string): Promise<string> {
   if (!/^https?:\/\//i.test(url)) return "";
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12_000);
-
   try {
-    const response = await fetch(url, {
+    const { response, text } = await safeFetchText(url, {
+      timeoutMs: 12_000,
+      maxBytes: MAX_HTML_BYTES,
+      maxRedirects: 3,
+      userAgent: "Mozilla/5.0 NewsRadar/1.0 article summary fetcher",
       headers: {
-        "User-Agent": "Mozilla/5.0 NewsRadar/1.0 article summary fetcher",
         Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       },
-      signal: controller.signal,
-      redirect: "follow",
     });
 
     if (!response.ok) return "";
@@ -70,11 +69,8 @@ export async function fetchArticleText(url: string): Promise<string> {
       return "";
     }
 
-    const html = (await response.text()).slice(0, MAX_HTML_BYTES);
-    return extractArticleTextFromHtml(html);
+    return extractArticleTextFromHtml(text.slice(0, MAX_HTML_BYTES));
   } catch {
     return "";
-  } finally {
-    clearTimeout(timeout);
   }
 }

@@ -15,7 +15,7 @@ import {
 
 const router = Router();
 
-const webSearchProviderSchema = z.enum(["disabled", "brave", "tavily", "serpapi", "perplexity"]);
+const webSearchProviderSchema = z.enum(["disabled", "brave", "tavily", "serpapi", "perplexity", "grok"]);
 
 const startDeepSearchSchema = z.preprocess(
   (body) => {
@@ -119,7 +119,7 @@ router.post("/settings/web-search/test", authMiddleware, async (req, res, next) 
       return;
     }
 
-    if (provider !== "brave") {
+    if (provider === "tavily" || provider === "serpapi") {
       res.json({
         success: true,
         data: { ok: false, message: `Провайдер ${provider} сохранён, но тест подключения пока реализован только для Brave` },
@@ -130,6 +130,36 @@ router.post("/settings/web-search/test", authMiddleware, async (req, res, next) 
     const apiKey = await resolveDeepsearchWebSearchApiKey(workspaceId, input.apiKey);
     if (!apiKey) {
       throw new AppError(400, "API key required", "DEEPSEARCH_WEB_SEARCH_KEY_REQUIRED");
+    }
+
+    if (provider === "perplexity" || provider === "grok") {
+      const fallbackBase = provider === "grok" ? "https://api.x.ai/v1" : "https://api.perplexity.ai";
+      const base = (input.baseUrl?.trim() || currentSettings.baseUrl || fallbackBase).replace(/\/+$/, "");
+      const endpoint = base.endsWith("/chat/completions") ? base : `${base}/chat/completions`;
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: input.model?.trim() || currentSettings.model || (provider === "grok" ? "grok-3-mini" : "sonar"),
+          messages: [
+            { role: "system", content: "Return only JSON with a sources array." },
+            { role: "user", content: input.query?.trim() || "OpenAI Anthropic AI news" },
+          ],
+          max_tokens: 500,
+          temperature: 0.1,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new AppError(400, `${provider} test failed with HTTP ${response.status}`, "DEEPSEARCH_WEB_SEARCH_TEST_FAILED");
+      }
+
+      res.json({ success: true, data: { ok: true, message: `${provider} connected` } });
+      return;
     }
 
     const url = new URL(input.baseUrl?.trim() || currentSettings.baseUrl || "https://api.search.brave.com/res/v1/web/search");

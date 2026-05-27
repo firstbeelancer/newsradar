@@ -826,7 +826,7 @@ export interface DeepSearchResult {
   finished_at?: string | null;
 }
 
-export type DeepSearchWebSearchProvider = 'disabled' | 'brave' | 'tavily' | 'serpapi' | 'perplexity';
+export type DeepSearchWebSearchProvider = 'disabled' | 'brave' | 'tavily' | 'serpapi' | 'perplexity' | 'grok';
 
 export interface DeepSearchWebSearchSettings {
   provider: DeepSearchWebSearchProvider;
