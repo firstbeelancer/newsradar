@@ -196,18 +196,12 @@ export async function deleteDeepSearchResult(id: string, workspaceId: string) {
 }
 
 export async function getLatestDeepSearchForArticle(articleId: string, workspaceId: string) {
-  const article = await getArticleById(articleId, workspaceId);
-  const rows = await db
+  const [result] = await db
     .select()
     .from(deepsearchResults)
-    .where(and(eq(deepsearchResults.workspaceId, workspaceId), eq(deepsearchResults.agentId, article.agentId)))
+    .where(and(eq(deepsearchResults.workspaceId, workspaceId), eq(deepsearchResults.articleId, articleId)))
     .orderBy(desc(deepsearchResults.createdAt))
-    .limit(20);
-
-  const result = rows.find((row) => {
-    const findings = row.findings as Record<string, unknown>;
-    return findings.articleId === articleId;
-  });
+    .limit(1);
 
   if (!result) {
     throw new AppError(404, "DeepSearch result not found", "DEEPSEARCH_NOT_FOUND");

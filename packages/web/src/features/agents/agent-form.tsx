@@ -20,9 +20,11 @@ const SUBJECT_AREAS = [
   { id: 'devops', label: 'Free DevOps & Инжиниринг', icon: Wrench, color: '#10b981' },
 ];
 
-const COLORS = [
+export const AGENT_COLORS = [
   '#3b82f6', '#ef4444', '#8b5cf6', '#f97316', '#06b6d4', '#ec4899', '#10b981', '#6366f1',
-  '#f59e0b', '#14b8a6', '#e11d48', '#7c3aed',
+  '#f59e0b', '#14b8a6', '#e11d48', '#7c3aed', '#84cc16', '#f43f5e', '#0ea5e9', '#22c55e',
+  '#a855f7', '#d946ef', '#fb7185', '#38bdf8', '#2dd4bf', '#eab308', '#64748b', '#0f766e',
+  '#be123c', '#4338ca', '#c2410c', '#15803d',
 ];
 
 const ICON_OPTIONS: { id: string; icon: LucideIcon; label: string }[] = [
@@ -435,7 +437,7 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
               <div className="space-y-2">
                 <Label>Цвет</Label>
                 <div className="flex flex-wrap gap-2">
-                  {COLORS.map(c => (
+                  {AGENT_COLORS.map(c => (
                     <button
                       key={c}
                       type="button"
@@ -671,7 +673,7 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
                     <div className="space-y-1">
                       <Label className="text-[11px] text-muted-foreground">Цвет</Label>
                       <div className="flex flex-wrap gap-1.5">
-                        {COLORS.slice(0, 8).map(c => (
+                        {AGENT_COLORS.slice(0, 12).map(c => (
                           <button
                             key={c}
                             type="button"

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
@@ -37,6 +38,7 @@ function clampScore(score: number): number {
 
 export function ArticleDetail({ articleId }: ArticleDetailProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { addToast } = useToast();
   const { setSelectedArticleIds, resetGeneration } = useGenerationStore();
   const { currentArticle, isLoading, fetchArticle, toggleFavorite } = useArticlesStore();
@@ -133,6 +135,7 @@ export function ArticleDetail({ articleId }: ArticleDetailProps) {
           finished_at: null,
         });
       }
+      await queryClient.invalidateQueries({ queryKey: ['history', 'deepsearch'] });
       addToast({
         title: 'DeepSearch запущен',
         description: `Операция ${result.op_id} уже в работе. Смотри статус-бар и журнал событий.`,

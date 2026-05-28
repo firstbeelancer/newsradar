@@ -31,13 +31,34 @@ function useDeepSearchHistory() {
     queryFn: ({ pageParam }) => deepsearchApi.list(pageParam as string | undefined, PAGE_SIZE),
     getNextPageParam: (lastPage) => lastPage.has_more ? (lastPage.next_cursor ?? undefined) : undefined,
     initialPageParam: undefined as string | undefined,
-    staleTime: 2 * 60 * 1000,
+    staleTime: 15_000,
+    refetchInterval: (query) => {
+      const data = query.state.data as { pages?: Array<{ data?: DeepSearchResult[] }> } | undefined;
+      const hasActive = data?.pages?.some((page) =>
+        page.data?.some((result) => ['queued', 'pending', 'running'].includes(result.status))
+      );
+      return hasActive ? 5000 : false;
+    },
   });
 }
 
 function sourceList(result: DeepSearchResult): Array<{ title?: string; url?: string; snippet?: string }> {
   const sources = result.findings?.externalSources;
   return Array.isArray(sources) ? sources as Array<{ title?: string; url?: string; snippet?: string }> : [];
+}
+
+function deepSearchStatusLabel(status: string): string {
+  if (status === 'completed') return 'Готово';
+  if (status === 'failed') return 'Ошибка';
+  if (['queued', 'pending', 'running'].includes(status)) return 'В работе';
+  return status;
+}
+
+function deepSearchCardBody(result: DeepSearchResult): string {
+  if (result.report_text) return result.report_text;
+  if (result.error) return result.error;
+  if (result.status === 'failed') return 'DeepSearch завершился с ошибкой. Открой карточку, чтобы увидеть детали.';
+  return 'Отчёт ещё формируется. История обновится автоматически.';
 }
 
 export function HistoryPage() {
@@ -332,9 +353,9 @@ export function HistoryPage() {
                   key={result.id}
                   icon={FileSearch}
                   tone="purple"
-                  badge={result.status}
+                  badge={deepSearchStatusLabel(result.status)}
                   title={result.query || String(result.findings?.articleTitle ?? 'DeepSearch')}
-                  body={result.report_text || result.error || 'Отчёт ещё формируется.'}
+                  body={deepSearchCardBody(result)}
                   meta={`${formatDateTime(result.created_at)} · источников: ${sourceList(result).length}`}
                   selected={selectedDeepSearchIds.has(result.id)}
                   onSelect={() => toggleDeepSearchSelection(result.id)}
@@ -383,11 +404,11 @@ export function HistoryPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline">{selectedDeepSearch?.status}</Badge>
+              <Badge variant="outline">{selectedDeepSearch ? deepSearchStatusLabel(selectedDeepSearch.status) : 'DeepSearch'}</Badge>
               {!!selectedDeepSearch && <span className="text-xs text-muted-foreground">{formatDateTime(selectedDeepSearch.created_at)}</span>}
             </div>
             <div className="whitespace-pre-wrap rounded-xl border border-border/60 bg-white/80 p-4 text-sm leading-relaxed">
-              {selectedDeepSearch?.report_text || selectedDeepSearch?.error || 'Отчёт ещё формируется.'}
+              {selectedDeepSearch ? deepSearchCardBody(selectedDeepSearch) : ''}
             </div>
             {selectedDeepSearchSources.length > 0 && (
               <div className="space-y-2">

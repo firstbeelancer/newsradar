@@ -106,6 +106,8 @@ interface BackendArticle {
   agent_id?: string;
   agentName?: string | null;
   agent_name?: string | null;
+  agentColor?: string | null;
+  agent_color?: string | null;
   metadata?: Record<string, unknown>;
 }
 
@@ -167,6 +169,8 @@ interface BackendDeepSearchResult {
   reportText?: string | null;
   report_text?: string | null;
   error?: string | null;
+  errorMessage?: string | null;
+  error_message?: string | null;
   createdAt?: string;
   created_at?: string;
   startedAt?: string | null;
@@ -257,6 +261,7 @@ export function normalizeArticle(raw: BackendArticle): Article {
     source_url: raw.source_url ?? raw.sourceUrl ?? undefined,
     agent_id: raw.agent_id ?? raw.agentId ?? '',
     agent_name: raw.agent_name ?? raw.agentName ?? undefined,
+    agent_color: raw.agent_color ?? raw.agentColor ?? undefined,
     published_at: publishedAt,
     collected_at: collectedAt,
     score: normalizedScore,
@@ -351,7 +356,7 @@ export function normalizeDeepSearchResult(raw: BackendDeepSearchResult): DeepSea
     query: raw.query,
     findings: raw.findings,
     report_text: raw.report_text ?? raw.reportText ?? null,
-    error: raw.error ?? null,
+    error: raw.error ?? raw.error_message ?? raw.errorMessage ?? null,
     created_at: raw.created_at ?? raw.createdAt ?? new Date(0).toISOString(),
     started_at: raw.started_at ?? raw.startedAt ?? null,
     finished_at: raw.finished_at ?? raw.finishedAt ?? null,
@@ -734,6 +739,7 @@ export interface Article {
   source_url?: string;
   agent_id: string;
   agent_name?: string;
+  agent_color?: string;
   published_at: string;
   collected_at: string;
   score: number;

@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router';
+import type { CSSProperties } from 'react';
 import { Card, CardContent } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
@@ -26,6 +27,20 @@ function formatScore(score: number): number {
   return Math.round(Math.max(0, Math.min(score, 100)));
 }
 
+function isHexColor(value: string | null | undefined): value is string {
+  return /^#[0-9a-f]{6}$/i.test(value ?? '');
+}
+
+export function getArticleAgentStyle(color: string | null | undefined): CSSProperties | undefined {
+  if (!isHexColor(color)) return undefined;
+  return {
+    '--agent-color': color,
+    '--agent-color-soft': `${color}1f`,
+    '--agent-color-line': `${color}5c`,
+    borderLeftColor: `${color}5c`,
+  } as CSSProperties;
+}
+
 export function ArticleCard({
   article,
   onToggleFavorite,
@@ -37,13 +52,15 @@ export function ArticleCard({
 }: ArticleCardProps) {
   const scorePercent = formatScore(article.score);
   const preview = cleanArticleText(article.ai_summary || article.description || article.content || article.original_description || '');
+  const agentStyle = getArticleAgentStyle(article.agent_color);
 
   return (
     <Card
       className={cn(
-        'overflow-hidden transition-all hover:shadow-md',
+        'overflow-hidden border-l-[5px] transition-all hover:shadow-md',
         selectable && isSelected && 'ring-2 ring-accent'
       )}
+      style={agentStyle}
       onClick={() => selectable && onSelect?.(article.id)}
     >
       <CardContent className="p-4">
@@ -76,7 +93,14 @@ export function ArticleCard({
                 {formatDateTime(article.published_at)}
               </span>
               {article.agent_name && (
-                <Badge variant="outline" className="text-[10px]">
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    'gap-1.5 text-[10px]',
+                    agentStyle && 'border-[var(--agent-color-line)] bg-[var(--agent-color-soft)] text-[var(--agent-color)]'
+                  )}
+                >
+                  {agentStyle && <span className="h-1.5 w-1.5 rounded-full bg-[var(--agent-color)]" />}
                   {article.agent_name}
                 </Badge>
               )}

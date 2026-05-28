@@ -1,6 +1,6 @@
 import { eq, and, desc, asc, sql, type SQL } from "drizzle-orm";
 import { db } from "../../db/index.js";
-import { articles, articleScores, favoriteArticles, sources, workspaces } from "../../db/schema.js";
+import { agents, articles, articleScores, favoriteArticles, sources, workspaces } from "../../db/schema.js";
 import { AppError } from "../../middleware/error-handler.js";
 import type { PaginatedResult, Cursor } from "../../lib/pagination.js";
 import { encodeCursor, decodeCursor } from "../../lib/pagination.js";
@@ -29,16 +29,24 @@ export async function getArticleById(id: string, workspaceId: string) {
     .select({
       articles: articles,
       sourceName: sources.name,
+      agentName: agents.name,
+      agentColor: agents.color,
     })
     .from(articles)
     .leftJoin(sources, eq(articles.sourceId, sources.id))
+    .leftJoin(agents, eq(articles.agentId, agents.id))
     .where(and(eq(articles.id, id), eq(articles.workspaceId, workspaceId)))
     .limit(1);
 
   if (!result[0]) {
     throw new AppError(404, "Article not found", "ARTICLE_NOT_FOUND");
   }
-  return { ...result[0].articles, source_name: result[0].sourceName };
+  return {
+    ...result[0].articles,
+    source_name: result[0].sourceName,
+    agent_name: result[0].agentName,
+    agent_color: result[0].agentColor,
+  };
 }
 
 // ─── Cursor-based list with filters ───
@@ -53,6 +61,8 @@ export async function listArticles(
   }
   if (filters.status) {
     conditions.push(eq(articles.status, filters.status));
+  } else {
+    conditions.push(sql`NOT (${articles.status} = 'fetched' AND ${articles.needsTranslation} = true)`);
   }
   if (filters.isFavorite !== undefined) {
     conditions.push(eq(articles.isFavorite, filters.isFavorite));
@@ -97,9 +107,12 @@ export async function listArticles(
     .select({
       articles: articles,
       sourceName: sources.name,
+      agentName: agents.name,
+      agentColor: agents.color,
     })
     .from(articles)
     .leftJoin(sources, eq(articles.sourceId, sources.id))
+    .leftJoin(agents, eq(articles.agentId, agents.id))
     .where(and(...conditions))
     .orderBy(...orderByClause)
     .limit(filters.limit + 1);
@@ -135,9 +148,12 @@ export async function listArticles(
         .select({
           articles: articles,
           sourceName: sources.name,
+          agentName: agents.name,
+          agentColor: agents.color,
         })
         .from(articles)
         .leftJoin(sources, eq(articles.sourceId, sources.id))
+        .leftJoin(agents, eq(articles.agentId, agents.id))
         .where(and(...conditions))
         .orderBy(...orderByClause)
         .limit(filters.limit + 1);
@@ -162,7 +178,16 @@ export async function listArticles(
         } as Cursor)
       : null;
 
-  return { data: data.map((r) => ({ ...r.articles, source_name: r.sourceName })), nextCursor, hasMore };
+  return {
+    data: data.map((r) => ({
+      ...r.articles,
+      source_name: r.sourceName,
+      agent_name: r.agentName,
+      agent_color: r.agentColor,
+    })),
+    nextCursor,
+    hasMore,
+  };
 }
 
 // ─── Full-text search (dedicated endpoint) ───
@@ -191,9 +216,12 @@ export async function searchArticles(
     .select({
       articles: articles,
       sourceName: sources.name,
+      agentName: agents.name,
+      agentColor: agents.color,
     })
     .from(articles)
     .leftJoin(sources, eq(articles.sourceId, sources.id))
+    .leftJoin(agents, eq(articles.agentId, agents.id))
     .where(and(...conditions))
     .orderBy(desc(articles.score), desc(sql<Date>`coalesce(${articles.publishedAt}, ${articles.createdAt})`))
     .limit(params.limit + 1);
@@ -208,9 +236,12 @@ export async function searchArticles(
         .select({
           articles: articles,
           sourceName: sources.name,
+          agentName: agents.name,
+          agentColor: agents.color,
         })
         .from(articles)
         .leftJoin(sources, eq(articles.sourceId, sources.id))
+        .leftJoin(agents, eq(articles.agentId, agents.id))
         .where(and(...conditions))
         .orderBy(desc(articles.score), desc(sql<Date>`coalesce(${articles.publishedAt}, ${articles.createdAt})`))
         .limit(params.limit + 1);
@@ -230,7 +261,16 @@ export async function searchArticles(
         } as Cursor)
       : null;
 
-  return { data: data.map((r) => ({ ...r.articles, source_name: r.sourceName })), nextCursor, hasMore };
+  return {
+    data: data.map((r) => ({
+      ...r.articles,
+      source_name: r.sourceName,
+      agent_name: r.agentName,
+      agent_color: r.agentColor,
+    })),
+    nextCursor,
+    hasMore,
+  };
 }
 
 // ─── Favorites ───

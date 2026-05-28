@@ -119,6 +119,7 @@ export function FeedPage() {
         article_id: article.id,
         agent_id: article.agent_id || undefined,
       });
+      await queryClient.invalidateQueries({ queryKey: ['history', 'deepsearch'] });
       addToast({
         title: 'DeepSearch запущен',
         description: `Операция ${result.op_id} уже в работе. Смотри статус-бар и журнал событий.`,
@@ -131,7 +132,7 @@ export function FeedPage() {
         variant: 'danger',
       });
     }
-  }, [addToast]);
+  }, [addToast, queryClient]);
 
   const handleToggleFavorite = useCallback(async (id: string, isFavorite?: boolean) => {
     const newValue = !(isFavorite ?? false);

@@ -27,4 +27,15 @@ describe('deepsearch history api contract', () => {
     expect(typeof deepsearchApi.list).toBe('function');
     expect(typeof deepsearchApi.delete).toBe('function');
   });
+
+  it('normalizes backend error_message for failed DeepSearch rows', () => {
+    const result = normalizeDeepSearchResult({
+      id: 'result-failed',
+      status: 'failed',
+      error_message: 'DeepSearch timeout',
+      created_at: '2026-05-28T16:31:34.000Z',
+    } as never);
+
+    expect(result.error).toBe('DeepSearch timeout');
+  });
 });

@@ -118,6 +118,14 @@ function buildSearchQuery(article: typeof articles.$inferSelect): string {
   return [title, description].filter(Boolean).join(" ");
 }
 
+function formatDeepSearchError(err: unknown): string {
+  const message = err instanceof Error ? err.message : "DeepSearch failed";
+  if (message === "This operation was aborted" || message.toLowerCase().includes("aborted")) {
+    return "DeepSearch не уложился в лимит 120 секунд. Попробуй повторить позже или уменьшить число внешних источников в настройках DeepSearch.";
+  }
+  return message;
+}
+
 function buildDeepSearchPrompt(params: {
   article: typeof articles.$inferSelect;
   fetchedText: string;
@@ -302,7 +310,7 @@ export async function processDeepsearch(
     logger.info({ resultId, articleId }, "DeepSearch worker completed");
     return { resultId, status: "completed" };
   } catch (err) {
-    const error = err instanceof Error ? err.message : "DeepSearch failed";
+    const error = formatDeepSearchError(err);
     const finishedAt = new Date();
 
     await db
