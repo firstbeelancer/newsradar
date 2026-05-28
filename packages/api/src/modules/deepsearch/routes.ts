@@ -80,7 +80,7 @@ router.get("/", authMiddleware, async (req, res, next) => {
     const cursor = typeof req.query.cursor === "string" ? req.query.cursor : undefined;
     const agentId = typeof req.query.agentId === "string" ? req.query.agentId : undefined;
     const result = await listDeepSearchResults(workspaceId, { cursor, limit, agentId });
-    res.json({ success: true, data: result.data, next_cursor: result.next_cursor, has_more: result.has_more });
+    res.json({ success: true, data: result });
   } catch (err) {
     next(err);
   }
