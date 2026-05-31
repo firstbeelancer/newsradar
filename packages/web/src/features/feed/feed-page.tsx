@@ -20,6 +20,7 @@ import {
   ArrowDownWideNarrow,
   ArrowUpWideNarrow,
   CheckSquare,
+  Sparkles,
   X,
 } from 'lucide-react';
 
@@ -59,6 +60,7 @@ export function FeedPage() {
     selectedArticleSnapshots,
     setGenerationType,
     setSelectedAgentId,
+    setSelectedArticleIds,
     setSelectedArticles,
     toggleSelectedArticle,
     clearSelectedArticles,
@@ -76,6 +78,7 @@ export function FeedPage() {
     favoritesOnly: false,
     activeChipFilters: [],
   });
+  const [isSelectingAll, setIsSelectingAll] = useState(false);
 
   useEffect(() => {
     fetchAgents();
@@ -153,12 +156,83 @@ export function FeedPage() {
     setSelectedArticles([...existing.values()]);
   }, [articles, selectedArticleSnapshots, setSelectedArticles]);
 
+  const handleSelectAllMatching = useCallback(async () => {
+    setIsSelectingAll(true);
+    try {
+      const result = await articlesApi.selection({
+        ...articleFilters,
+        search: search.trim() || undefined,
+      }, 200);
+      setSelectedArticleIds(result.article_ids);
+      if (result.capped) {
+        addToast({
+          title: `Выбрано ${result.selected_count} новостей`,
+          description: `Подборка ограничена первыми ${result.max_ids} новостями по текущему фильтру, чтобы не перегружать браузер.`,
+          variant: 'warning',
+        });
+      } else {
+        addToast({
+          title: `Выбрано ${result.selected_count} новостей`,
+          description: 'Подборка собрана по текущему фильтру ленты.',
+          variant: 'success',
+        });
+      }
+    } catch (error) {
+      addToast({
+        title: 'Не удалось выбрать новости',
+        description: error instanceof Error ? error.message : 'Ошибка выборки по текущему фильтру',
+        variant: 'danger',
+      });
+    } finally {
+      setIsSelectingAll(false);
+    }
+  }, [addToast, articleFilters, search, setSelectedArticleIds]);
+
   const handleGenerateDigest = useCallback(() => {
     if (selectedArticleIds.length === 0) return;
     setGenerationType('digest');
     setSelectedAgentId(filters.agentId || null);
     navigate({ to: '/generation' });
   }, [filters.agentId, navigate, selectedArticleIds.length, setGenerationType, setSelectedAgentId]);
+
+  const handleGenerateSelectedPost = useCallback(() => {
+    const firstSelectedId = selectedArticleIds[0];
+    if (!firstSelectedId) return;
+
+    const selectedArticle =
+      selectedArticleSnapshots.find((article) => article.id === firstSelectedId)
+      ?? articles.find((article) => article.id === firstSelectedId);
+
+    if (selectedArticle) {
+      setSelectedArticles([selectedArticle]);
+      setSelectedAgentId(selectedArticle.agent_id || null);
+    } else {
+      setSelectedArticleIds([firstSelectedId]);
+      setSelectedAgentId(filters.agentId || null);
+    }
+
+    if (selectedArticleIds.length > 1) {
+      addToast({
+        title: 'Для поста взята первая новость',
+        description: 'Для нескольких новостей используй дайджест.',
+        variant: 'warning',
+      });
+    }
+
+    setGenerationType('post');
+    navigate({ to: '/generation' });
+  }, [
+    addToast,
+    articles,
+    filters.agentId,
+    navigate,
+    selectedArticleIds,
+    selectedArticleSnapshots,
+    setGenerationType,
+    setSelectedAgentId,
+    setSelectedArticleIds,
+    setSelectedArticles,
+  ]);
 
   const handleDeepSearch = useCallback(async (article: Article) => {
     try {
@@ -321,6 +395,14 @@ export function FeedPage() {
               <Button variant="outline" size="sm" onClick={handleSelectVisible}>
                 <CheckSquare className="h-4 w-4" />
                 Выбрать видимые
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleSelectAllMatching} disabled={isSelectingAll}>
+                <CheckSquare className="h-4 w-4" />
+                {isSelectingAll ? 'Выбираю...' : 'Все по фильтру'}
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleGenerateSelectedPost}>
+                <Sparkles className="h-4 w-4" />
+                Пост
               </Button>
               <Button size="sm" onClick={handleGenerateDigest}>
                 <Newspaper className="h-4 w-4" />

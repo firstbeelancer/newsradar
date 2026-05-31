@@ -40,7 +40,7 @@ export function ArticleDetail({ articleId }: ArticleDetailProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { addToast } = useToast();
-  const { setSelectedArticleIds, resetGeneration } = useGenerationStore();
+  const { setGenerationType, setSelectedAgentId, setSelectedArticles, resetGeneration } = useGenerationStore();
   const { currentArticle, isLoading, fetchArticle, toggleFavorite } = useArticlesStore();
   const [deepSearchResult, setDeepSearchResult] = useState<DeepSearchResult | null>(null);
   const [isDeepSearchStarting, setIsDeepSearchStarting] = useState(false);
@@ -154,7 +154,9 @@ export function ArticleDetail({ articleId }: ArticleDetailProps) {
 
   const handleGeneratePost = () => {
     resetGeneration();
-    setSelectedArticleIds([currentArticle.id]);
+    setGenerationType('post');
+    setSelectedAgentId(currentArticle.agent_id || null);
+    setSelectedArticles([currentArticle]);
     navigate({ to: '/generation' });
   };
 

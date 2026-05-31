@@ -93,7 +93,7 @@ function AgentArticlesList({ agentId }: { agentId: string }) {
   const navigate = useNavigate();
   const [sortBy, setSortBy] = useState<'date' | 'score'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const { setSelectedArticleIds, resetGeneration } = useGenerationStore();
+  const { setGenerationType, setSelectedAgentId, setSelectedArticles, resetGeneration } = useGenerationStore();
 
   const { data, isLoading } = useQuery({
     queryKey: ['agent-articles', agentId, sortBy, sortOrder],
@@ -108,9 +108,11 @@ function AgentArticlesList({ agentId }: { agentId: string }) {
 
   const handleGeneratePost = useCallback((article: Article) => {
     resetGeneration();
-    setSelectedArticleIds([article.id]);
+    setGenerationType('post');
+    setSelectedAgentId(article.agent_id || agentId);
+    setSelectedArticles([article]);
     navigate({ to: '/generation' });
-  }, [navigate, resetGeneration, setSelectedArticleIds]);
+  }, [agentId, navigate, resetGeneration, setGenerationType, setSelectedAgentId, setSelectedArticles]);
 
   if (isLoading) {
     return (

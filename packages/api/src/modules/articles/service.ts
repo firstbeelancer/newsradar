@@ -24,6 +24,69 @@ export interface ArticleFilters {
   cursor?: string | null;
 }
 
+function chipFilterCondition(chipKeys: string[] | undefined): SQL | null {
+  const normalizedChipKeys = chipKeys?.map((key) => key.trim()).filter(Boolean) ?? [];
+  if (normalizedChipKeys.length === 0) return null;
+
+  return sql`EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements(
+      CASE
+        WHEN jsonb_typeof(${articles.scoreDetail}->'triggeredChips') = 'array'
+          THEN ${articles.scoreDetail}->'triggeredChips'
+        ELSE '[]'::jsonb
+      END
+    ) AS chip
+    WHERE chip->>'key' IN (${sql.join(normalizedChipKeys.map((key) => sql`${key}`), sql`, `)})
+  )`;
+}
+
+function buildArticleConditions(filters: ArticleFilters): SQL[] {
+  const conditions: SQL[] = [eq(articles.workspaceId, filters.workspaceId)];
+
+  if (filters.agentId) {
+    conditions.push(eq(articles.agentId, filters.agentId));
+  }
+  if (filters.sourceId) {
+    conditions.push(eq(articles.sourceId, filters.sourceId));
+  }
+  if (filters.status) {
+    conditions.push(eq(articles.status, filters.status));
+  } else {
+    conditions.push(sql`NOT (${articles.status} = 'fetched' AND ${articles.needsTranslation} = true)`);
+  }
+  if (filters.isFavorite !== undefined) {
+    conditions.push(eq(articles.isFavorite, filters.isFavorite));
+  }
+  if (filters.dateFrom) {
+    const fromDate = new Date(filters.dateFrom);
+    if (!isNaN(fromDate.getTime())) {
+      conditions.push(sql`${articles.publishedAt} >= ${fromDate}`);
+    }
+  }
+  if (filters.dateTo) {
+    const toDate = new Date(filters.dateTo);
+    if (!isNaN(toDate.getTime())) {
+      conditions.push(sql`${articles.publishedAt} <= ${toDate}`);
+    }
+  }
+  if (filters.search) {
+    const tsQuery = filters.search
+      .trim()
+      .split(/\s+/)
+      .map((w) => w + ":*")
+      .join(" & ");
+    conditions.push(
+      sql`to_tsvector('russian', ${articles.title} || ' ' || COALESCE(${articles.description}, '')) @@ to_tsquery('russian', ${tsQuery})`
+    );
+  }
+
+  const chipCondition = chipFilterCondition(filters.chipKeys);
+  if (chipCondition) conditions.push(chipCondition);
+
+  return conditions;
+}
+
 // ─── CRUD ───
 
 export async function getArticleById(id: string, workspaceId: string) {
@@ -56,57 +119,7 @@ export async function getArticleById(id: string, workspaceId: string) {
 export async function listArticles(
   filters: ArticleFilters
 ): Promise<PaginatedResult<Article>> {
-  const conditions: SQL[] = [eq(articles.workspaceId, filters.workspaceId)];
-
-  if (filters.agentId) {
-    conditions.push(eq(articles.agentId, filters.agentId));
-  }
-  if (filters.sourceId) {
-    conditions.push(eq(articles.sourceId, filters.sourceId));
-  }
-  if (filters.status) {
-    conditions.push(eq(articles.status, filters.status));
-  } else {
-    conditions.push(sql`NOT (${articles.status} = 'fetched' AND ${articles.needsTranslation} = true)`);
-  }
-  if (filters.isFavorite !== undefined) {
-    conditions.push(eq(articles.isFavorite, filters.isFavorite));
-  }
-  if (filters.dateFrom) {
-    const fromDate = new Date(filters.dateFrom);
-    if (!isNaN(fromDate.getTime())) {
-      conditions.push(sql`${articles.publishedAt} >= ${fromDate}`);
-    }
-  }
-  if (filters.dateTo) {
-    const toDate = new Date(filters.dateTo);
-    if (!isNaN(toDate.getTime())) {
-      conditions.push(sql`${articles.publishedAt} <= ${toDate}`);
-    }
-  }
-  if (filters.search) {
-    // Full-text search using the GIN index
-    const tsQuery = filters.search
-      .trim()
-      .split(/\s+/)
-      .map((w) => w + ":*")
-      .join(" & ");
-    conditions.push(
-      sql`to_tsvector('russian', ${articles.title} || ' ' || COALESCE(${articles.description}, '')) @@ to_tsquery('russian', ${tsQuery})`
-    );
-  }
-  if (filters.chipKeys?.length) {
-    const chipKeys = filters.chipKeys.map((key) => key.trim()).filter(Boolean);
-    if (chipKeys.length > 0) {
-      conditions.push(
-        sql`EXISTS (
-          SELECT 1
-          FROM jsonb_array_elements(COALESCE(${articles.scoreDetail}->'triggeredChips', '[]'::jsonb)) AS chip
-          WHERE chip->>'key' IN (${sql.join(chipKeys.map((key) => sql`${key}`), sql`, `)})
-        )`
-      );
-    }
-  }
+  const conditions = buildArticleConditions(filters);
 
   const sortBy = filters.sortBy ?? "date";
   const sortOrder = filters.sortOrder ?? "desc";
@@ -207,6 +220,24 @@ export async function listArticles(
   };
 }
 
+export async function listArticleSelectionIds(filters: ArticleFilters & { maxIds: number }) {
+  const conditions = buildArticleConditions(filters);
+  const rows = await db
+    .select({ id: articles.id })
+    .from(articles)
+    .where(and(...conditions))
+    .orderBy(desc(sql<Date>`coalesce(${articles.publishedAt}, ${articles.createdAt})`), desc(articles.id))
+    .limit(filters.maxIds + 1);
+
+  const limitedRows = rows.slice(0, filters.maxIds);
+  return {
+    articleIds: limitedRows.map((row) => row.id),
+    selectedCount: limitedRows.length,
+    capped: rows.length > filters.maxIds,
+    maxIds: filters.maxIds,
+  };
+}
+
 // ─── Full-text search (dedicated endpoint) ───
 
 export async function searchArticles(
@@ -237,18 +268,8 @@ export async function searchArticles(
   if (params.isFavorite !== undefined) {
     conditions.push(eq(articles.isFavorite, params.isFavorite));
   }
-  if (params.chipKeys?.length) {
-    const chipKeys = params.chipKeys.map((key) => key.trim()).filter(Boolean);
-    if (chipKeys.length > 0) {
-      conditions.push(
-        sql`EXISTS (
-          SELECT 1
-          FROM jsonb_array_elements(COALESCE(${articles.scoreDetail}->'triggeredChips', '[]'::jsonb)) AS chip
-          WHERE chip->>'key' IN (${sql.join(chipKeys.map((key) => sql`${key}`), sql`, `)})
-        )`
-      );
-    }
-  }
+  const chipCondition = chipFilterCondition(params.chipKeys);
+  if (chipCondition) conditions.push(chipCondition);
 
   let query = db
     .select({

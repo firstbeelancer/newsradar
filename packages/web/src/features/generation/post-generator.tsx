@@ -1,18 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useQueries } from '@tanstack/react-query';
 import { Button } from '@shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@shared/ui/card';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@shared/ui/select';
-import { Checkbox } from '@shared/ui/checkbox';
 import { useGenerationStore } from '@shared/stores/generation-store';
 import { useSettingsStore } from '@shared/stores/settings-store';
 import { useToast } from '@shared/ui/toast';
-import { articlesApi, apiGet, apiPut, workspaceApi, type WorkspaceConfig } from '@shared/api/client';
-import { Save, Sparkles } from 'lucide-react';
+import { articlesApi, apiGet, apiPut, workspaceApi, type Article, type WorkspaceConfig } from '@shared/api/client';
+import { Save, Search, Sparkles, X } from 'lucide-react';
 import { GenerationRunDialog } from './generation-run-dialog';
 
-const PAGE_SIZE = 20;
 const DEFAULT_TEMPLATE_VALUE = '__default_template__';
 
 interface AIProviderOption {
@@ -24,25 +22,17 @@ interface AIProviderOption {
   assignedTo?: string[];
 }
 
-function useArticlesForSelection() {
-  return useInfiniteQuery({
-    queryKey: ['articles-for-post-generation'],
-    queryFn: async ({ pageParam }) => articlesApi.list({}, pageParam as string | undefined, PAGE_SIZE),
-    getNextPageParam: (lastPage) => (lastPage.has_more ? (lastPage.next_cursor ?? undefined) : undefined),
-    initialPageParam: undefined as string | undefined,
-    staleTime: 2 * 60 * 1000,
-  });
-}
-
 export function PostGenerator() {
   const navigate = useNavigate();
   const {
     selectedArticleIds,
+    selectedArticleSnapshots,
     selectedTemplateId,
     selectedProvider,
     selectedModel,
     isGenerating,
-    setSelectedArticleIds,
+    setSelectedArticles,
+    clearSelectedArticles,
     setSelectedTemplateId,
     setSelectedProvider,
     setSelectedModel,
@@ -97,8 +87,29 @@ export function PostGenerator() {
     };
   }, [initFromProvider, setSelectedTemplateId]);
 
-  const { data, isLoading } = useArticlesForSelection();
-  const articles = data?.pages.flatMap((page) => page.data) ?? [];
+  const selectedArticleQueries = useQueries({
+    queries: selectedArticleIds.map((id) => ({
+      queryKey: ['article', id],
+      queryFn: () => articlesApi.get(id),
+      enabled: !selectedArticleSnapshots.some((article) => article.id === id),
+      staleTime: 2 * 60 * 1000,
+    })),
+  });
+
+  const selectedArticles = useMemo(() => {
+    const byId = new Map<string, Article>();
+    for (const article of selectedArticleSnapshots) byId.set(article.id, article);
+    for (const query of selectedArticleQueries) {
+      if (query.data) byId.set(query.data.id, query.data);
+    }
+    return selectedArticleIds
+      .map((id) => byId.get(id))
+      .filter((article): article is Article => Boolean(article));
+  }, [selectedArticleIds, selectedArticleQueries, selectedArticleSnapshots]);
+
+  const selectedArticle = selectedArticles[0] ?? null;
+  const selectedPostArticleIds = selectedArticle ? [selectedArticle.id] : selectedArticleIds.slice(0, 1);
+  const isLoadingSelected = selectedArticleQueries.some((query) => query.isLoading);
 
   const providerChoices = useMemo(() => {
     const uniqueProviders = new Map<string, string>();
@@ -123,18 +134,15 @@ export function PostGenerator() {
     }
   }, [modelChoices, selectedModel, selectedProvider, setSelectedModel]);
 
-  const toggleArticle = (id: string) => {
-    setSelectedArticleIds(
-      selectedArticleIds.includes(id)
-        ? selectedArticleIds.filter((articleId) => articleId !== id)
-        : [...selectedArticleIds, id]
-    );
-  };
-
   const handleGenerate = () => {
-    if (selectedArticleIds.length === 0) return;
+    if (selectedPostArticleIds.length === 0) return;
     setDialogOpen(true);
     setRequestKey((current) => current + 1);
+  };
+
+  const handleKeepOnlyThisArticle = () => {
+    if (!selectedArticle) return;
+    setSelectedArticles([selectedArticle]);
   };
 
   const handleSaveConfig = async () => {
@@ -257,50 +265,67 @@ export function PostGenerator() {
       </Card>
 
       <div className="space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <h3 className="text-sm font-medium">Выберите статьи ({selectedArticleIds.length} выбрано)</h3>
-          <Button size="sm" onClick={handleGenerate} disabled={selectedArticleIds.length === 0 || isGenerating}>
-            <Sparkles className="h-4 w-4" />
-            Сгенерировать
-          </Button>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-sm font-medium">Новость для поста</h3>
+            <p className="text-xs text-muted-foreground">Для поста используется одна выбранная карточка из ленты.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={() => navigate({ to: '/feed' })}>
+              <Search className="h-4 w-4" />
+              Выбрать в ленте
+            </Button>
+            {selectedArticleIds.length > 0 && (
+              <Button variant="ghost" size="sm" onClick={clearSelectedArticles}>
+                <X className="h-4 w-4" />
+                Очистить
+              </Button>
+            )}
+            <Button size="sm" onClick={handleGenerate} disabled={selectedPostArticleIds.length === 0 || isGenerating}>
+              <Sparkles className="h-4 w-4" />
+              Сгенерировать пост
+            </Button>
+          </div>
         </div>
 
-        {isLoading ? (
-          <div className="space-y-2">
-            {Array.from({ length: 5 }).map((_, index) => (
-              <div key={index} className="h-16 animate-pulse rounded-lg border border-border bg-muted" />
-            ))}
-          </div>
-        ) : articles.length === 0 ? (
+        {isLoadingSelected && selectedArticles.length === 0 ? (
+          <div className="h-20 animate-pulse rounded-lg border border-border bg-muted" />
+        ) : !selectedArticle ? (
           <Card>
             <CardContent className="flex flex-col items-center py-12">
-              <p className="mb-4 text-sm text-muted-foreground">Нет доступных статей</p>
+              <p className="mb-4 text-sm text-muted-foreground">Сначала выбери одну новость в ленте</p>
               <Button variant="outline" size="sm" onClick={() => navigate({ to: '/feed' })}>
                 Перейти в ленту
               </Button>
             </CardContent>
           </Card>
         ) : (
-          <div className="max-h-[500px] space-y-2 overflow-y-auto pr-1">
-            {articles.map((article) => (
-              <label
-                key={article.id}
-                className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-muted/50"
-              >
-                <Checkbox
-                  checked={selectedArticleIds.includes(article.id)}
-                  onCheckedChange={() => toggleArticle(article.id)}
-                  className="mt-0.5"
-                />
+          <Card>
+            <CardContent className="space-y-3 p-4">
+              {selectedArticleIds.length > 1 && (
+                <div className="rounded-lg border border-warning/30 bg-warning-light px-3 py-2 text-xs text-warning">
+                  Выбрано несколько новостей. Для поста будет использована первая; для всех выбранных используй вкладку «Дайджест».
+                </div>
+              )}
+              <div className="flex items-start gap-3">
                 <div className="min-w-0 flex-1">
-                  <p className="line-clamp-2 text-sm font-medium">{article.title}</p>
+                  <p className="line-clamp-2 text-sm font-medium">{selectedArticle.title}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    {article.source_name} • {article.published_at ? new Date(article.published_at).toLocaleDateString('ru-RU') : 'без даты'}
+                    {selectedArticle.agent_name ? `${selectedArticle.agent_name} • ` : ''}{selectedArticle.source_name} • {selectedArticle.published_at ? new Date(selectedArticle.published_at).toLocaleDateString('ru-RU') : 'без даты'}
                   </p>
                 </div>
-              </label>
-            ))}
-          </div>
+                {selectedArticleIds.length > 1 ? (
+                  <Button variant="outline" size="sm" onClick={handleKeepOnlyThisArticle}>
+                    Только она
+                  </Button>
+                ) : (
+                  <Button variant="ghost" size="icon-sm" onClick={clearSelectedArticles} title="Убрать новость">
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         )}
       </div>
 
@@ -309,10 +334,10 @@ export function PostGenerator() {
         requestKey={requestKey}
         title="Генерация поста"
         description="На выходе будет один готовый текст для Telegram без markdown-мусора."
-        idleSummary={`Выбрано статей: ${selectedArticleIds.length}. Шаблон и модель уже подтянуты из текущих настроек.`}
+        idleSummary={`Выбрана новость: ${selectedArticle?.title ?? selectedPostArticleIds[0] ?? 'нет'}.`}
         onOpenChange={setDialogOpen}
-        onStart={() => generatePost({ article_ids: selectedArticleIds })}
-        onRegenerate={(comments) => generatePost({ article_ids: selectedArticleIds, custom_prompt: comments })}
+        onStart={() => generatePost({ article_ids: selectedPostArticleIds })}
+        onRegenerate={(comments) => generatePost({ article_ids: selectedPostArticleIds, custom_prompt: comments })}
       />
     </div>
   );

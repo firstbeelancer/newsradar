@@ -764,6 +764,13 @@ export interface ArticleFilters {
   sort_order?: 'asc' | 'desc';
 }
 
+export interface ArticleSelectionResult {
+  article_ids: string[];
+  selected_count: number;
+  capped: boolean;
+  max_ids: number;
+}
+
 // ─── Template Types ──────────────────────────────────────────────────────────
 
 export interface Template {
@@ -1097,6 +1104,34 @@ export const articlesApi = {
     return apiGet<BackendCursorResponse<BackendArticle>>(`/articles/search?${params.toString()}`).then((payload) =>
       normalizeCursorResponse(payload, normalizeArticle)
     );
+  },
+  selection: (filters?: ArticleFilters, maxIds = 200) => {
+    const params = new URLSearchParams();
+    params.set('maxIds', String(maxIds));
+    if (filters?.agent_id) params.set('agentId', filters.agent_id);
+    if (filters?.source_id) params.set('sourceId', filters.source_id);
+    if (filters?.status) params.set('status', filters.status);
+    if (filters?.search) params.set('search', filters.search);
+    if (filters?.chip_keys?.length) params.set('chips', filters.chip_keys.join(','));
+    if (filters?.date_from) params.set('dateFrom', filters.date_from);
+    if (filters?.date_to) params.set('dateTo', filters.date_to);
+    if (filters?.favorites_only !== undefined) params.set('isFavorite', String(filters.favorites_only));
+    if (filters?.sort_by) params.set('sortBy', filters.sort_by);
+    if (filters?.sort_order) params.set('sortOrder', filters.sort_order);
+    return apiGet<{
+      articleIds?: string[];
+      article_ids?: string[];
+      selectedCount?: number;
+      selected_count?: number;
+      capped: boolean;
+      maxIds?: number;
+      max_ids?: number;
+    }>(`/articles/selection?${params.toString()}`).then((payload) => ({
+      article_ids: payload.article_ids ?? payload.articleIds ?? [],
+      selected_count: payload.selected_count ?? payload.selectedCount ?? 0,
+      capped: payload.capped,
+      max_ids: payload.max_ids ?? payload.maxIds ?? maxIds,
+    }));
   },
   get: (id: string) => apiGet<BackendArticle>(`/articles/${id}`).then(normalizeArticle),
   favorite: (id: string) => apiPost<BackendArticle, Record<string, never>>(`/articles/${id}/favorite`, {}).then(normalizeArticle),

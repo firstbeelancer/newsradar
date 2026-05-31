@@ -12,6 +12,7 @@ import {
   getArticleWithScore,
   deleteAllArticles,
   ensureArticleExists,
+  listArticleSelectionIds,
 } from "./service.js";
 import { createOperationLog } from "../operation-logs/service.js";
 import { getTranslateQueue } from "../../lib/queues.js";
@@ -33,6 +34,10 @@ const listQuerySchema = z.object({
   isFavorite: z.enum(["true", "false"]).optional(),
   sortBy: z.enum(["date", "score"]).optional(),
   sortOrder: z.enum(["asc", "desc"]).optional(),
+});
+
+const selectionQuerySchema = listQuerySchema.extend({
+  maxIds: z.coerce.number().int().min(1).max(500).default(200),
 });
 
 const favoriteBodySchema = z.object({
@@ -86,6 +91,32 @@ router.delete("/", authMiddleware, async (req, res, next) => {
       metadata: { deletedCount: result.deleted },
       startedAt: new Date(),
       finishedAt: new Date(),
+    });
+
+    res.json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/selection", authMiddleware, async (req, res, next) => {
+  try {
+    const filters = selectionQuerySchema.parse(req.query);
+    const result = await listArticleSelectionIds({
+      workspaceId: filters.workspaceId,
+      agentId: filters.agentId,
+      sourceId: filters.sourceId,
+      status: filters.status,
+      search: filters.search,
+      chipKeys: filters.chips?.split(",").map((chip) => chip.trim()).filter(Boolean),
+      dateFrom: filters.dateFrom,
+      dateTo: filters.dateTo,
+      isFavorite: filters.isFavorite === "true" ? true : filters.isFavorite === "false" ? false : undefined,
+      sortBy: filters.sortBy ?? "date",
+      sortOrder: filters.sortOrder ?? "desc",
+      limit: filters.maxIds,
+      cursor: null,
+      maxIds: filters.maxIds,
     });
 
     res.json({ success: true, data: result });
