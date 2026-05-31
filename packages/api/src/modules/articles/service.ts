@@ -11,8 +11,10 @@ import type { Article } from "../../db/types.js";
 export interface ArticleFilters {
   workspaceId: string;
   agentId?: string;
+  sourceId?: string;
   status?: string;
   search?: string;
+  chipKeys?: string[];
   dateFrom?: string;
   dateTo?: string;
   isFavorite?: boolean;
@@ -59,6 +61,9 @@ export async function listArticles(
   if (filters.agentId) {
     conditions.push(eq(articles.agentId, filters.agentId));
   }
+  if (filters.sourceId) {
+    conditions.push(eq(articles.sourceId, filters.sourceId));
+  }
   if (filters.status) {
     conditions.push(eq(articles.status, filters.status));
   } else {
@@ -89,6 +94,18 @@ export async function listArticles(
     conditions.push(
       sql`to_tsvector('russian', ${articles.title} || ' ' || COALESCE(${articles.description}, '')) @@ to_tsquery('russian', ${tsQuery})`
     );
+  }
+  if (filters.chipKeys?.length) {
+    const chipKeys = filters.chipKeys.map((key) => key.trim()).filter(Boolean);
+    if (chipKeys.length > 0) {
+      conditions.push(
+        sql`EXISTS (
+          SELECT 1
+          FROM jsonb_array_elements(COALESCE(${articles.scoreDetail}->'triggeredChips', '[]'::jsonb)) AS chip
+          WHERE chip->>'key' IN (${sql.join(chipKeys.map((key) => sql`${key}`), sql`, `)})
+        )`
+      );
+    }
   }
 
   const sortBy = filters.sortBy ?? "date";
@@ -195,7 +212,7 @@ export async function listArticles(
 export async function searchArticles(
   workspaceId: string,
   queryText: string,
-  params: { limit: number; cursor?: string | null }
+  params: { limit: number; cursor?: string | null; agentId?: string; sourceId?: string; isFavorite?: boolean; chipKeys?: string[] }
 ): Promise<PaginatedResult<Article>> {
   if (!queryText || queryText.trim().length < 2) {
     throw new AppError(400, "Search query must be at least 2 characters", "VALIDATION_ERROR");
@@ -211,6 +228,27 @@ export async function searchArticles(
     eq(articles.workspaceId, workspaceId),
     sql`to_tsvector('russian', ${articles.title} || ' ' || COALESCE(${articles.description}, '')) @@ to_tsquery('russian', ${tsQuery})`,
   ];
+  if (params.agentId) {
+    conditions.push(eq(articles.agentId, params.agentId));
+  }
+  if (params.sourceId) {
+    conditions.push(eq(articles.sourceId, params.sourceId));
+  }
+  if (params.isFavorite !== undefined) {
+    conditions.push(eq(articles.isFavorite, params.isFavorite));
+  }
+  if (params.chipKeys?.length) {
+    const chipKeys = params.chipKeys.map((key) => key.trim()).filter(Boolean);
+    if (chipKeys.length > 0) {
+      conditions.push(
+        sql`EXISTS (
+          SELECT 1
+          FROM jsonb_array_elements(COALESCE(${articles.scoreDetail}->'triggeredChips', '[]'::jsonb)) AS chip
+          WHERE chip->>'key' IN (${sql.join(chipKeys.map((key) => sql`${key}`), sql`, `)})
+        )`
+      );
+    }
+  }
 
   let query = db
     .select({

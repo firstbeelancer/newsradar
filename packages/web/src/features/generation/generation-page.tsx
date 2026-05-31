@@ -2,13 +2,20 @@ import { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { Button } from '@shared/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@shared/ui/tabs';
+import { useGenerationStore } from '@shared/stores/generation-store';
 import { PostGenerator } from './post-generator';
 import { DigestGenerator } from './digest-generator';
 import { FileText, Newspaper, Clock } from 'lucide-react';
 
 export function GenerationPage() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('post');
+  const { generationType, setGenerationType } = useGenerationStore();
+  const [activeTab, setActiveTab] = useState(generationType === 'digest' ? 'digest' : 'post');
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    setGenerationType(value === 'digest' ? 'digest' : 'post');
+  };
 
   return (
     <div className="space-y-6">
@@ -27,7 +34,7 @@ export function GenerationPage() {
       </div>
 
       {/* Type selection cards - only show on initial view */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="post">
             <FileText className="h-4 w-4 mr-1.5" />

@@ -1,12 +1,13 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { generationApi, type GeneratePostDto, type GenerateDigestDto, type GeneratedPost, type GenerationStreamState } from '@shared/api/client';
+import { generationApi, type Article, type GeneratePostDto, type GenerateDigestDto, type GeneratedPost, type GenerationStreamState } from '@shared/api/client';
 
 type GenerationType = 'post' | 'digest' | null;
 
 interface GenerationState {
   generationType: GenerationType;
   selectedArticleIds: string[];
+  selectedArticleSnapshots: Article[];
   selectedAgentId: string | null;
   selectedPeriod: 'day' | 'week' | 'month';
   selectedTemplateId: string | null;
@@ -28,6 +29,9 @@ interface GenerationState {
 interface GenerationActions {
   setGenerationType: (type: GenerationType) => void;
   setSelectedArticleIds: (ids: string[]) => void;
+  setSelectedArticles: (articles: Article[]) => void;
+  toggleSelectedArticle: (article: Article) => void;
+  clearSelectedArticles: () => void;
   setSelectedAgentId: (id: string | null) => void;
   setSelectedPeriod: (period: 'day' | 'week' | 'month') => void;
   setSelectedTemplateId: (id: string | null) => void;
@@ -46,6 +50,7 @@ interface GenerationActions {
 const initialState: GenerationState = {
   generationType: null,
   selectedArticleIds: [],
+  selectedArticleSnapshots: [],
   selectedAgentId: null,
   selectedPeriod: 'day',
   selectedTemplateId: null,
@@ -108,6 +113,28 @@ export const useGenerationStore = create<GenerationState & GenerationActions>()(
 
       setGenerationType: (type) => set({ generationType: type }),
       setSelectedArticleIds: (ids) => set({ selectedArticleIds: ids }),
+      setSelectedArticles: (articles) => set({
+        selectedArticleIds: articles.map((article) => article.id),
+        selectedArticleSnapshots: articles,
+      }),
+      toggleSelectedArticle: (article) => set((state) => {
+        const isSelected = state.selectedArticleIds.includes(article.id);
+        if (isSelected) {
+          return {
+            selectedArticleIds: state.selectedArticleIds.filter((id) => id !== article.id),
+            selectedArticleSnapshots: state.selectedArticleSnapshots.filter((item) => item.id !== article.id),
+          };
+        }
+
+        return {
+          selectedArticleIds: [...state.selectedArticleIds, article.id],
+          selectedArticleSnapshots: [
+            ...state.selectedArticleSnapshots.filter((item) => item.id !== article.id),
+            article,
+          ],
+        };
+      }),
+      clearSelectedArticles: () => set({ selectedArticleIds: [], selectedArticleSnapshots: [] }),
       setSelectedAgentId: (id) => set({ selectedAgentId: id }),
       setSelectedPeriod: (period) => set({ selectedPeriod: period }),
       setSelectedTemplateId: (id) => set({ selectedTemplateId: id }),

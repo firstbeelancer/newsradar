@@ -1,11 +1,12 @@
 import { Button } from '@shared/ui/button';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@shared/ui/select';
-import type { Agent, ChipFilter } from '@shared/api/client';
+import type { Agent, ChipFilter, Source } from '@shared/api/client';
 import { Bookmark, Filter } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 
 export interface FeedFiltersState {
   agentId: string;
+  sourceId: string;
   status: string;
   favoritesOnly: boolean;
   activeChipFilters: string[];
@@ -13,18 +14,22 @@ export interface FeedFiltersState {
 
 interface FeedFiltersProps {
   agents: Agent[];
+  sources: Source[];
   filters: FeedFiltersState;
   onChange: (filters: FeedFiltersState | ((prev: FeedFiltersState) => FeedFiltersState)) => void;
 }
 
 const ALL_AGENTS_VALUE = '__all_agents__';
+const ALL_SOURCES_VALUE = '__all_sources__';
 const ALL_STATUSES_VALUE = '__all_statuses__';
 
-export function FeedFilters({ agents, filters, onChange }: FeedFiltersProps) {
+export function FeedFilters({ agents, sources, filters, onChange }: FeedFiltersProps) {
   const selectedAgent = agents.find((a) => a.id === filters.agentId);
   const agentChipFilters = selectedAgent?.chipFilters ?? [];
   const configChipFilters = (selectedAgent?.config?.chipFilters ?? []) as Partial<ChipFilter>[];
   const allChipFilters: Partial<ChipFilter>[] = agentChipFilters.length > 0 ? agentChipFilters : configChipFilters;
+  const agentScopedSources = filters.agentId ? sources.filter((source) => source.agent_id === filters.agentId) : sources;
+  const visibleSources = filters.agentId && agentScopedSources.length > 0 ? agentScopedSources : sources;
 
   const toggleChipFilter = (key: string) => {
     onChange((prev) => ({
@@ -41,7 +46,7 @@ export function FeedFilters({ agents, filters, onChange }: FeedFiltersProps) {
         <Select
           value={filters.agentId || ALL_AGENTS_VALUE}
           onValueChange={(value) => {
-            onChange((prev) => ({ ...prev, agentId: value === ALL_AGENTS_VALUE ? '' : value, activeChipFilters: [] }));
+            onChange((prev) => ({ ...prev, agentId: value === ALL_AGENTS_VALUE ? '' : value, sourceId: '', activeChipFilters: [] }));
           }}
         >
           <SelectTrigger className="w-[160px] h-8 text-xs">
@@ -52,6 +57,25 @@ export function FeedFilters({ agents, filters, onChange }: FeedFiltersProps) {
             {agents.map((agent) => (
               <SelectItem key={agent.id} value={agent.id}>
                 {agent.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={filters.sourceId || ALL_SOURCES_VALUE}
+          onValueChange={(value) => {
+            onChange((prev) => ({ ...prev, sourceId: value === ALL_SOURCES_VALUE ? '' : value }));
+          }}
+        >
+          <SelectTrigger className="w-[190px] h-8 text-xs">
+            <SelectValue placeholder="Все источники" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_SOURCES_VALUE}>Все источники</SelectItem>
+            {visibleSources.map((source) => (
+              <SelectItem key={source.id} value={source.id}>
+                {source.name}
               </SelectItem>
             ))}
           </SelectContent>

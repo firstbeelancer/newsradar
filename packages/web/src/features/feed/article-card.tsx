@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import { Card, CardContent } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
+import { Checkbox } from '@shared/ui/checkbox';
 import { Bookmark, ExternalLink, Calendar, Search, Sparkles } from 'lucide-react';
 import { cn, truncate, formatDateTime, cleanArticleText } from '@shared/lib/utils';
 import type { Article } from '@shared/api/client';
@@ -65,6 +66,15 @@ export function ArticleCard({
     >
       <CardContent className="p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+          {selectable && (
+            <Checkbox
+              checked={Boolean(isSelected)}
+              onCheckedChange={() => onSelect?.(article.id)}
+              onClick={(event) => event.stopPropagation()}
+              className="mt-1 shrink-0"
+              aria-label="Выбрать новость для генерации"
+            />
+          )}
           <div className="min-w-0 flex-1 overflow-hidden">
             <div className="flex items-start gap-2">
               <Link

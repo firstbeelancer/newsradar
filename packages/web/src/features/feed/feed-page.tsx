@@ -7,6 +7,7 @@ import { Skeleton } from '@shared/ui/skeleton';
 import { Input } from '@shared/ui/input';
 import { useAgentsStore } from '@shared/stores/agents-store';
 import { useGenerationStore } from '@shared/stores/generation-store';
+import { useSourcesStore } from '@shared/stores/sources-store';
 import { useToast } from '@shared/ui/toast';
 import { articlesApi, deepsearchApi, type Article, type ArticleFilters } from '@shared/api/client';
 import { ArticleCard } from './article-card';
@@ -18,6 +19,8 @@ import {
   ArrowLeft,
   ArrowDownWideNarrow,
   ArrowUpWideNarrow,
+  CheckSquare,
+  X,
 } from 'lucide-react';
 
 const PAGE_SIZE = 20;
@@ -26,10 +29,11 @@ function useArticlesInfinite(filters: ArticleFilters, searchQuery: string) {
   return useInfiniteQuery({
     queryKey: ['articles', filters, searchQuery],
     queryFn: async ({ pageParam }) => {
-      if (searchQuery.trim()) {
-        return articlesApi.search(searchQuery.trim(), pageParam as string | undefined, PAGE_SIZE);
-      }
-      return articlesApi.list(filters, pageParam as string | undefined, PAGE_SIZE);
+      return articlesApi.list(
+        { ...filters, search: searchQuery.trim() || undefined },
+        pageParam as string | undefined,
+        PAGE_SIZE
+      );
     },
     getNextPageParam: (lastPage) => {
       return lastPage.has_more ? (lastPage.next_cursor ?? undefined) : undefined;
@@ -49,7 +53,17 @@ export function FeedPage() {
 
   const queryClient = useQueryClient();
   const { agents, fetchAgents } = useAgentsStore();
-  const { setSelectedArticleIds, resetGeneration } = useGenerationStore();
+  const { sources, fetchSources, fetchSourcesByAgent } = useSourcesStore();
+  const {
+    selectedArticleIds,
+    selectedArticleSnapshots,
+    setGenerationType,
+    setSelectedAgentId,
+    setSelectedArticles,
+    toggleSelectedArticle,
+    clearSelectedArticles,
+    resetGeneration,
+  } = useGenerationStore();
   const { addToast } = useToast();
 
   const [search, setSearch] = useState('');
@@ -57,6 +71,7 @@ export function FeedPage() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [filters, setFilters] = useState<FeedFiltersState>({
     agentId: agentIdFromRoute ?? '',
+    sourceId: '',
     status: '',
     favoritesOnly: false,
     activeChipFilters: [],
@@ -67,15 +82,25 @@ export function FeedPage() {
   }, [fetchAgents]);
 
   useEffect(() => {
+    if (filters.agentId) {
+      void fetchSourcesByAgent(filters.agentId);
+    } else {
+      void fetchSources();
+    }
+  }, [fetchSources, fetchSourcesByAgent, filters.agentId]);
+
+  useEffect(() => {
     if (agentIdFromRoute) {
-      setFilters((f) => ({ ...f, agentId: agentIdFromRoute }));
+      setFilters((f) => ({ ...f, agentId: agentIdFromRoute, sourceId: '', activeChipFilters: [] }));
     }
   }, [agentIdFromRoute]);
 
   const articleFilters: ArticleFilters = {
     agent_id: filters.agentId || undefined,
+    source_id: filters.sourceId || undefined,
     status: filters.status || undefined,
     favorites_only: filters.favoritesOnly || undefined,
+    chip_keys: filters.activeChipFilters.length ? filters.activeChipFilters : undefined,
     sort_by: sortBy,
     sort_order: sortOrder,
   };
@@ -112,6 +137,28 @@ export function FeedPage() {
   );
 
   const agentName = agents.find((a) => a.id === filters.agentId)?.name;
+  const selectedArticlesVisible = articles.filter((article) => selectedArticleIds.includes(article.id));
+  const hasVisibleSelection = selectedArticlesVisible.length > 0;
+  const selectedCount = selectedArticleIds.length;
+
+  const handleToggleArticleSelection = useCallback((article: Article) => {
+    toggleSelectedArticle(article);
+  }, [toggleSelectedArticle]);
+
+  const handleSelectVisible = useCallback(() => {
+    const existing = new Map(selectedArticleSnapshots.map((article) => [article.id, article]));
+    for (const article of articles) {
+      existing.set(article.id, article);
+    }
+    setSelectedArticles([...existing.values()]);
+  }, [articles, selectedArticleSnapshots, setSelectedArticles]);
+
+  const handleGenerateDigest = useCallback(() => {
+    if (selectedArticleIds.length === 0) return;
+    setGenerationType('digest');
+    setSelectedAgentId(filters.agentId || null);
+    navigate({ to: '/generation' });
+  }, [filters.agentId, navigate, selectedArticleIds.length, setGenerationType, setSelectedAgentId]);
 
   const handleDeepSearch = useCallback(async (article: Article) => {
     try {
@@ -142,7 +189,7 @@ export function FeedPage() {
       if (!old?.pages) return old;
       return {
         ...old,
-        pages: old.pages.map((page: typeof data.pages[0]) => ({
+        pages: old.pages.map((page) => ({
           ...page,
           data: page.data.map((a: Article) =>
             a.id === id ? { ...a, is_favorite: newValue } : a
@@ -163,7 +210,7 @@ export function FeedPage() {
         if (!old?.pages) return old;
         return {
           ...old,
-          pages: old.pages.map((page: typeof data.pages[0]) => ({
+          pages: old.pages.map((page) => ({
             ...page,
             data: page.data.map((a: Article) =>
               a.id === id ? { ...a, is_favorite: !newValue } : a
@@ -177,9 +224,11 @@ export function FeedPage() {
 
   const handleGeneratePost = useCallback((article: Article) => {
     resetGeneration();
-    setSelectedArticleIds([article.id]);
+    setGenerationType('post');
+    setSelectedAgentId(article.agent_id || null);
+    setSelectedArticles([article]);
     navigate({ to: '/generation' });
-  }, [navigate, resetGeneration, setSelectedArticleIds]);
+  }, [navigate, resetGeneration, setGenerationType, setSelectedAgentId, setSelectedArticles]);
 
   return (
     <div className="space-y-6">
@@ -219,7 +268,7 @@ export function FeedPage() {
         </div>
 
         {/* Filters */}
-        <FeedFilters agents={agents} filters={filters} onChange={setFilters} />
+        <FeedFilters agents={agents} sources={sources} filters={filters} onChange={setFilters} />
 
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -257,6 +306,34 @@ export function FeedPage() {
         </div>
       </div>
 
+      {selectedCount > 0 && (
+        <div className="sticky top-2 z-20 rounded-xl border border-accent/25 bg-white/95 p-3 shadow-lg shadow-cyan-100/50 backdrop-blur">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold">Выбрано новостей: {selectedCount}</p>
+              <p className="truncate text-xs text-muted-foreground">
+                {hasVisibleSelection
+                  ? `В текущей ленте выбрано: ${selectedArticlesVisible.length}`
+                  : 'Выбор сохранён, даже если новости скрыты текущим фильтром'}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={handleSelectVisible}>
+                <CheckSquare className="h-4 w-4" />
+                Выбрать видимые
+              </Button>
+              <Button size="sm" onClick={handleGenerateDigest}>
+                <Newspaper className="h-4 w-4" />
+                Дайджест
+              </Button>
+              <Button variant="ghost" size="icon-sm" onClick={clearSelectedArticles} title="Очистить выбор">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Articles list */}
       {isLoading && articles.length === 0 ? (
         <div className="space-y-3">
@@ -287,6 +364,9 @@ export function FeedPage() {
               key={article.id}
               article={article}
               onToggleFavorite={handleToggleFavorite}
+              selectable
+              isSelected={selectedArticleIds.includes(article.id)}
+              onSelect={() => handleToggleArticleSelection(article)}
               onDeepSearch={handleDeepSearch}
               onGeneratePost={handleGeneratePost}
             />

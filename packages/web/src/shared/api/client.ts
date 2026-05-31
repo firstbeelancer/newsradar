@@ -257,6 +257,7 @@ export function normalizeArticle(raw: BackendArticle): Article {
     content: raw.content ?? undefined,
     original_description: raw.original_description ?? raw.originalDescription ?? undefined,
     url: raw.url ?? raw.link ?? '',
+    source_id: raw.source_id ?? raw.sourceId ?? '',
     source_name: raw.source_name ?? raw.sourceName ?? raw.source_id ?? raw.sourceId ?? 'Источник',
     source_url: raw.source_url ?? raw.sourceUrl ?? undefined,
     agent_id: raw.agent_id ?? raw.agentId ?? '',
@@ -735,6 +736,7 @@ export interface Article {
   content?: string;
   original_description?: string;
   url: string;
+  source_id: string;
   source_name: string;
   source_url?: string;
   agent_id: string;
@@ -751,7 +753,10 @@ export interface Article {
 
 export interface ArticleFilters {
   agent_id?: string;
+  source_id?: string;
   status?: string;
+  search?: string;
+  chip_keys?: string[];
   date_from?: string;
   date_to?: string;
   favorites_only?: boolean;
@@ -1050,7 +1055,7 @@ export const chipFiltersApi = {
 
 // Sources
 export const sourcesApi = {
-  list: () => apiGet<{ data: BackendSource[] }>('/sources').then((res) => (res.data ?? []).map(normalizeSource)),
+  list: () => apiGet<{ data: BackendSource[] }>('/sources?limit=100').then((res) => (res.data ?? []).map(normalizeSource)),
   create: (data: CreateSourceDto) => apiPost<BackendSource, CreateSourceDto>('/sources', data).then(normalizeSource),
   update: (id: string, data: UpdateSourceDto) => apiPut<BackendSource, UpdateSourceDto>(`/sources/${id}`, data).then(normalizeSource),
   delete: (id: string) => apiDelete<void>(`/sources/${id}`),
@@ -1067,7 +1072,10 @@ export const articlesApi = {
     params.set('limit', String(limit));
     if (cursor) params.set('cursor', cursor);
     if (filters?.agent_id) params.set('agentId', filters.agent_id);
+    if (filters?.source_id) params.set('sourceId', filters.source_id);
     if (filters?.status) params.set('status', filters.status);
+    if (filters?.search) params.set('search', filters.search);
+    if (filters?.chip_keys?.length) params.set('chips', filters.chip_keys.join(','));
     if (filters?.date_from) params.set('dateFrom', filters.date_from);
     if (filters?.date_to) params.set('dateTo', filters.date_to);
     if (filters?.favorites_only !== undefined) params.set('isFavorite', String(filters.favorites_only));
@@ -1077,11 +1085,15 @@ export const articlesApi = {
       normalizeCursorResponse(payload, normalizeArticle)
     );
   },
-  search: (q: string, cursor?: string, limit = 20) => {
+  search: (q: string, cursor?: string, limit = 20, filters?: ArticleFilters) => {
     const params = new URLSearchParams();
     params.set('q', q);
     params.set('limit', String(limit));
     if (cursor) params.set('cursor', cursor);
+    if (filters?.agent_id) params.set('agentId', filters.agent_id);
+    if (filters?.source_id) params.set('sourceId', filters.source_id);
+    if (filters?.favorites_only !== undefined) params.set('isFavorite', String(filters.favorites_only));
+    if (filters?.chip_keys?.length) params.set('chips', filters.chip_keys.join(','));
     return apiGet<BackendCursorResponse<BackendArticle>>(`/articles/search?${params.toString()}`).then((payload) =>
       normalizeCursorResponse(payload, normalizeArticle)
     );

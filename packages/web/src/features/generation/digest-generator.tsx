@@ -1,18 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useQueries } from '@tanstack/react-query';
 import { Button } from '@shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@shared/ui/card';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@shared/ui/select';
-import { Checkbox } from '@shared/ui/checkbox';
 import { useGenerationStore } from '@shared/stores/generation-store';
 import { useSettingsStore } from '@shared/stores/settings-store';
 import { useToast } from '@shared/ui/toast';
-import { articlesApi, apiGet, apiPut, workspaceApi, type WorkspaceConfig } from '@shared/api/client';
-import { Newspaper, Save } from 'lucide-react';
+import { articlesApi, apiGet, apiPut, workspaceApi, type Article, type WorkspaceConfig } from '@shared/api/client';
+import { Newspaper, Save, Search, X } from 'lucide-react';
 import { GenerationRunDialog } from './generation-run-dialog';
 
-const PAGE_SIZE = 20;
 const DEFAULT_TEMPLATE_VALUE = '__default_template__';
 
 interface AIProviderOption {
@@ -24,26 +22,19 @@ interface AIProviderOption {
   assignedTo?: string[];
 }
 
-function useArticlesForSelection() {
-  return useInfiniteQuery({
-    queryKey: ['articles-for-digest-generation'],
-    queryFn: async ({ pageParam }) => articlesApi.list({}, pageParam as string | undefined, PAGE_SIZE),
-    getNextPageParam: (lastPage) => (lastPage.has_more ? (lastPage.next_cursor ?? undefined) : undefined),
-    initialPageParam: undefined as string | undefined,
-    staleTime: 2 * 60 * 1000,
-  });
-}
-
 export function DigestGenerator() {
   const navigate = useNavigate();
   const {
     selectedArticleIds,
+    selectedArticleSnapshots,
     selectedPeriod,
     selectedTemplateId,
     selectedProvider,
     selectedModel,
     isGenerating,
     setSelectedArticleIds,
+    setSelectedArticles,
+    clearSelectedArticles,
     setSelectedPeriod,
     setSelectedTemplateId,
     setSelectedProvider,
@@ -100,8 +91,29 @@ export function DigestGenerator() {
     };
   }, [initFromProvider, setSelectedPeriod, setSelectedTemplateId]);
 
-  const { data, isLoading } = useArticlesForSelection();
-  const articles = data?.pages.flatMap((page) => page.data) ?? [];
+  const selectedArticleQueries = useQueries({
+    queries: selectedArticleIds.map((id) => ({
+      queryKey: ['article', id],
+      queryFn: () => articlesApi.get(id),
+      enabled: !selectedArticleSnapshots.some((article) => article.id === id),
+      staleTime: 2 * 60 * 1000,
+    })),
+  });
+
+  const selectedArticles = useMemo(() => {
+    const byId = new Map<string, Article>();
+    for (const article of selectedArticleSnapshots) {
+      byId.set(article.id, article);
+    }
+    for (const query of selectedArticleQueries) {
+      if (query.data) byId.set(query.data.id, query.data);
+    }
+    return selectedArticleIds
+      .map((id) => byId.get(id))
+      .filter((article): article is Article => Boolean(article));
+  }, [selectedArticleIds, selectedArticleQueries, selectedArticleSnapshots]);
+
+  const isLoadingSelected = selectedArticleQueries.some((query) => query.isLoading);
 
   const providerChoices = useMemo(() => {
     const uniqueProviders = new Map<string, string>();
@@ -125,12 +137,13 @@ export function DigestGenerator() {
     }
   }, [modelChoices, selectedModel, selectedProvider, setSelectedModel]);
 
-  const toggleArticle = (id: string) => {
-    setSelectedArticleIds(
-      selectedArticleIds.includes(id)
-        ? selectedArticleIds.filter((articleId) => articleId !== id)
-        : [...selectedArticleIds, id]
-    );
+  const removeArticle = (id: string) => {
+    const nextArticles = selectedArticles.filter((article) => article.id !== id);
+    if (nextArticles.length > 0 || selectedArticles.length === selectedArticleIds.length) {
+      setSelectedArticles(nextArticles);
+      return;
+    }
+    setSelectedArticleIds(selectedArticleIds.filter((articleId) => articleId !== id));
   };
 
   const handleGenerate = () => {
@@ -274,49 +287,67 @@ export function DigestGenerator() {
       </Card>
 
       <div className="space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <h3 className="text-sm font-medium">Выберите статьи для дайджеста ({selectedArticleIds.length} выбрано)</h3>
-          <Button size="sm" onClick={handleGenerate} disabled={selectedArticleIds.length === 0 || isGenerating}>
-            <Newspaper className="h-4 w-4" />
-            Сгенерировать дайджест
-          </Button>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-sm font-medium">Статьи для дайджеста ({selectedArticleIds.length} выбрано)</h3>
+            <p className="text-xs text-muted-foreground">Отбирай новости в ленте через поиск, канал, агента и чипы.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={() => navigate({ to: '/feed' })}>
+              <Search className="h-4 w-4" />
+              Выбрать в ленте
+            </Button>
+            {selectedArticleIds.length > 0 && (
+              <Button variant="ghost" size="sm" onClick={clearSelectedArticles}>
+                <X className="h-4 w-4" />
+                Очистить
+              </Button>
+            )}
+            <Button size="sm" onClick={handleGenerate} disabled={selectedArticleIds.length === 0 || isGenerating}>
+              <Newspaper className="h-4 w-4" />
+              Сгенерировать дайджест
+            </Button>
+          </div>
         </div>
 
-        {isLoading ? (
+        {isLoadingSelected && selectedArticles.length === 0 ? (
           <div className="space-y-2">
             {Array.from({ length: 5 }).map((_, index) => (
               <div key={index} className="h-16 animate-pulse rounded-lg border border-border bg-muted" />
             ))}
           </div>
-        ) : articles.length === 0 ? (
+        ) : selectedArticleIds.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center py-12">
-              <p className="mb-4 text-sm text-muted-foreground">Нет доступных статей</p>
+              <p className="mb-4 text-sm text-muted-foreground">Сначала выбери новости для дайджеста в ленте</p>
               <Button variant="outline" size="sm" onClick={() => navigate({ to: '/feed' })}>
                 Перейти в ленту
               </Button>
             </CardContent>
           </Card>
         ) : (
-          <div className="max-h-[500px] space-y-2 overflow-y-auto pr-1">
-            {articles.map((article) => (
-              <label
+          <div className="space-y-2">
+            {selectedArticles.map((article) => (
+              <div
                 key={article.id}
-                className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-muted/50"
+                className="flex items-start gap-3 rounded-lg border border-border bg-white/70 p-3 transition-colors hover:bg-white"
               >
-                <Checkbox
-                  checked={selectedArticleIds.includes(article.id)}
-                  onCheckedChange={() => toggleArticle(article.id)}
-                  className="mt-0.5"
-                />
                 <div className="min-w-0 flex-1">
                   <p className="line-clamp-2 text-sm font-medium">{article.title}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    {article.source_name} • {article.published_at ? new Date(article.published_at).toLocaleDateString('ru-RU') : 'без даты'}
+                    {article.agent_name ? `${article.agent_name} • ` : ''}{article.source_name} • {article.published_at ? new Date(article.published_at).toLocaleDateString('ru-RU') : 'без даты'}
                   </p>
                 </div>
-              </label>
+                <Button variant="ghost" size="icon-sm" onClick={() => removeArticle(article.id)} title="Убрать из дайджеста">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
             ))}
+            {selectedArticles.length < selectedArticleIds.length && (
+              <p className="text-xs text-muted-foreground">
+                Часть выбранных новостей ещё загружается: {selectedArticleIds.length - selectedArticles.length}
+              </p>
+            )}
           </div>
         )}
       </div>

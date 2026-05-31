@@ -24,8 +24,10 @@ const router = Router();
 const listQuerySchema = z.object({
   workspaceId: z.string().uuid(),
   agentId: z.string().uuid().optional(),
+  sourceId: z.string().uuid().optional(),
   status: z.string().optional(),
   search: z.string().optional(),
+  chips: z.string().optional(),
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
   isFavorite: z.enum(["true", "false"]).optional(),
@@ -49,8 +51,10 @@ router.get("/", authMiddleware, async (req, res, next) => {
     const result = await listArticles({
       workspaceId: filters.workspaceId,
       agentId: filters.agentId,
+      sourceId: filters.sourceId,
       status: filters.status,
       search: filters.search,
+      chipKeys: filters.chips?.split(",").map((chip) => chip.trim()).filter(Boolean),
       dateFrom: filters.dateFrom,
       dateTo: filters.dateTo,
       isFavorite: filters.isFavorite === "true" ? true : filters.isFavorite === "false" ? false : undefined,
@@ -96,6 +100,12 @@ router.get("/search", authMiddleware, async (req, res, next) => {
     const { cursor, limit } = paginationQuerySchema.parse(req.query);
     const workspaceId = req.query.workspaceId as string;
     const q = req.query.q as string;
+    const agentId = req.query.agentId as string | undefined;
+    const sourceId = req.query.sourceId as string | undefined;
+    const isFavorite = req.query.isFavorite === "true" ? true : req.query.isFavorite === "false" ? false : undefined;
+    const chipKeys = typeof req.query.chips === "string"
+      ? req.query.chips.split(",").map((chip) => chip.trim()).filter(Boolean)
+      : undefined;
 
     if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
     if (!q) throw new AppError(400, "q (search query) required", "VALIDATION_ERROR");
@@ -103,6 +113,10 @@ router.get("/search", authMiddleware, async (req, res, next) => {
     const result = await searchArticles(workspaceId, q, {
       limit,
       cursor: cursor ?? null,
+      agentId,
+      sourceId,
+      isFavorite,
+      chipKeys,
     });
 
     res.json({ success: true, data: result });

@@ -25,7 +25,20 @@ router.get("/articles", authMiddleware, async (req, res, next) => {
   try {
     const { cursor, limit } = paginationQuerySchema.parse(req.query);
     const { workspaceId, q } = requireSearchParams(req.query as Record<string, unknown>);
-    const result = await searchArticles(workspaceId, q, { limit, cursor: cursor ?? null });
+    const agentId = req.query.agentId as string | undefined;
+    const sourceId = req.query.sourceId as string | undefined;
+    const isFavorite = req.query.isFavorite === "true" ? true : req.query.isFavorite === "false" ? false : undefined;
+    const chipKeys = typeof req.query.chips === "string"
+      ? req.query.chips.split(",").map((chip) => chip.trim()).filter(Boolean)
+      : undefined;
+    const result = await searchArticles(workspaceId, q, {
+      limit,
+      cursor: cursor ?? null,
+      agentId,
+      sourceId,
+      isFavorite,
+      chipKeys,
+    });
     res.json({ success: true, data: result });
   } catch (err) {
     next(err);
