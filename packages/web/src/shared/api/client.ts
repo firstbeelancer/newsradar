@@ -756,7 +756,6 @@ export interface ArticleFilters {
   source_id?: string;
   status?: string;
   search?: string;
-  chip_keys?: string[];
   date_from?: string;
   date_to?: string;
   favorites_only?: boolean;
@@ -1082,7 +1081,6 @@ export const articlesApi = {
     if (filters?.source_id) params.set('sourceId', filters.source_id);
     if (filters?.status) params.set('status', filters.status);
     if (filters?.search) params.set('search', filters.search);
-    if (filters?.chip_keys?.length) params.set('chips', filters.chip_keys.join(','));
     if (filters?.date_from) params.set('dateFrom', filters.date_from);
     if (filters?.date_to) params.set('dateTo', filters.date_to);
     if (filters?.favorites_only !== undefined) params.set('isFavorite', String(filters.favorites_only));
@@ -1100,7 +1098,6 @@ export const articlesApi = {
     if (filters?.agent_id) params.set('agentId', filters.agent_id);
     if (filters?.source_id) params.set('sourceId', filters.source_id);
     if (filters?.favorites_only !== undefined) params.set('isFavorite', String(filters.favorites_only));
-    if (filters?.chip_keys?.length) params.set('chips', filters.chip_keys.join(','));
     return apiGet<BackendCursorResponse<BackendArticle>>(`/articles/search?${params.toString()}`).then((payload) =>
       normalizeCursorResponse(payload, normalizeArticle)
     );
@@ -1112,7 +1109,6 @@ export const articlesApi = {
     if (filters?.source_id) params.set('sourceId', filters.source_id);
     if (filters?.status) params.set('status', filters.status);
     if (filters?.search) params.set('search', filters.search);
-    if (filters?.chip_keys?.length) params.set('chips', filters.chip_keys.join(','));
     if (filters?.date_from) params.set('dateFrom', filters.date_from);
     if (filters?.date_to) params.set('dateTo', filters.date_to);
     if (filters?.favorites_only !== undefined) params.set('isFavorite', String(filters.favorites_only));

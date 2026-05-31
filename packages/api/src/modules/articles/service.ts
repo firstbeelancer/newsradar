@@ -14,7 +14,6 @@ export interface ArticleFilters {
   sourceId?: string;
   status?: string;
   search?: string;
-  chipKeys?: string[];
   dateFrom?: string;
   dateTo?: string;
   isFavorite?: boolean;
@@ -22,23 +21,6 @@ export interface ArticleFilters {
   sortOrder?: "asc" | "desc";
   limit: number;
   cursor?: string | null;
-}
-
-function chipFilterCondition(chipKeys: string[] | undefined): SQL | null {
-  const normalizedChipKeys = chipKeys?.map((key) => key.trim()).filter(Boolean) ?? [];
-  if (normalizedChipKeys.length === 0) return null;
-
-  return sql`EXISTS (
-    SELECT 1
-    FROM jsonb_array_elements(
-      CASE
-        WHEN jsonb_typeof(${articles.scoreDetail}->'triggeredChips') = 'array'
-          THEN ${articles.scoreDetail}->'triggeredChips'
-        ELSE '[]'::jsonb
-      END
-    ) AS chip
-    WHERE chip->>'key' IN (${sql.join(normalizedChipKeys.map((key) => sql`${key}`), sql`, `)})
-  )`;
 }
 
 function buildArticleConditions(filters: ArticleFilters): SQL[] {
@@ -80,9 +62,6 @@ function buildArticleConditions(filters: ArticleFilters): SQL[] {
       sql`to_tsvector('russian', ${articles.title} || ' ' || COALESCE(${articles.description}, '')) @@ to_tsquery('russian', ${tsQuery})`
     );
   }
-
-  const chipCondition = chipFilterCondition(filters.chipKeys);
-  if (chipCondition) conditions.push(chipCondition);
 
   return conditions;
 }
@@ -243,7 +222,7 @@ export async function listArticleSelectionIds(filters: ArticleFilters & { maxIds
 export async function searchArticles(
   workspaceId: string,
   queryText: string,
-  params: { limit: number; cursor?: string | null; agentId?: string; sourceId?: string; isFavorite?: boolean; chipKeys?: string[] }
+  params: { limit: number; cursor?: string | null; agentId?: string; sourceId?: string; isFavorite?: boolean }
 ): Promise<PaginatedResult<Article>> {
   if (!queryText || queryText.trim().length < 2) {
     throw new AppError(400, "Search query must be at least 2 characters", "VALIDATION_ERROR");
@@ -268,8 +247,6 @@ export async function searchArticles(
   if (params.isFavorite !== undefined) {
     conditions.push(eq(articles.isFavorite, params.isFavorite));
   }
-  const chipCondition = chipFilterCondition(params.chipKeys);
-  if (chipCondition) conditions.push(chipCondition);
 
   let query = db
     .select({

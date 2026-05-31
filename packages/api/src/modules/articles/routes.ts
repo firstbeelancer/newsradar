@@ -28,7 +28,6 @@ const listQuerySchema = z.object({
   sourceId: z.string().uuid().optional(),
   status: z.string().optional(),
   search: z.string().optional(),
-  chips: z.string().optional(),
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
   isFavorite: z.enum(["true", "false"]).optional(),
@@ -59,7 +58,6 @@ router.get("/", authMiddleware, async (req, res, next) => {
       sourceId: filters.sourceId,
       status: filters.status,
       search: filters.search,
-      chipKeys: filters.chips?.split(",").map((chip) => chip.trim()).filter(Boolean),
       dateFrom: filters.dateFrom,
       dateTo: filters.dateTo,
       isFavorite: filters.isFavorite === "true" ? true : filters.isFavorite === "false" ? false : undefined,
@@ -108,7 +106,6 @@ router.get("/selection", authMiddleware, async (req, res, next) => {
       sourceId: filters.sourceId,
       status: filters.status,
       search: filters.search,
-      chipKeys: filters.chips?.split(",").map((chip) => chip.trim()).filter(Boolean),
       dateFrom: filters.dateFrom,
       dateTo: filters.dateTo,
       isFavorite: filters.isFavorite === "true" ? true : filters.isFavorite === "false" ? false : undefined,
@@ -134,9 +131,6 @@ router.get("/search", authMiddleware, async (req, res, next) => {
     const agentId = req.query.agentId as string | undefined;
     const sourceId = req.query.sourceId as string | undefined;
     const isFavorite = req.query.isFavorite === "true" ? true : req.query.isFavorite === "false" ? false : undefined;
-    const chipKeys = typeof req.query.chips === "string"
-      ? req.query.chips.split(",").map((chip) => chip.trim()).filter(Boolean)
-      : undefined;
 
     if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
     if (!q) throw new AppError(400, "q (search query) required", "VALIDATION_ERROR");
@@ -147,7 +141,6 @@ router.get("/search", authMiddleware, async (req, res, next) => {
       agentId,
       sourceId,
       isFavorite,
-      chipKeys,
     });
 
     res.json({ success: true, data: result });

@@ -76,7 +76,6 @@ export function FeedPage() {
     sourceId: '',
     status: '',
     favoritesOnly: false,
-    activeChipFilters: [],
   });
   const [isSelectingAll, setIsSelectingAll] = useState(false);
 
@@ -94,7 +93,7 @@ export function FeedPage() {
 
   useEffect(() => {
     if (agentIdFromRoute) {
-      setFilters((f) => ({ ...f, agentId: agentIdFromRoute, sourceId: '', activeChipFilters: [] }));
+      setFilters((f) => ({ ...f, agentId: agentIdFromRoute, sourceId: '' }));
     }
   }, [agentIdFromRoute]);
 
@@ -103,7 +102,6 @@ export function FeedPage() {
     source_id: filters.sourceId || undefined,
     status: filters.status || undefined,
     favorites_only: filters.favoritesOnly || undefined,
-    chip_keys: filters.activeChipFilters.length ? filters.activeChipFilters : undefined,
     sort_by: sortBy,
     sort_order: sortOrder,
   };

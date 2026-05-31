@@ -1,7 +1,7 @@
 import { Button } from '@shared/ui/button';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@shared/ui/select';
-import type { Agent, ChipFilter, Source } from '@shared/api/client';
-import { Bookmark, Filter } from 'lucide-react';
+import type { Agent, Source } from '@shared/api/client';
+import { Bookmark } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 
 export interface FeedFiltersState {
@@ -9,7 +9,6 @@ export interface FeedFiltersState {
   sourceId: string;
   status: string;
   favoritesOnly: boolean;
-  activeChipFilters: string[];
 }
 
 interface FeedFiltersProps {
@@ -24,21 +23,8 @@ const ALL_SOURCES_VALUE = '__all_sources__';
 const ALL_STATUSES_VALUE = '__all_statuses__';
 
 export function FeedFilters({ agents, sources, filters, onChange }: FeedFiltersProps) {
-  const selectedAgent = agents.find((a) => a.id === filters.agentId);
-  const agentChipFilters = selectedAgent?.chipFilters ?? [];
-  const configChipFilters = (selectedAgent?.config?.chipFilters ?? []) as Partial<ChipFilter>[];
-  const allChipFilters: Partial<ChipFilter>[] = agentChipFilters.length > 0 ? agentChipFilters : configChipFilters;
   const agentScopedSources = filters.agentId ? sources.filter((source) => source.agent_id === filters.agentId) : sources;
   const visibleSources = filters.agentId && agentScopedSources.length > 0 ? agentScopedSources : sources;
-
-  const toggleChipFilter = (key: string) => {
-    onChange((prev) => ({
-      ...prev,
-      activeChipFilters: prev.activeChipFilters.includes(key)
-        ? prev.activeChipFilters.filter((k) => k !== key)
-        : [...prev.activeChipFilters, key],
-    }));
-  };
 
   return (
     <div className="space-y-2">
@@ -46,7 +32,7 @@ export function FeedFilters({ agents, sources, filters, onChange }: FeedFiltersP
         <Select
           value={filters.agentId || ALL_AGENTS_VALUE}
           onValueChange={(value) => {
-            onChange((prev) => ({ ...prev, agentId: value === ALL_AGENTS_VALUE ? '' : value, sourceId: '', activeChipFilters: [] }));
+            onChange((prev) => ({ ...prev, agentId: value === ALL_AGENTS_VALUE ? '' : value, sourceId: '' }));
           }}
         >
           <SelectTrigger className="w-[160px] h-8 text-xs">
@@ -112,34 +98,6 @@ export function FeedFilters({ agents, sources, filters, onChange }: FeedFiltersP
         </Button>
       </div>
 
-      {/* Chip Filters */}
-      {allChipFilters.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Filter className="h-3 w-3 text-muted-foreground shrink-0" />
-          {allChipFilters.filter(cf => cf.isActive !== false).map((cf) => {
-            const key = cf.key ?? '';
-            const isActive = filters.activeChipFilters.includes(key);
-            return (
-              <button
-                key={key}
-                onClick={() => toggleChipFilter(key)}
-                className={cn(
-                  'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all border',
-                  isActive
-                    ? 'border-accent bg-accent-light text-accent shadow-sm'
-                    : 'border-border bg-white/60 text-muted-foreground hover:bg-white hover:text-foreground hover:border-cyan-200/60'
-                )}
-              >
-                <div
-                  className="h-1.5 w-1.5 rounded-full"
-                  style={{ backgroundColor: isActive ? ((cf as ChipFilter).color || '#0064f4') : '#94a3b8' }}
-                />
-                {cf.label ?? key}
-              </button>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }
