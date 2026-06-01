@@ -9,6 +9,7 @@ import type { Agent, CreateAgentDto, UpdateAgentDto, ChipFilter } from '@shared/
 import { chipFiltersApi } from '@shared/api/client';
 import { Shield, Brain, Megaphone, Heart, Paintbrush, Plus, X, GripVertical, Hammer, Wrench, Bot, Globe, Zap, Star, Eye, Search, BookOpen, Rss, MessageCircle, Target, Lightbulb, Compass, Newspaper, Settings2, Sliders, Filter, MessageSquare, type LucideIcon } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
+import { buildAgentTags } from './agent-tags';
 
 const SUBJECT_AREAS = [
   { id: 'cybersec', label: 'Информационная безопасность', icon: Shield, color: '#ef4444' },
@@ -156,12 +157,9 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
   };
 
   const addTag = useCallback(() => {
-    const tag = tagInput.trim().toLowerCase();
-    if (tag && !tags.includes(tag)) {
-      setTags(prev => [...prev, tag]);
-    }
+    setTags(prev => buildAgentTags(prev, tagInput));
     setTagInput('');
-  }, [tagInput, tags]);
+  }, [tagInput]);
 
   const removeTag = useCallback((tag: string) => {
     setTags(prev => prev.filter(t => t !== tag));
@@ -195,6 +193,7 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
     if (!validate()) return;
 
     const finalSubjectArea = customSubjectArea.trim() || subjectArea || undefined;
+    const finalTags = buildAgentTags(tags, tagInput);
 
     const data: CreateAgentDto = {
       name: name.trim(),
@@ -206,7 +205,7 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
         targetAudience: targetAudience.trim() || undefined,
         tone: tone.trim() || undefined,
         systemPrompt: systemPrompt.trim() || undefined,
-        tags: tags.length > 0 ? tags : undefined,
+        tags: finalTags.length > 0 ? finalTags : undefined,
         scoringWeights: weights,
       },
     };
@@ -393,7 +392,12 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
                   <input
                     value={tagInput}
                     onChange={(e) => setTagInput(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ',') {
+                        e.preventDefault();
+                        addTag();
+                      }
+                    }}
                     placeholder="Добавить тег..."
                     className={cn(
                       'flex-1 rounded-lg border border-border bg-card px-3 py-1.5 text-sm text-foreground',

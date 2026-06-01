@@ -20,8 +20,9 @@ import {
   Compass, Newspaper, Hammer, Wrench, type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
-import type { Agent } from '@shared/api/client';
+import type { Agent, CreateAgentDto, UpdateAgentDto } from '@shared/api/client';
 import { AgentForm } from '@/features/agents/agent-form';
+import { buildSettingsAgentCreatePayload } from '@/features/agents/agent-tags';
 
 const ICON_MAP: Record<string, LucideIcon> = {
   bot: Bot,
@@ -105,20 +106,13 @@ export function AgentsSettings() {
     }
   };
 
-  const handleSubmit = async (data: { name: string; description?: string; icon?: string; color?: string; is_active?: boolean }) => {
+  const handleSubmit = async (data: CreateAgentDto | UpdateAgentDto) => {
     try {
       if (editingAgent) {
         await updateAgent(editingAgent.id, data);
         addToast({ title: 'Сохранено', description: 'Агент обновлен', variant: 'success' });
       } else {
-        await createAgent({
-          name: data.name,
-          description: data.description,
-          icon: data.icon,
-          color: data.color,
-          position: agents.length,
-          is_active: true,
-        });
+        await createAgent(buildSettingsAgentCreatePayload(data, agents.length));
         addToast({ title: 'Создано', description: 'Агент создан', variant: 'success' });
       }
       setFormOpen(false);
