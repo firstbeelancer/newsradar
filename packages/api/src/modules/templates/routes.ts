@@ -12,6 +12,20 @@ import {
 
 const router = Router();
 
+function normalizeTemplateBody(body: unknown): unknown {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return body;
+  }
+
+  const raw = body as Record<string, unknown>;
+  return {
+    ...raw,
+    systemPrompt: raw.systemPrompt ?? raw.system_prompt,
+    userPrompt: raw.userPrompt ?? raw.user_prompt,
+    isDefault: raw.isDefault ?? raw.is_default,
+  };
+}
+
 // ─── Schemas ───
 
 const createSchema = z.object({
@@ -56,7 +70,7 @@ router.post("/", authMiddleware, async (req, res, next) => {
     const workspaceId = req.query.workspaceId as string;
     if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
 
-    const input = createSchema.parse(req.body);
+    const input = createSchema.parse(normalizeTemplateBody(req.body));
     const template = await createTemplate({
       ...input,
       workspaceId,
@@ -73,7 +87,7 @@ router.get("/:id", authMiddleware, async (req, res, next) => {
     const workspaceId = req.query.workspaceId as string;
     if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
 
-    const template = await getTemplateById(req.params.id, workspaceId);
+    const template = await getTemplateById(String(req.params.id), workspaceId);
     res.json({ success: true, data: template });
   } catch (err) {
     next(err);
@@ -86,8 +100,8 @@ router.put("/:id", authMiddleware, async (req, res, next) => {
     const workspaceId = req.query.workspaceId as string;
     if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
 
-    const input = updateSchema.parse(req.body);
-    const template = await updateTemplate(req.params.id, workspaceId, input);
+    const input = updateSchema.parse(normalizeTemplateBody(req.body));
+    const template = await updateTemplate(String(req.params.id), workspaceId, input);
     res.json({ success: true, data: template });
   } catch (err) {
     next(err);
@@ -100,7 +114,7 @@ router.delete("/:id", authMiddleware, async (req, res, next) => {
     const workspaceId = req.query.workspaceId as string;
     if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
 
-    await deleteTemplate(req.params.id, workspaceId);
+    await deleteTemplate(String(req.params.id), workspaceId);
     res.json({ success: true, data: { deleted: true } });
   } catch (err) {
     next(err);

@@ -20,8 +20,8 @@ const SEED_USERS: SeedUser[] = [
   },
 ];
 
-// AI providers to seed (only created if they don't exist for the workspace)
-// API key is read from PLATFORM_AI_API_KEY env var at runtime
+// AI providers to seed (only created if they don't exist for the workspace).
+// API key is read from PLATFORM_AI_API_KEY env var at runtime.
 const SEED_AI_PROVIDERS = [
   {
     name: "OpenRouter Owl Alpha",
@@ -35,8 +35,8 @@ const SEED_AI_PROVIDERS = [
 
 /**
  * Ensures that seed users exist in the database with correct passwords.
- * Also seeds default AI providers for the user's workspace.
- * Runs on every API startup — safe to call repeatedly (idempotent).
+ * Also seeds default AI providers and editorial templates for the user's workspace.
+ * Runs on every API startup and is safe to call repeatedly.
  */
 export async function seedAdminUsers(): Promise<void> {
   for (const seed of SEED_USERS) {
@@ -48,7 +48,6 @@ export async function seedAdminUsers(): Promise<void> {
       let workspaceId: string | undefined;
 
       if (!existing) {
-        // Create user + workspace
         const passwordHash = await bcrypt.hash(seed.password, SALT_ROUNDS);
         const [user] = await db
           .insert(users)
@@ -59,17 +58,19 @@ export async function seedAdminUsers(): Promise<void> {
           })
           .returning();
 
-        // Ensure workspace exists
         const existingWorkspace = await db.query.workspaces.findFirst({
           where: eq(workspaces.userId, user.id),
         });
 
         if (!existingWorkspace) {
-          const [ws] = await db.insert(workspaces).values({
-            userId: user.id,
-            name: `${seed.name} workspace`,
-            plan: "free",
-          }).returning();
+          const [ws] = await db
+            .insert(workspaces)
+            .values({
+              userId: user.id,
+              name: `${seed.name} workspace`,
+              plan: "free",
+            })
+            .returning();
           workspaceId = ws.id;
         } else {
           workspaceId = existingWorkspace.id;
@@ -77,7 +78,6 @@ export async function seedAdminUsers(): Promise<void> {
 
         console.log(`[seed] Created admin user: ${seed.email}`);
       } else {
-        // Verify password matches
         const valid = await bcrypt.compare(seed.password, existing.passwordHash ?? "");
         if (!valid) {
           const passwordHash = await bcrypt.hash(seed.password, SALT_ROUNDS);
@@ -90,14 +90,12 @@ export async function seedAdminUsers(): Promise<void> {
           console.log(`[seed] Admin user OK: ${seed.email}`);
         }
 
-        // Get workspace ID
         const ws = await db.query.workspaces.findFirst({
           where: eq(workspaces.userId, existing.id),
         });
         workspaceId = ws?.id;
       }
 
-      // Seed AI providers for this workspace
       if (workspaceId) {
         await seedAIProviders(workspaceId);
         await seedDefaultTemplates(workspaceId);
@@ -111,14 +109,12 @@ export async function seedAdminUsers(): Promise<void> {
 async function seedAIProviders(workspaceId: string): Promise<void> {
   for (const provider of SEED_AI_PROVIDERS) {
     try {
-      // Read API key from environment variable
       const apiKeyPlain = process.env[provider.apiKeyEnvVar];
       if (!apiKeyPlain) {
         console.log(`[seed] Skipping AI provider ${provider.name}: env var ${provider.apiKeyEnvVar} not set`);
         continue;
       }
 
-      // Check if provider already exists for this workspace
       const existing = await db.query.aiProviders.findFirst({
         where: and(
           eq(aiProviders.workspaceId, workspaceId),
@@ -148,72 +144,201 @@ async function seedAIProviders(workspaceId: string): Promise<void> {
   }
 }
 
-// ─── Default content templates ───
+type TemplateType = "post" | "digest";
 
-const DEFAULT_TEMPLATES = [
+interface SeedTemplate {
+  name: string;
+  type: TemplateType;
+  systemPrompt: string;
+  userPrompt: string;
+  description: string;
+  isDefault: boolean;
+  aliases: string[];
+}
+
+const DEFAULT_TEMPLATES: SeedTemplate[] = [
   {
-    name: "Структурированный пост",
-    type: "post" as const,
-    systemPrompt: "Ты — профессиональный редактор новостного контента. Твоя задача — создать увлекательный пост на основе предоставленных новостных статей.\n\nПРАВИЛА:\n1. Пиши на русском языке\n2. Используй информативный, но доступный стиль\n3. Начинай с самого важного — ключевой факт или инсайт\n4. Подкрепляй утверждения конкретными данными из источников\n5. Добавляй контекст: почему это важно именно сейчас\n6. Завершай резюме или прогнозом\n\nСТРУКТУРА ПОСТА:\n- Заголовок (краткий, цепляющий)\n- Лид (1-2 предложения — суть новости)\n- Основная часть (факты, данные, цитаты)\n- Контекст и анализ\n- Вывод / прогноз",
-    userPrompt: "На основе следующих статей создай структурированный пост:\n\n{{content}}",
+    name: "Ежедневный дайджест",
+    type: "digest",
+    description: "Универсальный дайджест по вручную выбранным новостям за любой период.",
     isDefault: true,
+    aliases: ["Дайджест дня", "Краткий дайджест"],
+    systemPrompt: `Ты — редактор-аналитик Newsradar. Пользователь вручную выбрал новости для дайджеста, поэтому не придумывай период и не называй материал ежедневным, если по датам видно, что подборка шире одного дня.
+
+Задача: собрать связный русскоязычный дайджест для Telegram/мессенджера на основе выбранных материалов.
+
+Правила:
+1. Пиши только на русском языке.
+2. Не пересказывай каждую статью механически: сгруппируй материалы по темам, убери дубли и повторы.
+3. Покажи главное: что произошло, почему это важно, кому это важно и что может быть дальше.
+4. Не выдумывай факты, цифры, CVE, цитаты, источники и ссылки.
+5. Если в исходных материалах есть ссылки, добавь короткий блок "Источники".
+6. Если статья на иностранном языке, используй русский перевод смысла, но не теряй оригинальные имена продуктов, компаний и технологий.
+7. Эмодзи и sticker placeholders используй только если они переданы в контексте генерации; не вставляй случайные украшения.
+
+Структура:
+- Заголовок дайджеста.
+- 3-7 главных пунктов, сгруппированных по смыслу.
+- Короткий аналитический вывод: общий тренд или риск.
+- Источники, если ссылки доступны.`,
+    userPrompt: `Собери дайджест по выбранным материалам.
+
+Материалы:
+{{content}}
+
+Сделай итоговый текст готовым к ручной публикации: без markdown-разметки, без служебных комментариев, без упоминания промта.`,
   },
   {
-    name: "Краткий пост для соцсетей",
-    type: "post" as const,
-    systemPrompt: "Ты — SMM-копирайтер. Создай краткий, цепляющий пост для социальных сетей на основе новостных статей.\n\nПРАВИЛА:\n1. Пиши на русском языке\n2. Пост должен быть concise — до 500 символов\n3. Используй эмодзи для визуальной структуры (🔥💡📊⚡️)\n4. Начинай с хука — цепляющего факта или вопроса\n5. Добавляй 2-3 хештега в конце",
-    userPrompt: "Создай краткий пост для соцсетей на основе этих новостей:\n\n{{content}}",
+    name: "Отчёт по уязвимостям",
+    type: "post",
+    description: "Практический отчёт по уязвимостям, инцидентам и ИБ-рискам.",
     isDefault: false,
+    aliases: ["Отчет по уязвимостям"],
+    systemPrompt: `Ты — аналитик по информационной безопасности. Твоя задача — превратить новость об уязвимости, атаке, кампании или защитной мере в практический отчёт для технической аудитории.
+
+Правила:
+1. Пиши на русском языке.
+2. Не выдумывай CVE, CVSS, версии, вендоров, индикаторы компрометации и способы эксплуатации.
+3. Если данных нет, прямо пиши: "в источнике не указано".
+4. Разделяй подтверждённые факты, выводы и рекомендации.
+5. Если есть ссылка на оригинал, обязательно добавь её в конце.
+6. Не превращай отчёт в кликбейт. Тон: спокойный, инженерный, полезный.
+7. Эмодзи и sticker placeholders используй только если они переданы в контексте генерации.
+
+Структура:
+- Что произошло.
+- Что затронуто: продукт, версия, платформа, вендор, CVE/CVSS, если указаны.
+- Какой риск и для кого.
+- Что делать: обновление, workaround, мониторинг, проверка логов.
+- Что пока неизвестно.
+- Источник.`,
+    userPrompt: `Подготовь отчёт по уязвимости или ИБ-событию на основе материала.
+
+Материал:
+{{content}}
+
+Если новость не про уязвимость, всё равно сделай ИБ-разбор: риск, контекст, практические действия и источник.`,
   },
   {
     name: "Экспертный анализ",
-    type: "post" as const,
-    systemPrompt: "Ты — эксперт-аналитик в сфере технологий и бизнеса. Создай глубокий аналитический пост на основе предоставленных новостей.\n\nПРАВИЛА:\n1. Пиши на русском языке\n2. Глубокий анализ, а не пересказ\n3. Выявляй скрытые тренды и закономерности\n4. Формулируй прогнозы с обоснованием\n5. Указывай на риски и возможности\n\nСТРУКТУРА:\n- Контекст проблемы\n- Анализ ситуации\n- Тренды и закономерности\n- Прогноз развития\n- Рекомендации",
-    userPrompt: "Подготовь экспертный анализ на основе этих новостей:\n\n{{content}}",
-    isDefault: false,
-  },
-  {
-    name: "Ежедневный дайджест",
-    type: "digest" as const,
-    systemPrompt: "Ты — профессиональный аналитик новостей. Твоя задача — подготовить структурированный дайджест на основе нескольких новостных статей по теме.\n\nПРАВИЛА:\n1. Пиши на русском языке\n2. Группируй новости по темам и значимости\n3. Для каждой темы: краткое резюме + ключевые факты + вывод\n4. Избегай дублирования — если несколько статей об одном, объединяй\n5. Добавляй аналитический контекст и прогнозы\n6. Указывай источники\n\nСТРУКТУРА ДАЙДЖЕСТА:\n- Заголовок дайджеста (тема + период)\n- Самое важное за период (3-5 ключевых событий)\n- Детальный разбор по темам\n- Тренды и закономерности\n- Прогноз и рекомендации",
-    userPrompt: "Подготовь структурированный дайджест на основе этих статей:\n\n{{content}}",
+    type: "post",
+    description: "Структурированный экспертный пост: факт, контекст, значение, последствия.",
     isDefault: true,
-  },
-  {
-    name: "Краткий дайджест",
-    type: "digest" as const,
-    systemPrompt: "Ты — аналитик новостей. Создай краткий дайджест — только самое важное.\n\nПРАВИЛА:\n1. Пиши на русском языке\n2. Не более 1000 символов\n3. Только топ-3 новости с кратким описанием каждой\n4. Формат: буллет-пункты\n5. В конце — одно предложение прогноза",
-    userPrompt: "Создай краткий дайджест из этих статей:\n\n{{content}}",
-    isDefault: false,
+    aliases: ["Структурированный пост", "Подробный анализ", "AI-подборка", "Краткий пост для соцсетей"],
+    systemPrompt: `Ты — сильный редактор и эксперт-аналитик Newsradar. Делай не пересказ, а структурированный экспертный пост по выбранной новости.
+
+Задача: объяснить читателю, что произошло, почему это важно и какие последствия возможны.
+
+Правила:
+1. Пиши только на русском языке.
+2. Не выдумывай факты, ссылки, цитаты, статистику и причинно-следственные связи.
+3. Сохраняй точные имена компаний, продуктов, моделей, технологий и людей.
+4. Если пользователь в комментарии просит изменить стиль, теги, ссылку, тональность или структуру — выполни это как приоритетную редакторскую правку.
+5. Если есть ссылка на оригинал, добавь её в конце.
+6. Хештеги добавляй только если пользователь попросил или если это явно уместно для соцсетей.
+7. Эмодзи и sticker placeholders используй только если они переданы в контексте генерации; не выбирай их наугад.
+
+Базовая структура:
+- Сильный заголовок без кликбейта.
+- Суть новости в 1-2 предложениях.
+- Контекст: почему это важно сейчас.
+- Разбор: последствия, риски, возможности или ограничения.
+- Что дальше: вероятный следующий шаг или вопрос, за которым стоит следить.
+- Источник, если ссылка доступна.`,
+    userPrompt: `Сделай структурированный экспертный пост по материалу.
+
+Материал:
+{{content}}
+
+Итог должен быть готов для ручной публикации в Telegram/мессенджере: без markdown-мусора, без служебных пояснений, без фраз вроде "вот пост".`,
   },
 ];
 
+const LEGACY_TEMPLATE_NAMES = new Set(DEFAULT_TEMPLATES.flatMap((template) => template.aliases));
+
+const OLD_SEED_PROMPT_MARKERS = [
+  "профессиональный редактор новостного контента",
+  "SMM-копирайтер",
+  "эксперт-аналитик в сфере технологий и бизнеса",
+  "профессиональный аналитик новостей",
+  "Создай краткий дайджест",
+  "структурированный пост",
+  "краткий пост для соцсетей",
+  "глубокий аналитический пост",
+  "Рџ",
+  "Рў",
+  "Рќ",
+  "РЎ",
+  "Рё",
+  "СЃ",
+  "С‚",
+  "вЂ",
+];
+
+function shouldRefreshSeedPrompt(value: string | null | undefined): boolean {
+  const text = value?.trim();
+  if (!text || text === "{{content}}" || text.length < 40) {
+    return true;
+  }
+
+  const lower = text.toLowerCase();
+  return OLD_SEED_PROMPT_MARKERS.some((marker) => lower.includes(marker.toLowerCase()));
+}
+
 async function seedDefaultTemplates(workspaceId: string): Promise<void> {
+  const existingTemplates = await db.query.contentTemplates.findMany({
+    where: eq(contentTemplates.workspaceId, workspaceId),
+  });
+  const keptIds = new Set<string>();
+
   for (const tmpl of DEFAULT_TEMPLATES) {
     try {
-      // Check if a template with the same name already exists for this workspace
-      const existing = await db.query.contentTemplates.findFirst({
-        where: and(
-          eq(contentTemplates.workspaceId, workspaceId),
-          eq(contentTemplates.name, tmpl.name),
-        ),
-      });
+      const existing =
+        existingTemplates.find((template) => template.name === tmpl.name) ??
+        existingTemplates.find((template) => tmpl.aliases.includes(template.name) && !keptIds.has(template.id));
 
       if (!existing) {
-        await db.insert(contentTemplates).values({
-          name: tmpl.name,
-          type: tmpl.type,
-          systemPrompt: tmpl.systemPrompt,
-          userPrompt: tmpl.userPrompt,
-          isDefault: tmpl.isDefault,
-          workspaceId,
-        });
+        const [created] = await db
+          .insert(contentTemplates)
+          .values({
+            name: tmpl.name,
+            type: tmpl.type,
+            systemPrompt: tmpl.systemPrompt,
+            userPrompt: tmpl.userPrompt,
+            description: tmpl.description,
+            isDefault: tmpl.isDefault,
+            workspaceId,
+          })
+          .returning();
+        keptIds.add(created.id);
         console.log(`[seed] Created template: ${tmpl.name}`);
-      } else {
-        console.log(`[seed] Template already exists: ${tmpl.name}`);
+        continue;
       }
+
+      const updateData = {
+        name: tmpl.name,
+        type: tmpl.type,
+        description: existing.description ?? tmpl.description,
+        isDefault: tmpl.isDefault,
+        systemPrompt: shouldRefreshSeedPrompt(existing.systemPrompt) ? tmpl.systemPrompt : existing.systemPrompt,
+        userPrompt: shouldRefreshSeedPrompt(existing.userPrompt) ? tmpl.userPrompt : existing.userPrompt,
+        updatedAt: new Date(),
+      };
+
+      await db.update(contentTemplates).set(updateData).where(eq(contentTemplates.id, existing.id));
+      keptIds.add(existing.id);
+      console.log(`[seed] Template OK: ${tmpl.name}`);
     } catch (err) {
       console.error(`[seed] Error seeding template ${tmpl.name}:`, err);
     }
+  }
+
+  for (const template of existingTemplates) {
+    if (keptIds.has(template.id) || !LEGACY_TEMPLATE_NAMES.has(template.name)) {
+      continue;
+    }
+
+    await db.delete(contentTemplates).where(eq(contentTemplates.id, template.id));
+    console.log(`[seed] Removed legacy template: ${template.name}`);
   }
 }

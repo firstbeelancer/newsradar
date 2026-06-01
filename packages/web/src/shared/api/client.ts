@@ -186,6 +186,22 @@ interface BackendDashboardSummary {
   favorite_count?: number;
 }
 
+interface BackendTemplate {
+  id: string;
+  name: string;
+  type: 'post' | 'digest';
+  systemPrompt?: string;
+  system_prompt?: string;
+  userPrompt?: string;
+  user_prompt?: string;
+  isDefault?: boolean;
+  is_default?: boolean;
+  createdAt?: string;
+  created_at?: string;
+  updatedAt?: string;
+  updated_at?: string;
+}
+
 // ─── Normalizers ─────────────────────────────────────────────────────────────
 
 function normalizeCursorResponse<TInput, TOutput>(
@@ -361,6 +377,29 @@ export function normalizeDeepSearchResult(raw: BackendDeepSearchResult): DeepSea
     created_at: raw.created_at ?? raw.createdAt ?? new Date(0).toISOString(),
     started_at: raw.started_at ?? raw.startedAt ?? null,
     finished_at: raw.finished_at ?? raw.finishedAt ?? null,
+  };
+}
+
+export function normalizeTemplate(raw: BackendTemplate): Template {
+  return {
+    id: raw.id,
+    name: raw.name,
+    type: raw.type,
+    system_prompt: raw.system_prompt ?? raw.systemPrompt ?? '',
+    user_prompt: raw.user_prompt ?? raw.userPrompt ?? '{{content}}',
+    is_default: raw.is_default ?? raw.isDefault ?? false,
+    created_at: raw.created_at ?? raw.createdAt ?? new Date(0).toISOString(),
+    updated_at: raw.updated_at ?? raw.updatedAt ?? new Date(0).toISOString(),
+  };
+}
+
+export function toTemplateApiPayload(data: Partial<CreateTemplateDto>) {
+  return {
+    ...(data.name !== undefined ? { name: data.name } : {}),
+    ...(data.type !== undefined ? { type: data.type } : {}),
+    ...(data.system_prompt !== undefined ? { systemPrompt: data.system_prompt } : {}),
+    ...(data.user_prompt !== undefined ? { userPrompt: data.user_prompt } : {}),
+    ...(data.is_default !== undefined ? { isDefault: data.is_default } : {}),
   };
 }
 
@@ -1154,9 +1193,11 @@ export const dashboardApi = {
 
 // Templates
 export const templatesApi = {
-  list: () => apiGet<Template[]>('/templates'),
-  create: (data: CreateTemplateDto) => apiPost<Template, CreateTemplateDto>('/templates', data),
-  update: (id: string, data: Partial<CreateTemplateDto>) => apiPut<Template, Partial<CreateTemplateDto>>(`/templates/${id}`, data),
+  list: () => apiGet<BackendTemplate[]>('/templates').then((templates) => templates.map(normalizeTemplate)),
+  create: (data: CreateTemplateDto) =>
+    apiPost<BackendTemplate, ReturnType<typeof toTemplateApiPayload>>('/templates', toTemplateApiPayload(data)).then(normalizeTemplate),
+  update: (id: string, data: Partial<CreateTemplateDto>) =>
+    apiPut<BackendTemplate, ReturnType<typeof toTemplateApiPayload>>(`/templates/${id}`, toTemplateApiPayload(data)).then(normalizeTemplate),
   delete: (id: string) => apiDelete<void>(`/templates/${id}`),
 };
 
