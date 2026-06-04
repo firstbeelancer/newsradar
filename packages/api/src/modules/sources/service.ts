@@ -79,7 +79,7 @@ export async function listSources(
 export async function updateSource(
   id: string,
   workspaceId: string,
-  data: Partial<Pick<Source, "name" | "url" | "channelUsername" | "isActive">>
+  data: Partial<Pick<Source, "type" | "name" | "url" | "channelUsername" | "isActive">>
 ) {
   await getSourceById(id, workspaceId);
 

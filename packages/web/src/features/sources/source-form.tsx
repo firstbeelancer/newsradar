@@ -59,6 +59,7 @@ export function SourceForm({ source, agents, open, onOpenChange, onSubmit, isSub
       await onSubmit({
         name: name.trim(),
         url: url.trim(),
+        type,
         isActive,
       });
     } else {
@@ -91,7 +92,7 @@ export function SourceForm({ source, agents, open, onOpenChange, onSubmit, isSub
 
           <div className="space-y-1.5">
             <Label>Тип</Label>
-            <Select value={type} onValueChange={(v) => setType(v as 'rss' | 'telegram')} disabled={Boolean(source)}>
+            <Select value={type} onValueChange={(v) => setType(v as 'rss' | 'telegram')}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>

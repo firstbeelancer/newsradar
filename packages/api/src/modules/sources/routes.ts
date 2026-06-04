@@ -26,6 +26,7 @@ const createSchema = z.object({
 });
 
 const updateSchema = z.object({
+  type: z.enum(["rss", "telegram"]).optional(),
   name: z.string().min(1).max(200).optional(),
   url: z.string().min(1).optional(),
   channelUsername: z.string().max(100).optional(),

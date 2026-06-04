@@ -754,6 +754,7 @@ export interface CreateSourceDto {
 }
 
 export interface UpdateSourceDto {
+  type?: SourceType;
   name?: string;
   url?: string;
   is_active?: boolean;
@@ -770,6 +771,7 @@ interface BackendCreateSourceDto {
 }
 
 interface BackendUpdateSourceDto {
+  type?: SourceType;
   name?: string;
   url?: string;
   channelUsername?: string;
@@ -790,6 +792,7 @@ function toBackendCreateSourceDto(data: CreateSourceDto): BackendCreateSourceDto
 
 function toBackendUpdateSourceDto(data: UpdateSourceDto): BackendUpdateSourceDto {
   const payload: BackendUpdateSourceDto = {};
+  if (data.type !== undefined) payload.type = data.type;
   if (data.name !== undefined) payload.name = data.name;
   if (data.url !== undefined) payload.url = data.url;
   if (data.channelUsername !== undefined) payload.channelUsername = data.channelUsername;
