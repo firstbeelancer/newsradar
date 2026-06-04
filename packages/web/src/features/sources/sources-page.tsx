@@ -222,7 +222,10 @@ export function SourcesPage() {
         source={editingSource}
         agents={agents}
         open={formOpen}
-        onOpenChange={setFormOpen}
+        onOpenChange={(open) => {
+          setFormOpen(open);
+          if (!open) setEditingSource(null);
+        }}
         onSubmit={handleSubmit}
         isSubmitting={isSubmitting}
       />

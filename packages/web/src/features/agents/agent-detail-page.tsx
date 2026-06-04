@@ -12,6 +12,7 @@ import { useAgentsStore } from '@shared/stores/agents-store';
 import { useSourcesStore } from '@shared/stores/sources-store';
 import { useToast } from '@shared/ui/toast';
 import { AgentForm } from './agent-form';
+import { SourceForm } from '../sources/source-form';
 import {
   ArrowLeft,
   ArrowRight,
@@ -84,7 +85,7 @@ function getAgentIcon(iconStr?: string): LucideIcon {
   return ICON_MAP[key] || Bot;
 }
 import type { CreateAgentDto, UpdateAgentDto, AgentStats, ChipFilter } from '@shared/api/client';
-import { agentsApi, sourcesApi, chipFiltersApi, articlesApi, type Article } from '@shared/api/client';
+import { agentsApi, sourcesApi, chipFiltersApi, articlesApi, type Article, type Source, type UpdateSourceDto } from '@shared/api/client';
 import { useGenerationStore } from '@shared/stores/generation-store';
 
 // ─── Inline articles list for agent detail ───────────────────────────────────
@@ -277,6 +278,8 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
   const [unlinkingSourceId, setUnlinkingSourceId] = useState<string | null>(null);
   const [togglingSourceId, setTogglingSourceId] = useState<string | null>(null);
   const [deletingSourceId, setDeletingSourceId] = useState<string | null>(null);
+  const [editingSource, setEditingSource] = useState<Source | null>(null);
+  const [savingSourceEdit, setSavingSourceEdit] = useState(false);
   const [chipFilters, setChipFilters] = useState<ChipFilter[]>([]);
 
   useEffect(() => {
@@ -404,6 +407,25 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
       });
     } finally {
       setDeletingSourceId(null);
+    }
+  };
+
+  const handleEditSource = async (data: UpdateSourceDto) => {
+    if (!editingSource || !id) return;
+    setSavingSourceEdit(true);
+    try {
+      await updateSourceInStore(editingSource.id, data);
+      addToast({ title: 'Источник сохранён', description: editingSource.name, variant: 'success' });
+      setEditingSource(null);
+      fetchSourcesByAgent(id);
+    } catch (err) {
+      addToast({
+        title: 'Ошибка',
+        description: err instanceof Error ? err.message : 'Не удалось обновить источник',
+        variant: 'danger',
+      });
+    } finally {
+      setSavingSourceEdit(false);
     }
   };
 
@@ -663,6 +685,14 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
                             disabled={togglingSourceId === source.id}
                             className="scale-75"
                           />
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => setEditingSource(source)}
+                            title="Редактировать источник"
+                          >
+                            <Pencil className="h-4 w-4 text-muted-foreground hover:text-accent" />
+                          </Button>
                           <button
                             type="button"
                             onClick={() => handleDeleteSource(source.id)}
@@ -748,6 +778,16 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
         onOpenChange={setFormOpen}
         onSubmit={handleUpdate}
         isSubmitting={isSubmitting}
+      />
+      <SourceForm
+        source={editingSource}
+        agents={[]}
+        open={Boolean(editingSource)}
+        onOpenChange={(open) => {
+          if (!open) setEditingSource(null);
+        }}
+        onSubmit={(data) => handleEditSource(data as UpdateSourceDto)}
+        isSubmitting={savingSourceEdit}
       />
     </div>
   );

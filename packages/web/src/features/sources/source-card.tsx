@@ -87,12 +87,24 @@ export function SourceCard({ source, onEdit, onDelete, onTest, onFetch, onToggle
             {source.is_active ? 'Выключить' : 'Включить'}
           </Button>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" className="sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onEdit(source)}
+              className="h-7 gap-1.5 text-xs"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Редактировать</span>
+            </Button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon-sm" className="sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => onTest(source)}>
                 <TestTube className="mr-2 h-4 w-4" />
@@ -114,7 +126,8 @@ export function SourceCard({ source, onEdit, onDelete, onTest, onFetch, onToggle
                 Удалить
               </DropdownMenuItem>
             </DropdownMenuContent>
-          </DropdownMenu>
+            </DropdownMenu>
+          </div>
         </div>
       </CardContent>
     </Card>

@@ -46,7 +46,7 @@ export function SourceForm({ source, agents, open, onOpenChange, onSubmit, isSub
     const newErrors: Record<string, string> = {};
     if (!name.trim()) newErrors.name = 'Название обязательно';
     if (!url.trim()) newErrors.url = 'URL обязателен';
-    if (!agentId) newErrors.agentId = 'Выберите агента';
+    if (!source && !agentId) newErrors.agentId = 'Выберите агента';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -55,15 +55,21 @@ export function SourceForm({ source, agents, open, onOpenChange, onSubmit, isSub
     e.preventDefault();
     if (!validate()) return;
 
-    const data: CreateSourceDto = {
-      name: name.trim(),
-      url: url.trim(),
-      type,
-      agent_id: agentId,
-      is_active: isActive,
-    };
-
-    await onSubmit(source ? { name: data.name, url: data.url, type: data.type, is_active: data.is_active } : data);
+    if (source) {
+      await onSubmit({
+        name: name.trim(),
+        url: url.trim(),
+        isActive,
+      });
+    } else {
+      await onSubmit({
+        name: name.trim(),
+        url: url.trim(),
+        type,
+        agent_id: agentId,
+        isActive,
+      });
+    }
     onOpenChange(false);
   };
 
@@ -85,7 +91,7 @@ export function SourceForm({ source, agents, open, onOpenChange, onSubmit, isSub
 
           <div className="space-y-1.5">
             <Label>Тип</Label>
-            <Select value={type} onValueChange={(v) => setType(v as 'rss' | 'telegram')}>
+            <Select value={type} onValueChange={(v) => setType(v as 'rss' | 'telegram')} disabled={Boolean(source)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>

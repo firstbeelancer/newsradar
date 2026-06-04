@@ -743,19 +743,59 @@ export function normalizeSource(raw: BackendSource): Source {
 }
 
 export interface CreateSourceDto {
-  agent_id: string;
+  agent_id?: string;
+  agentId?: string;
   name: string;
   url: string;
   type: SourceType;
   is_active?: boolean;
+  isActive?: boolean;
+  channelUsername?: string;
 }
 
 export interface UpdateSourceDto {
   name?: string;
   url?: string;
-  type?: SourceType;
   is_active?: boolean;
   isActive?: boolean;
+  channelUsername?: string;
+}
+
+interface BackendCreateSourceDto {
+  type: SourceType;
+  name: string;
+  url: string;
+  channelUsername?: string;
+  isActive?: boolean;
+}
+
+interface BackendUpdateSourceDto {
+  name?: string;
+  url?: string;
+  channelUsername?: string;
+  isActive?: boolean;
+}
+
+function toBackendCreateSourceDto(data: CreateSourceDto): BackendCreateSourceDto {
+  const payload: BackendCreateSourceDto = {
+    type: data.type,
+    name: data.name,
+    url: data.url,
+  };
+  const isActive = data.isActive ?? data.is_active;
+  if (typeof isActive === 'boolean') payload.isActive = isActive;
+  if (data.channelUsername) payload.channelUsername = data.channelUsername;
+  return payload;
+}
+
+function toBackendUpdateSourceDto(data: UpdateSourceDto): BackendUpdateSourceDto {
+  const payload: BackendUpdateSourceDto = {};
+  if (data.name !== undefined) payload.name = data.name;
+  if (data.url !== undefined) payload.url = data.url;
+  if (data.channelUsername !== undefined) payload.channelUsername = data.channelUsername;
+  const isActive = data.isActive ?? data.is_active;
+  if (typeof isActive === 'boolean') payload.isActive = isActive;
+  return payload;
 }
 
 export interface SourceTestResult {
@@ -1101,8 +1141,8 @@ export const chipFiltersApi = {
 // Sources
 export const sourcesApi = {
   list: () => apiGet<{ data: BackendSource[] }>('/sources?limit=100').then((res) => (res.data ?? []).map(normalizeSource)),
-  create: (data: CreateSourceDto) => apiPost<BackendSource, CreateSourceDto>('/sources', data).then(normalizeSource),
-  update: (id: string, data: UpdateSourceDto) => apiPut<BackendSource, UpdateSourceDto>(`/sources/${id}`, data).then(normalizeSource),
+  create: (data: CreateSourceDto) => apiPost<BackendSource, BackendCreateSourceDto>('/sources', toBackendCreateSourceDto(data)).then(normalizeSource),
+  update: (id: string, data: UpdateSourceDto) => apiPut<BackendSource, BackendUpdateSourceDto>(`/sources/${id}`, toBackendUpdateSourceDto(data)).then(normalizeSource),
   delete: (id: string) => apiDelete<void>(`/sources/${id}`),
   test: (id: string) => apiPost<SourceTestResult>(`/sources/${id}/test`, {}),
   fetch: (id: string) => apiPost<{ operationId?: string; op_id?: string }>(`/sources/${id}/fetch`, {}).then((payload) => ({

@@ -19,7 +19,8 @@ import {
   Hammer, Wrench, type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
-import { agentsApi, sourcesApi, type Agent, type Source, type ChipFilter } from '@shared/api/client';
+import { agentsApi, sourcesApi, type Agent, type Source, type ChipFilter, type UpdateSourceDto } from '@shared/api/client';
+import { SourceForm } from '../sources/source-form';
 
 interface AgentCardProps {
   agent: Agent;
@@ -65,6 +66,8 @@ function SourceToggleList({ agentId, onSourceDeleted }: { agentId: string; onSou
   const [loading, setLoading] = useState(true);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingSource, setEditingSource] = useState<Source | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -106,6 +109,18 @@ function SourceToggleList({ agentId, onSourceDeleted }: { agentId: string; onSou
     }
   }, [onSourceDeleted]);
 
+  const handleEditSubmit = useCallback(async (data: UpdateSourceDto) => {
+    if (!editingSource) return;
+    setSavingEdit(true);
+    try {
+      const updated = await sourcesApi.update(editingSource.id, data);
+      setSources(prev => prev.map(s => s.id === updated.id ? updated : s));
+      setEditingSource(null);
+    } finally {
+      setSavingEdit(false);
+    }
+  }, [editingSource]);
+
   if (loading) {
     return (
       <div className="space-y-2">
@@ -121,51 +136,74 @@ function SourceToggleList({ agentId, onSourceDeleted }: { agentId: string; onSou
   }
 
   return (
-    <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
-      {sources.map((source) => (
-        <div
-          key={source.id}
-          className={cn(
-            'flex items-center gap-2 rounded-lg px-2.5 py-2 transition-colors group/src',
-            source.is_active ? 'bg-muted/40 hover:bg-muted/60' : 'bg-muted/20 opacity-60 hover:opacity-80'
-          )}
-        >
-          {/* Type icon */}
-          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground">
-            {source.type === 'telegram' ? (
-              <MessageCircle className="h-3.5 w-3.5" />
-            ) : (
-              <Rss className="h-3.5 w-3.5" />
+    <>
+      <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+        {sources.map((source) => (
+          <div
+            key={source.id}
+            className={cn(
+              'flex items-center gap-2 rounded-lg px-2.5 py-2 transition-colors group/src',
+              source.is_active ? 'bg-muted/40 hover:bg-muted/60' : 'bg-muted/20 opacity-60 hover:opacity-80'
             )}
-          </div>
-
-          {/* Name + URL */}
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium truncate leading-tight">{source.name}</p>
-            <p className="text-[10px] text-muted-foreground truncate">{source.url}</p>
-          </div>
-
-          {/* Toggle switch — standalone, NOT inside a <button> */}
-          <Switch
-            checked={source.is_active}
-            onCheckedChange={(checked) => handleToggle(source.id, checked)}
-            disabled={togglingId === source.id}
-            className="shrink-0 scale-75"
-          />
-
-          {/* Delete button */}
-          <button
-            type="button"
-            onClick={() => handleDelete(source.id)}
-            disabled={deletingId === source.id}
-            className="shrink-0 opacity-100 sm:opacity-0 sm:group-hover/src:opacity-100 transition-opacity p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
-            title="Удалить источник"
           >
-            <Trash2 className="h-3 w-3" />
-          </button>
-        </div>
-      ))}
-    </div>
+            {/* Type icon */}
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground">
+              {source.type === 'telegram' ? (
+                <MessageCircle className="h-3.5 w-3.5" />
+              ) : (
+                <Rss className="h-3.5 w-3.5" />
+              )}
+            </div>
+
+            {/* Name + URL */}
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-medium truncate leading-tight">{source.name}</p>
+              <p className="text-[10px] text-muted-foreground truncate">{source.url}</p>
+            </div>
+
+            {/* Edit button */}
+            <button
+              type="button"
+              onClick={() => setEditingSource(source)}
+              className="shrink-0 opacity-100 sm:opacity-0 sm:group-hover/src:opacity-100 transition-opacity p-0.5 rounded hover:bg-accent/10 text-muted-foreground hover:text-accent"
+              title="Редактировать источник"
+            >
+              <Pencil className="h-3 w-3" />
+            </button>
+
+            {/* Toggle switch — standalone, NOT inside a <button> */}
+            <Switch
+              checked={source.is_active}
+              onCheckedChange={(checked) => handleToggle(source.id, checked)}
+              disabled={togglingId === source.id}
+              className="shrink-0 scale-75"
+            />
+
+            {/* Delete button */}
+            <button
+              type="button"
+              onClick={() => handleDelete(source.id)}
+              disabled={deletingId === source.id}
+              className="shrink-0 opacity-100 sm:opacity-0 sm:group-hover/src:opacity-100 transition-opacity p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+              title="Удалить источник"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <SourceForm
+        source={editingSource}
+        agents={[]}
+        open={Boolean(editingSource)}
+        onOpenChange={(open) => {
+          if (!open) setEditingSource(null);
+        }}
+        onSubmit={(data) => handleEditSubmit(data as UpdateSourceDto)}
+        isSubmitting={savingEdit}
+      />
+    </>
   );
 }
 
