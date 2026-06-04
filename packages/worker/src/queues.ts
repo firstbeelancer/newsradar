@@ -48,6 +48,7 @@ import { processDeepsearch, type DeepsearchJob } from "./workers/deepsearch.work
 import { processCleanup, type CleanupJob } from "./workers/cleanup.worker.js";
 import { processFavoritesCleanup, type FavoritesCleanupJob } from "./workers/favorites-cleanup.worker.js";
 import { processPostsCleanup, type PostsCleanupJob } from "./workers/posts-cleanup.worker.js";
+import { summarizeCollectionResults } from "./workers/collection-summary.js";
 import { db } from "./db/index.js";
 import { operationLogs } from "./db/schema.js";
 import { eq } from "drizzle-orm";
@@ -144,19 +145,29 @@ export function registerWorkers(logger: Logger): Worker[] {
           if (existingLog[0]) {
             const meta = (existingLog[0].metadata as Record<string, unknown>) ?? {};
             const results = (meta.results as Array<Record<string, unknown>>) ?? [];
-            const successCount = results.filter(r => r.status === "success").length;
-            const errorCount = results.filter(r => r.status === "error").length;
-            const newStatus = errorCount > 0 && successCount > 0 ? "partial" : errorCount > 0 ? "failed" : "success";
-            const totalNew = results.reduce((sum, r) => sum + ((r.new as number) ?? 0), 0);
+            const summary = summarizeCollectionResults(results);
+            const successCount = summary.successCount;
+            const errorCount = summary.errorCount;
+            const totalNew = summary.totalNew;
             await db
               .update(operationLogs)
               .set({
-                status: newStatus,
-                message: `Сбор завершён: ${successCount} источников обработано, ${errorCount} ошибок, ${totalNew} новых статей`,
+                status: summary.status,
+                message: `Сбор завершён: ${successCount} источников обработано, ${errorCount} источников с ошибками, ${totalNew} новых статей`,
+                metadata: { ...meta, results, sourceSummary: summary.sources },
                 finishedAt: new Date(),
               })
               .where(eq(operationLogs.id, operationId));
-            logger.info({ operationId, newStatus, successCount, errorCount, totalNew }, "Collection operation finalized");
+            logger.info(
+              {
+                operationId,
+                newStatus: summary.status,
+                successCount: summary.successCount,
+                errorCount: summary.errorCount,
+                totalNew: summary.totalNew,
+              },
+              "Collection operation finalized"
+            );
           }
         } catch (err) {
           logger.error({ err: String(err), operationId }, "Failed to finalize collection");

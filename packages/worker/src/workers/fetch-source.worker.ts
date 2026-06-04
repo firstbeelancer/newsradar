@@ -43,6 +43,11 @@ async function resolveAgentForSource(
   return result[0] ?? null;
 }
 
+function isFinalAttempt(job: Job<FetchSourceJob>): boolean {
+  const maxAttempts = typeof job.opts.attempts === "number" && job.opts.attempts > 0 ? job.opts.attempts : 1;
+  return job.attemptsMade + 1 >= maxAttempts;
+}
+
 /**
  * Process a fetch-source job.
  */
@@ -259,8 +264,8 @@ export async function processFetchSource(
       })
       .where(eq(sources.id, sourceId));
 
-    // Update operation log with error
-    if (operationId) {
+    // Update operation log with the terminal source error only.
+    if (operationId && isFinalAttempt(job)) {
       try {
         const existingLog = await db
           .select({ metadata: operationLogs.metadata })
