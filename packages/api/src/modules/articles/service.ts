@@ -444,6 +444,15 @@ export async function deleteAllArticles(workspaceId: string) {
   return { deleted: deleted.length };
 }
 
+export async function deleteArticlesByAgent(workspaceId: string, agentId: string) {
+  const deleted = await db
+    .delete(articles)
+    .where(and(eq(articles.workspaceId, workspaceId), eq(articles.agentId, agentId)))
+    .returning({ id: articles.id });
+
+  return { deleted: deleted.length };
+}
+
 // ─── Article with score details ───
 
 export async function getArticleWithScore(id: string, workspaceId: string) {

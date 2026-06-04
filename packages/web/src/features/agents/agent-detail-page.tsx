@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
@@ -250,6 +250,7 @@ interface AgentDetailPageProps {
 
 export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { addToast } = useToast();
   const {
     currentAgent,
@@ -280,6 +281,7 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
   const [deletingSourceId, setDeletingSourceId] = useState<string | null>(null);
   const [editingSource, setEditingSource] = useState<Source | null>(null);
   const [savingSourceEdit, setSavingSourceEdit] = useState(false);
+  const [deletingAgentArticles, setDeletingAgentArticles] = useState(false);
   const [chipFilters, setChipFilters] = useState<ChipFilter[]>([]);
 
   useEffect(() => {
@@ -329,6 +331,31 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
       addToast({ title: 'Сбор запущен', description: 'Агент собирает новости', variant: 'success' });
     } catch {
       // Error handled by store
+    }
+  };
+
+  const handleDeleteAgentArticles = async () => {
+    if (!id || !currentAgent) return;
+    const confirmed = window.confirm(`Удалить все новости агента «${currentAgent.name}»? Действие нельзя отменить.`);
+    if (!confirmed) return;
+
+    setDeletingAgentArticles(true);
+    try {
+      const result = await articlesApi.deleteByAgent(id);
+      addToast({ title: 'Новости агента удалены', description: `Удалено: ${result.deleted}`, variant: 'success' });
+      await Promise.all([
+        loadStats(id),
+        fetchSourcesByAgent(id),
+        queryClient.invalidateQueries({ queryKey: ['agent-articles', id] }),
+      ]);
+    } catch (err) {
+      addToast({
+        title: 'Не удалось удалить новости агента',
+        description: err instanceof Error ? err.message : 'Попробуй ещё раз',
+        variant: 'danger',
+      });
+    } finally {
+      setDeletingAgentArticles(false);
     }
   };
 
@@ -488,6 +515,10 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
           )}
         </div>
         <div className="flex gap-1.5 sm:gap-2 shrink-0">
+          <Button variant="danger" size="sm" onClick={handleDeleteAgentArticles} loading={deletingAgentArticles}>
+            <Trash2 className="h-4 w-4" />
+            <span className="hidden sm:inline">Удалить новости</span>
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setFormOpen(true)}>
             <Pencil className="h-4 w-4" />
           </Button>

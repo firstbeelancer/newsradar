@@ -1215,6 +1215,7 @@ export const articlesApi = {
   favorite: (id: string) => apiPost<BackendArticle, Record<string, never>>(`/articles/${id}/favorite`, {}).then(normalizeArticle),
   unfavorite: (id: string) => apiDelete<BackendArticle>(`/articles/${id}/favorite`).then(normalizeArticle),
   deleteAll: () => apiDelete<{ deleted: number }>('/articles'),
+  deleteByAgent: (agentId: string) => apiDelete<{ deleted: number }>(`/articles?agentId=${encodeURIComponent(agentId)}`),
 };
 
 export const operationLogsApi = {

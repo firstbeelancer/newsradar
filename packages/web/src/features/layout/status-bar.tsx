@@ -14,6 +14,7 @@ const OPERATION_LABELS: Record<string, { label: string; icon: React.ElementType;
   generate_post: { label: 'Генерация', icon: Sparkles, color: 'text-emerald-500' },
   generate_digest: { label: 'Дайджест', icon: Sparkles, color: 'text-emerald-500' },
   articles_delete_all: { label: 'Очистка', icon: X, color: 'text-rose-500' },
+  articles_delete_agent: { label: 'Очистка', icon: X, color: 'text-rose-500' },
 };
 
 function getOperationInfo(type: string) {

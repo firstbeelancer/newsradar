@@ -11,6 +11,7 @@ import {
   removeFromFavorite,
   getArticleWithScore,
   deleteAllArticles,
+  deleteArticlesByAgent,
   ensureArticleExists,
   listArticleSelectionIds,
 } from "./service.js";
@@ -77,16 +78,23 @@ router.delete("/", authMiddleware, async (req, res, next) => {
   try {
     const workspaceId = req.query.workspaceId as string;
     if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
+    const agentId = typeof req.query.agentId === "string" ? req.query.agentId : undefined;
 
-    const result = await deleteAllArticles(workspaceId);
+    const result = agentId
+      ? await deleteArticlesByAgent(workspaceId, agentId)
+      : await deleteAllArticles(workspaceId);
     await createOperationLog({
       userId: req.user!.sub,
       workspaceId,
-      operationType: "articles_delete_all",
-      entityType: "articles",
+      agentId,
+      operationType: agentId ? "articles_delete_agent" : "articles_delete_all",
+      entityType: agentId ? "agent_articles" : "articles",
+      entityId: agentId,
       status: "success",
-      message: `Deleted ${result.deleted} articles`,
-      metadata: { deletedCount: result.deleted },
+      message: agentId
+        ? `Deleted ${result.deleted} articles for agent`
+        : `Deleted ${result.deleted} articles`,
+      metadata: { deletedCount: result.deleted, agentId },
       startedAt: new Date(),
       finishedAt: new Date(),
     });

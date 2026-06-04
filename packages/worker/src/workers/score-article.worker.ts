@@ -21,6 +21,7 @@ import {
   scoreArticle,
   loadAgentWeights,
   extractKeywords,
+  normalizeKeywords,
   type ScoreResult,
 } from "../lib/scorer.js";
 import type { Job } from "bullmq";
@@ -36,6 +37,7 @@ export interface ScoreArticleJob {
 async function resolveAgentContext(agentId: string): Promise<{
   topic?: string;
   tone?: string;
+  keywords: string[];
 }> {
   const result = await db
     .select({ name: agents.name, description: agents.description, config: agents.config })
@@ -44,13 +46,17 @@ async function resolveAgentContext(agentId: string): Promise<{
     .limit(1);
 
   const agent = result[0];
-  if (!agent) return {};
+  if (!agent) return { keywords: [] };
 
   const config = (agent.config as Record<string, unknown>) ?? {};
-  const topic = `${agent.name} ${agent.description ?? ""}`.trim();
+  const tags = Array.isArray(config.tags)
+    ? config.tags.filter((tag): tag is string => typeof tag === "string")
+    : [];
+  const topic = `${agent.name} ${agent.description ?? ""}${tags.length ? `\nTags: ${tags.join(", ")}` : ""}`.trim();
   const tone = (config.tone as string) ?? "professional";
+  const keywords = normalizeKeywords([...extractKeywords(topic), ...tags]);
 
-  return { topic, tone };
+  return { topic, tone, keywords };
 }
 
 /**
@@ -86,7 +92,7 @@ export async function processScoreArticle(
     loadAgentWeights(article.agentId),
   ]);
 
-  const keywords = agentCtx.topic ? extractKeywords(agentCtx.topic) : [];
+  const keywords = agentCtx.keywords;
 
   logger.debug(
     { articleId, keywords: keywords.length, weights },
@@ -122,6 +128,7 @@ export async function processScoreArticle(
     weightsSnapshot: {
       aiWeights: weights,
       hybrid: { ai: 0.55, keyword: 0.2, freshness: 0.15, sourceTrust: 0.1 },
+      keywords,
     } as unknown as Record<string, unknown>,
     chips: scoreResult.chips,
     scoredAt,
@@ -130,6 +137,9 @@ export async function processScoreArticle(
   const articleScoreDetail = {
     aiScore: scoreResult.aiScore,
     keywordScore: scoreResult.keywordScore,
+    keywordMatches: scoreResult.keywordMatches,
+    keywordTotal: scoreResult.keywordTotal,
+    matchedKeywords: scoreResult.matchedKeywords,
     freshnessScore: scoreResult.freshnessScore,
     sourceTrustScore: scoreResult.sourceTrustScore,
     baseScore: scoreResult.baseScore,
@@ -137,6 +147,7 @@ export async function processScoreArticle(
     weightedScore: scoreResult.weightedScore,
     aiFallbackUsed: scoreResult.aiFallbackUsed,
     aiFallbackReason: scoreResult.aiFallbackReason,
+    relevanceCap: scoreResult.relevanceCap,
     triggeredChips: scoreResult.triggeredChips,
   } as Record<string, unknown>;
 
@@ -168,6 +179,8 @@ export async function processScoreArticle(
       articleId,
       aiScore: scoreResult.aiScore,
       keywordScore: scoreResult.keywordScore,
+      keywordMatches: scoreResult.keywordMatches,
+      keywordTotal: scoreResult.keywordTotal,
       freshnessScore: scoreResult.freshnessScore,
       sourceTrustScore: scoreResult.sourceTrustScore,
       baseScore: scoreResult.baseScore,
@@ -175,6 +188,7 @@ export async function processScoreArticle(
       weightedScore: scoreResult.weightedScore,
       aiFallbackUsed: scoreResult.aiFallbackUsed,
       aiFallbackReason: scoreResult.aiFallbackReason,
+      relevanceCap: scoreResult.relevanceCap,
       chips: scoreResult.chips,
     },
     "Article scored (hybrid v2)"

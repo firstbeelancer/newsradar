@@ -63,6 +63,9 @@ export interface ScoreResult {
   aiScores: AIScores;
   aiScore: number;
   keywordScore: number;
+  keywordMatches: number;
+  keywordTotal: number;
+  matchedKeywords: string[];
   freshnessScore: number;
   sourceTrustScore: number;
   overallScore: number;
@@ -72,6 +75,7 @@ export interface ScoreResult {
   chips: string[];
   aiFallbackUsed: boolean;
   aiFallbackReason?: string;
+  relevanceCap?: number;
   triggeredChips: Array<{
     key: string;
     label: string;
@@ -202,6 +206,13 @@ function normalizeChipModifier(val: unknown): number {
   return parsed;
 }
 
+export interface KeywordMatchStats {
+  score: number;
+  matchedCount: number;
+  totalKeywords: number;
+  matchedKeywords: string[];
+}
+
 /**
  * Calculate AI composite score from 5 criteria using agent weights.
  * Returns 0–100.
@@ -233,16 +244,25 @@ export function scoreKeywordMatch(
   content: string,
   keywords: string[]
 ): number {
-  if (!keywords.length) return 50;
+  return analyzeKeywordMatch(title, description, content, keywords).score;
+}
+
+export function analyzeKeywordMatch(
+  title: string,
+  description: string,
+  content: string,
+  keywords: string[]
+): KeywordMatchStats {
+  const normalizedKeywords = normalizeKeywords(keywords);
+  if (!normalizedKeywords.length) {
+    return { score: 50, matchedCount: 0, totalKeywords: 0, matchedKeywords: [] };
+  }
 
   const text = `${title} ${buildScoringBody(description, content)}`.toLowerCase();
-  const totalKeywords = keywords.length;
   let matchedCount = 0;
+  const matchedKeywords: string[] = [];
 
-  for (const keyword of keywords) {
-    const lowerKeyword = keyword.toLowerCase().trim();
-    if (lowerKeyword.length < 2) continue;
-
+  for (const lowerKeyword of normalizedKeywords) {
     const regex = new RegExp(
       lowerKeyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
       "g"
@@ -250,12 +270,35 @@ export function scoreKeywordMatch(
     const matches = text.match(regex);
     if (matches && matches.length > 0) {
       matchedCount++;
+      matchedKeywords.push(lowerKeyword);
     }
   }
 
-  // Normalize: 30 base + up to 70 based on match ratio
-  const matchRatio = matchedCount / totalKeywords;
-  return Math.min(100, Math.round(30 + matchRatio * 70));
+  if (matchedCount === 0) {
+    return { score: 0, matchedCount, totalKeywords: normalizedKeywords.length, matchedKeywords };
+  }
+
+  const matchRatio = matchedCount / normalizedKeywords.length;
+  return {
+    score: Math.min(100, Math.round(35 + matchRatio * 65)),
+    matchedCount,
+    totalKeywords: normalizedKeywords.length,
+    matchedKeywords,
+  };
+}
+
+export function normalizeKeywords(keywords: string[]): string[] {
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+
+  for (const keyword of keywords) {
+    const lowerKeyword = keyword.toLowerCase().trim();
+    if (lowerKeyword.length < 2 || seen.has(lowerKeyword)) continue;
+    seen.add(lowerKeyword);
+    normalized.push(lowerKeyword);
+  }
+
+  return normalized;
 }
 
 /**
@@ -625,12 +668,13 @@ export async function scoreArticle(
     scoreSourceTrust(article.sourceId),
   ]);
 
-  const keywordScore = scoreKeywordMatch(
+  const keywordStats = analyzeKeywordMatch(
     article.title,
     article.description ?? "",
     article.content ?? "",
     keywords
   );
+  const keywordScore = keywordStats.score;
 
   const freshnessScore = scoreFreshness(article.publishedAt);
 
@@ -655,7 +699,19 @@ export async function scoreArticle(
     sourceTrustScore
   );
 
-  const weightedScore = clampScore(baseScore + chipModifierTotal);
+  const relevanceCap =
+    keywordStats.totalKeywords > 0 &&
+    keywordStats.matchedCount === 0 &&
+    aiScores.relevance < 75
+      ? aiFallbackUsed
+        ? 35
+        : 45
+      : undefined;
+
+  const uncappedWeightedScore = clampScore(baseScore + chipModifierTotal);
+  const weightedScore = relevanceCap === undefined
+    ? uncappedWeightedScore
+    : clampScore(Math.min(uncappedWeightedScore, relevanceCap));
 
   // Overall = simple average for reference
   const overallScore =
@@ -665,6 +721,9 @@ export async function scoreArticle(
     aiScores,
     aiScore,
     keywordScore,
+    keywordMatches: keywordStats.matchedCount,
+    keywordTotal: keywordStats.totalKeywords,
+    matchedKeywords: keywordStats.matchedKeywords,
     freshnessScore,
     sourceTrustScore,
     overallScore,
@@ -674,6 +733,7 @@ export async function scoreArticle(
     chips,
     aiFallbackUsed,
     aiFallbackReason,
+    relevanceCap,
     triggeredChips,
   };
 }
