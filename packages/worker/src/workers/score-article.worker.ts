@@ -20,10 +20,9 @@ import { eq } from "drizzle-orm";
 import {
   scoreArticle,
   loadAgentWeights,
-  extractKeywords,
-  normalizeKeywords,
   type ScoreResult,
 } from "../lib/scorer.js";
+import { buildAgentScoringContext } from "./agent-scoring-context.js";
 import type { Job } from "bullmq";
 import type { Logger } from "pino";
 
@@ -48,15 +47,11 @@ async function resolveAgentContext(agentId: string): Promise<{
   const agent = result[0];
   if (!agent) return { keywords: [] };
 
-  const config = (agent.config as Record<string, unknown>) ?? {};
-  const tags = Array.isArray(config.tags)
-    ? config.tags.filter((tag): tag is string => typeof tag === "string")
-    : [];
-  const topic = `${agent.name} ${agent.description ?? ""}${tags.length ? `\nTags: ${tags.join(", ")}` : ""}`.trim();
-  const tone = (config.tone as string) ?? "professional";
-  const keywords = normalizeKeywords([...extractKeywords(topic), ...tags]);
-
-  return { topic, tone, keywords };
+  return buildAgentScoringContext({
+    name: agent.name,
+    description: agent.description,
+    config: agent.config as Record<string, unknown> | null,
+  });
 }
 
 /**

@@ -23,6 +23,9 @@ import { sources, articles, agents, chipFilters } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import { complete } from "./ai-client.js";
 import { cleanArticleText } from "./text-cleaner.js";
+import { normalizeChipModifier } from "./chip-modifiers.js";
+export { extractKeywords, normalizeKeywords } from "./keywords.js";
+import { extractKeywords, normalizeKeywords } from "./keywords.js";
 import type { Logger } from "pino";
 
 /* ─── Types ─── */
@@ -198,14 +201,6 @@ function buildScoringBody(description: string, content: string): string {
   return (cleanedDescription || cleanedContent).slice(0, 4_000);
 }
 
-function normalizeChipModifier(val: unknown): number {
-  const parsed = parseDecimal(val);
-  if (Math.abs(parsed) <= 1) {
-    return parsed * 100;
-  }
-  return parsed;
-}
-
 export interface KeywordMatchStats {
   score: number;
   matchedCount: number;
@@ -285,45 +280,6 @@ export function analyzeKeywordMatch(
     totalKeywords: normalizedKeywords.length,
     matchedKeywords,
   };
-}
-
-export function normalizeKeywords(keywords: string[]): string[] {
-  const seen = new Set<string>();
-  const normalized: string[] = [];
-
-  for (const keyword of keywords) {
-    const lowerKeyword = keyword.toLowerCase().trim();
-    if (lowerKeyword.length < 2 || seen.has(lowerKeyword)) continue;
-    seen.add(lowerKeyword);
-    normalized.push(lowerKeyword);
-  }
-
-  return normalized;
-}
-
-/**
- * Extract keywords from an agent's name and description.
- */
-export function extractKeywords(topic: string): string[] {
-  const stopWords = new Set([
-    "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of",
-    "with", "by", "is", "are", "was", "were", "be", "been", "being", "have", "has",
-    "had", "do", "does", "did", "will", "would", "could", "should", "may", "might",
-    "must", "shall", "can", "need", "dare", "ought", "used", "about", "into", "through",
-    "during", "before", "after", "above", "below", "between", "out", "off", "over",
-    "under", "again", "further", "then", "once", "here", "there", "when", "where",
-    "why", "how", "all", "each", "few", "more", "most", "other", "some", "such",
-    "no", "nor", "not", "only", "own", "same", "so", "than", "too", "very", "just",
-    "и", "в", "не", "на", "с", "что", "а", "по", "для", "о", "к", "от", "за", "из",
-    "до", "при", "после", "но", "или", "так", "как", "его", "ее", "их", "то", "же",
-    "бы", "быть", "был", "была", "было", "они", "мы", "вы", "он", "она", "оно",
-  ]);
-
-  return topic
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, " ")
-    .split(/\s+/)
-    .filter((w) => w.length >= 3 && !stopWords.has(w));
 }
 
 /* ─── 3. Freshness ─── */
