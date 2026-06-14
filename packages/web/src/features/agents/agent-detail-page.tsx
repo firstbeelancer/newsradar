@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
@@ -48,6 +48,7 @@ import {
   Wrench,
   ArrowDownWideNarrow,
   ArrowUpWideNarrow,
+  Loader2,
   Sparkles,
   type LucideIcon,
 } from 'lucide-react';
@@ -96,16 +97,29 @@ function AgentArticlesList({ agentId }: { agentId: string }) {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const { setGenerationType, setSelectedAgentId, setSelectedArticles, resetGeneration } = useGenerationStore();
 
-  const { data, isLoading } = useQuery({
+  const {
+    data,
+    isLoading,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+  } = useInfiniteQuery({
     queryKey: ['agent-articles', agentId, sortBy, sortOrder],
-    queryFn: async () => {
-      const result = await articlesApi.list({ agent_id: agentId, sort_by: sortBy, sort_order: sortOrder }, undefined, 20);
-      return result.data;
+    queryFn: async ({ pageParam }) => {
+      return articlesApi.list(
+        { agent_id: agentId, sort_by: sortBy, sort_order: sortOrder },
+        pageParam as string | undefined,
+        20
+      );
     },
+    getNextPageParam: (lastPage) => {
+      return lastPage.has_more ? (lastPage.next_cursor ?? undefined) : undefined;
+    },
+    initialPageParam: undefined as string | undefined,
     staleTime: 30_000,
   });
 
-  const articles: Article[] = data ?? [];
+  const articles: Article[] = data?.pages.flatMap((page) => page.data) ?? [];
 
   const handleGeneratePost = useCallback((article: Article) => {
     resetGeneration();
@@ -230,7 +244,18 @@ function AgentArticlesList({ agentId }: { agentId: string }) {
           </CardContent>
         </Card>
       ))}
-      <div className="flex justify-center pt-2">
+      <div className="flex flex-wrap justify-center gap-2 pt-2">
+        {hasNextPage && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fetchNextPage()}
+            disabled={isFetchingNextPage}
+          >
+            {isFetchingNextPage ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <ArrowRight className="h-3.5 w-3.5 mr-1" />}
+            Загрузить ещё
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="sm"

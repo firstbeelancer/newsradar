@@ -66,6 +66,38 @@ function buildArticleConditions(filters: ArticleFilters): SQL[] {
   return conditions;
 }
 
+function buildDateCursorCondition(sortDateExpr: SQL<Date>, cursor: Cursor, sortOrder: "asc" | "desc"): SQL | null {
+  if (!cursor.sortValue) return null;
+
+  const cursorDate = new Date(cursor.sortValue);
+  if (isNaN(cursorDate.getTime())) return null;
+
+  const condition = sortOrder === "desc"
+    ? sql`(${sortDateExpr} < ${cursorDate}) OR (${sortDateExpr} = ${cursorDate} AND ${articles.id} < ${cursor.id})`
+    : sql`(${sortDateExpr} > ${cursorDate}) OR (${sortDateExpr} = ${cursorDate} AND ${articles.id} > ${cursor.id})`;
+
+  return sql`(${condition})`;
+}
+
+function buildScoreCursorCondition(sortDateExpr: SQL<Date>, cursor: Cursor, sortOrder: "asc" | "desc"): SQL | null {
+  if (!cursor.sortValue) return null;
+
+  const scoreValue = Number(cursor.sortValue);
+  const cursorDateValue = cursor.secondarySortValue ?? cursor.sortValue;
+  const cursorDate = new Date(cursorDateValue);
+  if (!Number.isFinite(scoreValue) || isNaN(cursorDate.getTime())) return null;
+
+  const dateTieCondition = sortOrder === "desc"
+    ? sql`(${sortDateExpr} < ${cursorDate}) OR (${sortDateExpr} = ${cursorDate} AND ${articles.id} < ${cursor.id})`
+    : sql`(${sortDateExpr} > ${cursorDate}) OR (${sortDateExpr} = ${cursorDate} AND ${articles.id} > ${cursor.id})`;
+
+  const condition = sortOrder === "desc"
+    ? sql`${articles.score} < ${scoreValue} OR (${articles.score} = ${scoreValue} AND (${dateTieCondition}))`
+    : sql`${articles.score} > ${scoreValue} OR (${articles.score} = ${scoreValue} AND (${dateTieCondition}))`;
+
+  return sql`(${condition})`;
+}
+
 // ─── CRUD ───
 
 export async function getArticleById(id: string, workspaceId: string) {
@@ -129,30 +161,14 @@ export async function listArticles(
   if (filters.cursor) {
     const decoded = decodeCursor(filters.cursor);
     if (decoded?.sortValue) {
-      if (sortBy === "score") {
-        const sortValue = Number(decoded.sortValue);
-        const cursorDate = decoded.secondarySortValue ? new Date(decoded.secondarySortValue) : new Date(decoded.sortValue);
-        if (sortOrder === "desc") {
-          conditions.push(
-            sql`(${articles.score} < ${sortValue}) OR (${articles.score} = ${sortValue} AND ${articles.publishedAt} < ${cursorDate})`
-          );
-        } else {
-          conditions.push(
-            sql`(${articles.score} > ${sortValue}) OR (${articles.score} = ${sortValue} AND ${articles.publishedAt} > ${cursorDate})`
-          );
-        }
-      } else {
-        const cursorDate = new Date(decoded.sortValue);
-        if (sortOrder === "desc") {
-          conditions.push(
-            sql`(${articles.publishedAt} IS NOT NULL AND ${articles.publishedAt} < ${cursorDate}) OR (${articles.publishedAt} IS NULL AND ${articles.createdAt} < ${cursorDate})`
-          );
-        } else {
-          conditions.push(
-            sql`(${articles.publishedAt} IS NOT NULL AND ${articles.publishedAt} > ${cursorDate}) OR (${articles.publishedAt} IS NULL AND ${articles.createdAt} > ${cursorDate})`
-          );
-        }
+      const cursorCondition = sortBy === "score"
+        ? buildScoreCursorCondition(sortDateExpr, decoded, sortOrder)
+        : buildDateCursorCondition(sortDateExpr, decoded, sortOrder);
+
+      if (cursorCondition) {
+        conditions.push(cursorCondition);
       }
+
       query = db
         .select({
           articles: articles,
@@ -265,9 +281,11 @@ export async function searchArticles(
   if (params.cursor) {
     const decoded = decodeCursor(params.cursor);
     if (decoded?.sortValue) {
-      conditions.push(
-        sql`${articles.score} < ${decoded.sortValue}`
-      );
+      const sortDateExpr = sql<Date>`coalesce(${articles.publishedAt}, ${articles.createdAt})`;
+      const cursorCondition = buildScoreCursorCondition(sortDateExpr, decoded, "desc");
+      if (cursorCondition) {
+        conditions.push(cursorCondition);
+      }
       query = db
         .select({
           articles: articles,
@@ -294,6 +312,7 @@ export async function searchArticles(
       ? encodeCursor({
           id: lastItem.articles.id,
           sortValue: lastItem.articles.score.toString(),
+          secondarySortValue: (lastItem.articles.publishedAt ?? lastItem.articles.createdAt).toISOString(),
         } as Cursor)
       : null;
 
