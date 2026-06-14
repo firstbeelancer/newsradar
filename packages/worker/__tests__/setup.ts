@@ -13,7 +13,7 @@ vi.mock('ioredis', () => ({
 }));
 
 vi.mock('pg', () => ({
-  Pool: vi.fn(() => ({ query: vi.fn(), end: vi.fn() })),
+  Pool: vi.fn(() => ({ query: vi.fn(), end: vi.fn(), on: vi.fn() })),
 }));
 
 vi.mock('pino', () => ({

@@ -208,6 +208,14 @@ export interface KeywordMatchStats {
   matchedKeywords: string[];
 }
 
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function keywordRegex(keyword: string): RegExp {
+  return new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegex(keyword)}(?![\\p{L}\\p{N}])`, "gu");
+}
+
 /**
  * Calculate AI composite score from 5 criteria using agent weights.
  * Returns 0–100.
@@ -258,10 +266,7 @@ export function analyzeKeywordMatch(
   const matchedKeywords: string[] = [];
 
   for (const lowerKeyword of normalizedKeywords) {
-    const regex = new RegExp(
-      lowerKeyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-      "g"
-    );
+    const regex = keywordRegex(lowerKeyword);
     const matches = text.match(regex);
     if (matches && matches.length > 0) {
       matchedCount++;
