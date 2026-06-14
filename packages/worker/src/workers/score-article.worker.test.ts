@@ -24,4 +24,25 @@ describe("buildAgentScoringContext", () => {
     expect(context.keywords).not.toContain("agent");
     expect(context.keywords).not.toContain("tags");
   });
+
+  it("uses string configured tags as scoring keywords", () => {
+    const context = buildAgentScoringContext({
+      name: "Information security",
+      description: "Security news monitoring",
+      config: {
+        tags: "кибербезопасность vpn резервное копирование mitre att&ck",
+      },
+    });
+
+    expect(context.keywords).toEqual([
+      "кибербезопасность",
+      "vpn",
+      "резервное",
+      "копирование",
+      "mitre",
+      "att&ck",
+    ]);
+    expect(context.keywords).not.toContain("information");
+    expect(context.keywords).not.toContain("security");
+  });
 });

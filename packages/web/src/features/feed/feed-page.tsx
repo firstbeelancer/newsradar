@@ -69,7 +69,7 @@ export function FeedPage() {
   const { addToast } = useToast();
 
   const [search, setSearch] = useState('');
-  const [sortBy, setSortBy] = useState<'date' | 'score'>('date');
+  const [sortBy, setSortBy] = useState<'date' | 'score'>('score');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [filters, setFilters] = useState<FeedFiltersState>({
     agentId: agentIdFromRoute ?? '',

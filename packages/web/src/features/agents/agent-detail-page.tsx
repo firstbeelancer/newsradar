@@ -93,7 +93,7 @@ import { useGenerationStore } from '@shared/stores/generation-store';
 
 function AgentArticlesList({ agentId }: { agentId: string }) {
   const navigate = useNavigate();
-  const [sortBy, setSortBy] = useState<'date' | 'score'>('date');
+  const [sortBy, setSortBy] = useState<'date' | 'score'>('score');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const { setGenerationType, setSelectedAgentId, setSelectedArticles, resetGeneration } = useGenerationStore();
 
