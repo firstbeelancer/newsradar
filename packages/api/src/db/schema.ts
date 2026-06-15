@@ -372,7 +372,7 @@ export const chipFilters = pgTable(
     index("chip_filters_agent_id_idx").on(table.agentId),
     index("chip_filters_key_idx").on(table.key),
     uniqueIndex("chip_filters_agent_key_unique_idx").on(table.agentId, table.key),
-    check("chip_filters_operator_check", sql`${table.operator} IN ('contains', 'not_contains', 'equals', 'starts_with', 'regex', 'in', 'gt', 'lt', 'gte', 'lte')`),
+    check("chip_filters_operator_check", sql`${table.operator} IN ('contains', 'not_contains', 'equals', 'starts_with', 'regex', 'in', 'gt', 'lt', 'gte', 'lte', 'age_days_gt', 'age_days_gte', 'age_days_lt', 'age_days_lte')`),
   ]
 );
 

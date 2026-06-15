@@ -37,6 +37,7 @@ import {
   Hammer,
   Wrench,
   RotateCcw,
+  RefreshCw,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -87,6 +88,7 @@ export function DashboardPage() {
   const [deleteAllLoading, setDeleteAllLoading] = useState(false);
   const [rescoreLoading, setRescoreLoading] = useState(false);
   const [collectDialogOpen, setCollectDialogOpen] = useState(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
 
   useEffect(() => {
     void fetchAgents();
@@ -94,6 +96,32 @@ export function DashboardPage() {
     void loadFavorites();
     void loadOperationLogs();
   }, [fetchAgents]);
+
+  // Quietly refresh data in the background every 30 seconds so cards stay current.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      void fetchAgents();
+      void loadDashboardSummary();
+      void loadFavorites();
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, [fetchAgents]);
+
+  // Remember when the user last triggered a manual refresh button.
+  const handleManualRefresh = async () => {
+    await refreshDashboard();
+    setLastRefreshedAt(new Date());
+  };
+
+  function formatRefreshLabel(d: Date | null): string {
+    if (!d) return 'ещё не обновляли';
+    const seconds = Math.max(0, Math.floor((Date.now() - d.getTime()) / 1000));
+    if (seconds < 5) return 'только что';
+    if (seconds < 60) return `${seconds} сек назад`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes} мин назад`;
+    return d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  }
 
   const loadDashboardSummary = async () => {
     try {
@@ -207,7 +235,18 @@ export function DashboardPage() {
           <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
             Привет, {user?.name?.split(' ')[0] || 'пользователь'}!
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">Вот что произошло сегодня</p>
+          <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+            <span>Вот что произошло сегодня</span>
+            <button
+              type="button"
+              onClick={handleManualRefresh}
+              title="Обновить данные"
+              className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-white/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:border-cyan-200 hover:text-accent"
+            >
+              <RefreshCw className="h-3 w-3" />
+              {formatRefreshLabel(lastRefreshedAt)}
+            </button>
+          </p>
         </div>
         <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
           <Button variant="danger" size="sm" onClick={handleDeleteAllArticles} loading={deleteAllLoading} className="min-w-0 justify-center px-2 sm:px-3">

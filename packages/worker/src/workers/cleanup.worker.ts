@@ -36,7 +36,12 @@ export async function processCleanup(
 
   const now = new Date();
 
-  // 1. Delete articles older than 3 days that are NOT favorited
+  // 1. Delete articles older than 3 days that are NOT favorited.
+  //    The TZ says «Новости хранятся 3 дня, затем удаляются, кроме избранных».
+  //    Apply the threshold to *publishedAt* when known, otherwise fall back to
+  //    createdAt. This way freshly-imported articles that never made it through
+  //    the pipeline (stuck in 'fetched' / 'translated') are also cleaned up
+  //    instead of leaking in the DB forever.
   const articleThreshold = new Date(now);
   articleThreshold.setDate(articleThreshold.getDate() - 3);
 
@@ -44,14 +49,12 @@ export async function processCleanup(
     .delete(articles)
     .where(
       and(
-        lt(articles.createdAt, articleThreshold),
         eq(articles.isFavorite, false),
         sql`NOT EXISTS (
           SELECT 1 FROM ${favoriteArticles}
           WHERE ${favoriteArticles.articleId} = ${articles.id}
         )`,
-        // Only delete articles that have been processed through the pipeline
-        sql`${articles.status} IN ('deduped', 'scored', 'published', 'archived')`
+        sql`COALESCE(${articles.publishedAt}, ${articles.createdAt}) < ${articleThreshold}`
       )
     )
     .returning({ id: articles.id });

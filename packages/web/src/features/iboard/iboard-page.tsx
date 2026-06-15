@@ -4,13 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@shar
 import { Button } from '@shared/ui/button';
 import { useSubscriptionStore } from '@shared/stores/subscription-store';
 import { apiGet } from '@shared/api/client';
-import { BarChart3, Crown, Newspaper, Radio, TrendingUp, Calendar, AlertTriangle } from 'lucide-react';
+import { BarChart3, Crown, Newspaper, Radio, Calendar, AlertTriangle, Activity } from 'lucide-react';
 
 interface IBoardAPIStats {
   totalArticles?: number;
   total_articles?: number;
-  avgScore?: number;
-  avg_score?: number;
   topSources?: Array<{ sourceId: string; sourceName: string; articleCount: number }>;
   top_sources?: Array<{ source_id?: string; sourceId?: string; source_name?: string; sourceName?: string; article_count?: number; articleCount?: number }>;
   activity7d?: Array<{ date: string; count: number }>;
@@ -73,7 +71,6 @@ export function IBoardPage() {
 
   // Compute derived values from API response - handle both camelCase and snake_case
   const totalArticles = stats?.totalArticles ?? stats?.total_articles ?? 0;
-  const avgScore = stats?.avgScore ?? stats?.avg_score ?? 0;
   const topSources = stats?.topSources ?? stats?.top_sources?.map(s => ({
     sourceId: s.sourceId ?? s.source_id ?? '',
     sourceName: s.sourceName ?? s.source_name ?? '',
@@ -82,6 +79,8 @@ export function IBoardPage() {
   const activity7d = stats?.activity7d ?? stats?.activity_7d ?? [];
   const activeSources = topSources.length ?? 0;
   const todayCount = activity7d[activity7d.length - 1]?.count ?? 0;
+  // Sum of articles collected over the last 7 days
+  const weekCount = activity7d.reduce((sum, day) => sum + (day?.count ?? 0), 0);
 
   return (
     <div className="space-y-6">
@@ -124,7 +123,7 @@ export function IBoardPage() {
         ) : (
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <MetricCard title="Всего статей" value={stats ? totalArticles : '—'} icon={Newspaper} />
-            <MetricCard title="Средний score" value={stats ? avgScore.toFixed(1) : '—'} icon={TrendingUp} />
+            <MetricCard title="За 7 дней" value={stats ? weekCount : '—'} icon={Activity} />
             <MetricCard title="Источники" value={stats ? activeSources : '—'} icon={Radio} />
             <MetricCard title="Сегодня" value={stats ? todayCount : '—'} icon={Calendar} />
           </div>

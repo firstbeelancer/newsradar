@@ -4,7 +4,7 @@ import { Card, CardContent } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
 import { Checkbox } from '@shared/ui/checkbox';
-import { Bookmark, ExternalLink, Calendar, Search, Sparkles } from 'lucide-react';
+import { Bookmark, ExternalLink, Calendar, Search, Sparkles, Clock } from 'lucide-react';
 import { cn, truncate, formatDateTime, cleanArticleText } from '@shared/lib/utils';
 import type { Article } from '@shared/api/client';
 
@@ -26,6 +26,16 @@ const scoreColor = (score: number): string => {
 
 function formatScore(score: number): number {
   return Math.round(Math.max(0, Math.min(score, 100)));
+}
+
+const STALE_DAYS_THRESHOLD = 3;
+
+function isArticleStale(publishedAt: string | null | undefined): boolean {
+  if (!publishedAt) return false;
+  const t = new Date(publishedAt).getTime();
+  if (Number.isNaN(t)) return false;
+  const ageDays = (Date.now() - t) / (1000 * 60 * 60 * 24);
+  return ageDays > STALE_DAYS_THRESHOLD;
 }
 
 function isHexColor(value: string | null | undefined): value is string {
@@ -54,12 +64,14 @@ export function ArticleCard({
   const scorePercent = formatScore(article.score);
   const preview = cleanArticleText(article.ai_summary || article.description || article.content || article.original_description || '');
   const agentStyle = getArticleAgentStyle(article.agent_color);
+  const isStale = isArticleStale(article.published_at);
 
   return (
     <Card
       className={cn(
         'overflow-hidden border-l-[5px] transition-all hover:shadow-md',
-        selectable && isSelected && 'ring-2 ring-accent'
+        selectable && isSelected && 'ring-2 ring-accent',
+        isStale && 'opacity-80'
       )}
       style={agentStyle}
       onClick={() => selectable && onSelect?.(article.id)}
@@ -102,6 +114,16 @@ export function ArticleCard({
                 <Calendar className="h-3 w-3" />
                 {formatDateTime(article.published_at)}
               </span>
+              {isStale && (
+                <Badge
+                  variant="outline"
+                  title="Новость старше 3 дней — чип-фильтр «Устаревшее» мог понизить скор"
+                  className="gap-1 border-red-200 bg-red-50 text-red-600 text-[10px]"
+                >
+                  <Clock className="h-3 w-3" />
+                  Устаревшее
+                </Badge>
+              )}
               {article.agent_name && (
                 <Badge
                   variant="outline"

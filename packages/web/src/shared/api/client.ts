@@ -595,7 +595,7 @@ export interface ChipFilter {
   label: string;
   description?: string | null;
   pattern?: string | null;
-  operator: 'contains' | 'not_contains' | 'equals' | 'starts_with' | 'regex' | 'in' | 'gt' | 'lt' | 'gte' | 'lte';
+  operator: 'contains' | 'not_contains' | 'equals' | 'starts_with' | 'regex' | 'in' | 'gt' | 'lt' | 'gte' | 'lte' | 'age_days_gt' | 'age_days_gte' | 'age_days_lt' | 'age_days_lte';
   scoreModifier: number;
   color: string;
   icon?: string | null;

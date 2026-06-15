@@ -54,7 +54,7 @@ function isFinalAttempt(job: Job<FetchSourceJob>): boolean {
 export async function processFetchSource(
   job: Job<FetchSourceJob>,
   logger: Logger
-): Promise<{ fetched: number; newArticles: number; duplicates: number }> {
+): Promise<{ fetched: number; newArticles: number; duplicates: number; skippedStale: number }> {
   const { sourceId, operationId } = job.data;
 
   logger.info({ sourceId, jobId: job.id, operationId }, "Fetching source");
@@ -73,20 +73,34 @@ export async function processFetchSource(
 
   if (!source.isActive) {
     logger.warn({ sourceId }, "Source is inactive, skipping");
-    return { fetched: 0, newArticles: 0, duplicates: 0 };
+    return { fetched: 0, newArticles: 0, duplicates: 0, skippedStale: 0 };
   }
 
   // Resolve agent/workspace
   const agentRef = await resolveAgentForSource(sourceId);
   if (!agentRef) {
     logger.warn({ sourceId }, "No agent linked to source");
-    return { fetched: 0, newArticles: 0, duplicates: 0 };
+    return { fetched: 0, newArticles: 0, duplicates: 0, skippedStale: 0 };
   }
 
   // Fetch based on source type
   let fetchedCount = 0;
   let newCount = 0;
   let dupCount = 0;
+  let skippedStale = 0;
+
+  // 3-day freshness cutoff (TZ §8.1 + §2.8: «Новости хранятся 3 дня, затем удаляются,
+  // кроме избранных». Сбор старых новостей не имеет смысла, только засоряет feed.
+  // If pubDate is missing/invalid we keep the article — only known-old items get skipped.)
+  const STALE_AFTER_MS = 3 * 24 * 60 * 60 * 1000;
+  const freshCutoff = Date.now() - STALE_AFTER_MS;
+
+  function isStale(publishedAt: Date | null | undefined): boolean {
+    if (!publishedAt) return false;
+    const t = publishedAt.getTime();
+    if (Number.isNaN(t)) return false;
+    return t < freshCutoff;
+  }
 
   try {
     if (source.type === "rss") {
@@ -98,6 +112,10 @@ export async function processFetchSource(
       );
 
       for (const item of result.items) {
+        if (isStale(item.pubDate)) {
+          skippedStale++;
+          continue;
+        }
         const { isDuplicate, hash } = await checkRawDedup(
           item.link,
           item.title,
@@ -156,6 +174,10 @@ export async function processFetchSource(
       );
 
       for (const item of result.items) {
+        if (isStale(item.date)) {
+          skippedStale++;
+          continue;
+        }
         const { isDuplicate, hash } = await checkRawDedup(
           item.link,
           item.title,
@@ -211,7 +233,7 @@ export async function processFetchSource(
       .where(eq(sources.id, sourceId));
 
     logger.info(
-      { sourceId, fetched: fetchedCount, new: newCount, duplicates: dupCount },
+      { sourceId, fetched: fetchedCount, new: newCount, duplicates: dupCount, skippedStale },
       "Source fetch complete"
     );
 
@@ -231,6 +253,7 @@ export async function processFetchSource(
           fetched: fetchedCount,
           new: newCount,
           duplicates: dupCount,
+          skippedStale,
           status: "success",
         });
         await db
@@ -248,6 +271,7 @@ export async function processFetchSource(
       fetched: fetchedCount,
       newArticles: newCount,
       duplicates: dupCount,
+      skippedStale,
     };
   } catch (err) {
     // Update source error stats
@@ -291,6 +315,7 @@ export async function processFetchSource(
       }
     }
 
+    // Re-throw original error so BullMQ can apply retry/backoff
     throw err;
   }
 }

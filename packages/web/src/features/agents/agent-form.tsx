@@ -65,6 +65,9 @@ const DEFAULT_CHIP_FILTERS: Partial<ChipFilter>[] = [
   { key: 'trending', label: 'Тренд', operator: 'contains', pattern: 'тренд,хайп,viral,популярн', scoreModifier: 8, color: '#f97316', icon: 'trending-up', isActive: true },
   { key: 'actionable', label: 'Actionable', operator: 'contains', pattern: 'как,пошагов,instruction,руководство,гайд', scoreModifier: 6, color: '#06b6d4', icon: 'check-circle', isActive: true },
   { key: 'spam', label: 'Спам', operator: 'contains', pattern: 'реклама,акция,скидка,promo,промо', scoreModifier: -12, color: '#6b7280', icon: 'x-circle', isActive: true },
+  // Default «Устаревшее» — penalise news older than 3 days.
+  // Pattern holds a number of days; the scorer applies the date-based operator.
+  { key: 'outdated', label: 'Устаревшее', operator: 'age_days_gt', pattern: '3', scoreModifier: -200, color: '#dc2626', icon: 'clock', isActive: true },
 ];
 
 function sliderFillStyle(value: number): CSSProperties {
@@ -640,10 +643,14 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
                           <option value="starts_with">Начинается с</option>
                           <option value="regex">Регулярное выражение</option>
                           <option value="in">В списке</option>
-                          <option value="gt">Больше</option>
-                          <option value="lt">Меньше</option>
-                          <option value="gte">Больше или равно</option>
-                          <option value="lte">Меньше или равно</option>
+                          <option value="gt">Скор &gt; N</option>
+                          <option value="lt">Скор &lt; N</option>
+                          <option value="gte">Скор ≥ N</option>
+                          <option value="lte">Скор ≤ N</option>
+                          <option value="age_days_gt">Старше N дней</option>
+                          <option value="age_days_gte">Возраст ≥ N дней</option>
+                          <option value="age_days_lt">Моложе N дней</option>
+                          <option value="age_days_lte">Возраст ≤ N дней</option>
                         </select>
                       </div>
                       <div className="space-y-1">

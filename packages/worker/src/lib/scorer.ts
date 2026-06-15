@@ -417,7 +417,8 @@ function matchesChipFilter(
   filter: ChipFilterRow,
   text: string,
   title: string,
-  baseScore: number
+  baseScore: number,
+  ageDays: number
 ): boolean {
   const pattern = filter.pattern ?? "";
   const values = splitChipPattern(pattern);
@@ -448,6 +449,16 @@ function matchesChipFilter(
       return baseScore < parseDecimal(filter.pattern);
     case "lte":
       return baseScore <= parseDecimal(filter.pattern);
+    // Date-based operators — pattern holds a number of days.
+    // Used by the default «Устаревшее» chip filter (-200) to penalize stale news.
+    case "age_days_gt":
+      return ageDays > parseDecimal(filter.pattern);
+    case "age_days_gte":
+      return ageDays >= parseDecimal(filter.pattern);
+    case "age_days_lt":
+      return ageDays < parseDecimal(filter.pattern);
+    case "age_days_lte":
+      return ageDays <= parseDecimal(filter.pattern);
     default:
       return false;
   }
@@ -474,6 +485,7 @@ async function resolveChipScoring(
     title: string;
     description: string | null;
     content: string | null;
+    publishedAt: Date | null;
   },
   baseScore: number,
   sourceTrustScore: number
@@ -483,6 +495,11 @@ async function resolveChipScoring(
   chipModifierTotal: number;
 }> {
   const activeFilters = await loadAgentChipFilters(article.agentId);
+
+  // Compute age in days (TZ §2.8: «Новости хранятся 3 дня, затем удаляются, кроме избранных»).
+  // Articles without pubDate get age 0 — date-based filters won't trigger.
+  const ageMs = article.publishedAt ? Date.now() - article.publishedAt.getTime() : 0;
+  const ageDays = article.publishedAt ? Math.max(0, ageMs / (1000 * 60 * 60 * 24)) : 0;
 
   if (activeFilters.length === 0) {
     const fallbackChips = await determineChips(
@@ -507,7 +524,7 @@ async function resolveChipScoring(
   const normalizedTitle = article.title.toLowerCase();
   const normalizedText = `${article.title} ${buildScoringBody(article.description ?? "", article.content ?? "")}`.toLowerCase();
   const triggeredChips = activeFilters
-    .filter((filter) => matchesChipFilter(filter, normalizedText, normalizedTitle, baseScore))
+    .filter((filter) => matchesChipFilter(filter, normalizedText, normalizedTitle, baseScore, ageDays))
     .map((filter) => ({
       key: filter.key,
       label: filter.label,
@@ -655,6 +672,7 @@ export async function scoreArticle(
       title: article.title,
       description: article.description,
       content: article.content,
+      publishedAt: article.publishedAt,
     },
     baseScore,
     sourceTrustScore

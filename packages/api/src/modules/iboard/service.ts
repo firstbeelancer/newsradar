@@ -7,7 +7,6 @@ import { AppError } from "../../middleware/error-handler.js";
 
 export interface IboardStats {
   totalArticles: number;
-  avgScore: number;
   topSources: Array<{ sourceId: string; sourceName: string; articleCount: number }>;
   activity7d: Array<{ date: string; count: number }>;
 }
@@ -50,14 +49,7 @@ export async function getIboardStats(workspaceId: string): Promise<IboardStats> 
     .where(eq(articles.workspaceId, workspaceId));
   const totalArticles = Number(articleCountResult[0]?.count ?? 0);
 
-  // Average score
-  const avgScoreResult = await db
-    .select({ avg: sql<number>`COALESCE(avg(${articles.score}), 0)` })
-    .from(articles)
-    .where(eq(articles.workspaceId, workspaceId));
-  const avgScore = Math.round((Number(avgScoreResult[0]?.avg ?? 0)) * 1000) / 1000;
-
-  // Top sources
+  // Top sources — show up to 20 (was 5) so users actually see their feed distribution.
   const topSourcesRaw = await db
     .select({
       sourceId: articles.sourceId,
@@ -69,7 +61,7 @@ export async function getIboardStats(workspaceId: string): Promise<IboardStats> 
     .where(eq(articles.workspaceId, workspaceId))
     .groupBy(articles.sourceId, sources.name)
     .orderBy(sql`count(*) DESC`)
-    .limit(5);
+    .limit(20);
 
   const topSources = topSourcesRaw.map((s) => ({
     sourceId: s.sourceId,
@@ -109,7 +101,7 @@ export async function getIboardStats(workspaceId: string): Promise<IboardStats> 
     activity7d.push({ date: dateStr, count: dateMap.get(dateStr) ?? 0 });
   }
 
-  return { totalArticles, avgScore, topSources, activity7d };
+  return { totalArticles, topSources, activity7d };
 }
 
 // ─── Timeline ───

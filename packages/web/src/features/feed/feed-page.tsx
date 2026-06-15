@@ -435,6 +435,16 @@ export function FeedPage() {
                   ? 'Нет новостей для этого агента'
                   : 'Новости появятся после первого сбора'}
             </p>
+            {search && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="mt-3"
+                onClick={() => setSearch('')}
+              >
+                Сбросить поиск
+              </Button>
+            )}
           </CardContent>
         </Card>
       ) : (
