@@ -34,8 +34,6 @@ function buildArticleConditions(filters: ArticleFilters): SQL[] {
   }
   if (filters.status) {
     conditions.push(eq(articles.status, filters.status));
-  } else {
-    conditions.push(sql`NOT (${articles.status} = 'fetched' AND ${articles.needsTranslation} = true)`);
   }
   if (filters.isFavorite !== undefined) {
     conditions.push(eq(articles.isFavorite, filters.isFavorite));

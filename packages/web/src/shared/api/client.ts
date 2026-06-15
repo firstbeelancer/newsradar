@@ -984,6 +984,15 @@ export interface DashboardSummary {
   favorite_count: number;
 }
 
+export interface DashboardCollectAllResult {
+  op_id: string;
+  operation_id: string;
+  status?: string;
+  message?: string;
+  agent_count: number;
+  queued_count: number;
+}
+
 // ─── Scoring Types ───────────────────────────────────────────────────────────
 
 export interface ScoringConfig {
@@ -1233,6 +1242,27 @@ export const dashboardApi = {
       total_articles: Number(payload.total_articles ?? payload.totalArticles ?? 0),
       favorite_count: Number(payload.favorite_count ?? payload.favoriteCount ?? 0),
     })),
+  collectAll: () =>
+    apiPost<{
+      operationId?: string;
+      op_id?: string;
+      status?: string;
+      message?: string;
+      agentCount?: number;
+      agent_count?: number;
+      queuedCount?: number;
+      queued_count?: number;
+    }>('/dashboard/collect-all', {}).then((payload) => {
+      const operationId = payload.op_id ?? payload.operationId ?? '';
+      return {
+        op_id: operationId,
+        operation_id: operationId,
+        status: payload.status,
+        message: payload.message,
+        agent_count: Number(payload.agent_count ?? payload.agentCount ?? 0),
+        queued_count: Number(payload.queued_count ?? payload.queuedCount ?? 0),
+      } satisfies DashboardCollectAllResult;
+    }),
 };
 
 // Templates

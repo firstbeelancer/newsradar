@@ -75,7 +75,7 @@ export function DashboardPage() {
   const navigate = useNavigate();
   const { addToast } = useToast();
   const { user } = useAuthStore();
-  const { agents, isLoading: agentsLoading, fetchAgents, collectAgent } = useAgentsStore();
+  const { agents, isLoading: agentsLoading, fetchAgents, collectAgent, collectAllAgents } = useAgentsStore();
 
   const [favorites, setFavorites] = useState<Article[]>([]);
   const [favoritesLoading, setFavoritesLoading] = useState(true);
@@ -132,10 +132,14 @@ export function DashboardPage() {
     }
   };
 
-  const handleCollect = async (agentId: string) => {
+  const handleCollect = async (agentId: string | null) => {
     try {
-      const operationId = await collectAgent(agentId);
-      addToast({ title: 'Сбор запущен', description: 'Агент собирает новости', variant: 'success' });
+      const operationId = agentId ? await collectAgent(agentId) : await collectAllAgents();
+      addToast({
+        title: 'Сбор запущен',
+        description: agentId ? 'Агент собирает новости' : 'Все активные агенты собирают новости',
+        variant: 'success',
+      });
       void loadOperationLogs();
       return operationId;
     } catch {

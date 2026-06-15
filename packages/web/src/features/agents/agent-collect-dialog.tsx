@@ -2,19 +2,24 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@shared/ui/dialog';
 import { Button } from '@shared/ui/button';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@shared/ui/select';
-import { Spinner } from '@shared/ui/spinner';
 import type { Agent } from '@shared/api/client';
 import { Zap, Check } from 'lucide-react';
+
+export const ALL_AGENTS_COLLECT_VALUE = '__all_agents__';
+
+export function resolveCollectTarget(selectedAgentId: string): string | null {
+  return selectedAgentId === ALL_AGENTS_COLLECT_VALUE ? null : selectedAgentId;
+}
 
 interface AgentCollectDialogProps {
   agents: Agent[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCollect: (agentId: string) => Promise<string>;
+  onCollect: (agentId: string | null) => Promise<string>;
 }
 
 export function AgentCollectDialog({ agents, open, onOpenChange, onCollect }: AgentCollectDialogProps) {
-  const [selectedAgentId, setSelectedAgentId] = useState('');
+  const [selectedAgentId, setSelectedAgentId] = useState(ALL_AGENTS_COLLECT_VALUE);
   const [isCollecting, setIsCollecting] = useState(false);
   const [success, setSuccess] = useState(false);
 
@@ -23,7 +28,7 @@ export function AgentCollectDialog({ agents, open, onOpenChange, onCollect }: Ag
     setIsCollecting(true);
     setSuccess(false);
     try {
-      await onCollect(selectedAgentId);
+      await onCollect(resolveCollectTarget(selectedAgentId));
       setSuccess(true);
       setTimeout(() => {
         setSuccess(false);
@@ -60,6 +65,7 @@ export function AgentCollectDialog({ agents, open, onOpenChange, onCollect }: Ag
                   <SelectValue placeholder="Выберите агента" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value={ALL_AGENTS_COLLECT_VALUE}>Все агенты</SelectItem>
                   {activeAgents.map((agent) => (
                     <SelectItem key={agent.id} value={agent.id}>
                       {agent.name}

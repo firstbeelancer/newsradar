@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { agentsApi, type Agent, type CreateAgentDto, type UpdateAgentDto } from '@shared/api/client';
+import { agentsApi, dashboardApi, type Agent, type CreateAgentDto, type UpdateAgentDto } from '@shared/api/client';
 
 interface AgentsState {
   agents: Agent[];
@@ -16,6 +16,7 @@ interface AgentsActions {
   updateAgent: (id: string, data: UpdateAgentDto) => Promise<void>;
   deleteAgent: (id: string) => Promise<void>;
   collectAgent: (id: string) => Promise<string>;
+  collectAllAgents: () => Promise<string>;
   setCurrentAgent: (agent: Agent | null) => void;
   clearError: () => void;
 }
@@ -119,6 +120,15 @@ export const useAgentsStore = create<AgentsState & AgentsActions>((set, get) => 
       return result.op_id;
     } catch (err) {
       throw new Error(err instanceof Error ? err.message : 'Ошибка запуска сбора');
+    }
+  },
+
+  collectAllAgents: async () => {
+    try {
+      const result = await dashboardApi.collectAll();
+      return result.op_id;
+    } catch (err) {
+      throw new Error(err instanceof Error ? err.message : 'РћС€РёР±РєР° Р·Р°РїСѓСЃРєР° СЃР±РѕСЂР°');
     }
   },
 
