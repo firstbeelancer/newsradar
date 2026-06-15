@@ -233,7 +233,7 @@ export const articles = pgTable(
     aiSummary: text("ai_summary"),
     category: varchar("category", { length: 50 }),
     language: varchar("language", { length: 10 }).default("ru").notNull(),
-    score: decimal("score", { precision: 5, scale: 3 }).default("0.000").notNull(),
+    score: decimal("score", { precision: 6, scale: 3 }).default("0.000").notNull(),
     scoreDetail: jsonb("score_detail").default({}).notNull(),
     isRelevant: boolean("is_relevant"),
     relevanceReason: text("relevance_reason"),
