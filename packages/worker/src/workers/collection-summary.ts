@@ -91,3 +91,11 @@ export function summarizeCollectionResults(rows: CollectionResultRow[]): Collect
     status,
   };
 }
+
+export function countTerminalCollectionSources(rows: CollectionResultRow[]): number {
+  return summarizeCollectionResults(rows).sources.length;
+}
+
+export function isCollectionReadyToFinalize(rows: CollectionResultRow[], expectedCount: number): boolean {
+  return expectedCount <= 0 || countTerminalCollectionSources(rows) >= expectedCount;
+}

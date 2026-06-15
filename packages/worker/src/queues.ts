@@ -48,7 +48,7 @@ import { processDeepsearch, type DeepsearchJob } from "./workers/deepsearch.work
 import { processCleanup, type CleanupJob } from "./workers/cleanup.worker.js";
 import { processFavoritesCleanup, type FavoritesCleanupJob } from "./workers/favorites-cleanup.worker.js";
 import { processPostsCleanup, type PostsCleanupJob } from "./workers/posts-cleanup.worker.js";
-import { summarizeCollectionResults } from "./workers/collection-summary.js";
+import { countTerminalCollectionSources, isCollectionReadyToFinalize, summarizeCollectionResults } from "./workers/collection-summary.js";
 import { db } from "./db/index.js";
 import { operationLogs } from "./db/schema.js";
 import { eq } from "drizzle-orm";
@@ -134,8 +134,12 @@ export function registerWorkers(logger: Logger): Worker[] {
     async (job) => {
       // Handle finalize-collection jobs
       if (job.name === "finalize-collection") {
-        const { operationId, expectedCount } = job.data as unknown as { operationId: string; expectedCount: number };
-        logger.info({ operationId, expectedCount }, "Finalizing collection operation");
+        const { operationId, expectedCount, finalizeAttempt = 0 } = job.data as unknown as {
+          operationId: string;
+          expectedCount: number;
+          finalizeAttempt?: number;
+        };
+        logger.info({ operationId, expectedCount, finalizeAttempt }, "Finalizing collection operation");
         try {
           const existingLog = await db
             .select({ metadata: operationLogs.metadata, status: operationLogs.status })
@@ -145,6 +149,31 @@ export function registerWorkers(logger: Logger): Worker[] {
           if (existingLog[0]) {
             const meta = (existingLog[0].metadata as Record<string, unknown>) ?? {};
             const results = (meta.results as Array<Record<string, unknown>>) ?? [];
+            if (!isCollectionReadyToFinalize(results, expectedCount) && finalizeAttempt < 20) {
+              const terminalCount = countTerminalCollectionSources(results);
+              await fetchSourceQueue.add("finalize-collection", {
+                operationId,
+                expectedCount,
+                finalizeAttempt: finalizeAttempt + 1,
+              }, {
+                delay: 30_000,
+                attempts: 1,
+                removeOnComplete: true,
+              });
+              logger.info(
+                { operationId, expectedCount, terminalCount },
+                "Collection operation still has pending source results; finalization delayed"
+              );
+              return { finalized: false, pending: expectedCount - terminalCount };
+            }
+
+            if (!isCollectionReadyToFinalize(results, expectedCount)) {
+              logger.warn(
+                { operationId, expectedCount, terminalCount: countTerminalCollectionSources(results), finalizeAttempt },
+                "Collection finalization reached wait limit; finalizing with available source results"
+              );
+            }
+
             const summary = summarizeCollectionResults(results);
             const successCount = summary.successCount;
             const errorCount = summary.errorCount;

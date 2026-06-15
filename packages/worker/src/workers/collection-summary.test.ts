@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { summarizeCollectionResults } from "./collection-summary.js";
+import { isCollectionReadyToFinalize, summarizeCollectionResults } from "./collection-summary.js";
 
 describe("summarizeCollectionResults", () => {
   it("counts repeated retry errors as one failed source", () => {
@@ -36,5 +36,15 @@ describe("summarizeCollectionResults", () => {
       duplicates: 1,
       attempts: 2,
     });
+  });
+
+  it("does not finalize until every expected source has a terminal result", () => {
+    const results = [
+      { sourceId: "a", sourceName: "Good feed", status: "success", fetched: 10, new: 1, duplicates: 9 },
+      { sourceId: "b", sourceName: "Broken feed", status: "error", error: "HTTP 404" },
+    ];
+
+    expect(isCollectionReadyToFinalize(results, 3)).toBe(false);
+    expect(isCollectionReadyToFinalize(results, 2)).toBe(true);
   });
 });
