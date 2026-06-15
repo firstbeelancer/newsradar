@@ -359,7 +359,7 @@ export const chipFilters = pgTable(
     description: text("description"),
     pattern: text("pattern"),
     operator: varchar("operator", { length: 20 }).default("contains").notNull(),
-    scoreModifier: decimal("score_modifier", { precision: 5, scale: 4 }).default("0.0000").notNull(),
+    scoreModifier: decimal("score_modifier", { precision: 7, scale: 4 }).default("0.0000").notNull(),
     color: varchar("color", { length: 20 }).default("default").notNull(),
     icon: varchar("icon", { length: 50 }),
     threshold: decimal("threshold", { precision: 5, scale: 4 }),

@@ -12,6 +12,16 @@ ALTER TABLE chip_filters
     'age_days_gt', 'age_days_gte', 'age_days_lt', 'age_days_lte'
   ));
 
+-- 1a) Widen score_modifier column. The old type was numeric(5,4), which only
+--     fits values in [-9.9999, 9.9999] — the default «Устаревшее» chip needs
+--     -200, so the default insert would hit a numeric field overflow and
+--     crash the API on every startup. We bump to numeric(7,4) so the column
+--     can hold modifiers up to ±999.9999 (matching the routes Zod cap of
+--     ±1000 set in chip-filters/routes.ts).
+ALTER TABLE chip_filters
+  ALTER COLUMN score_modifier TYPE NUMERIC(7,4)
+  USING score_modifier::NUMERIC(7,4);
+
 -- 2) Add default «Устаревшее» chip filter (-200, age > 3 days) to every agent
 --    that doesn't already have one. Uses the same key as the front-end default,
 --    so re-running is a no-op.
