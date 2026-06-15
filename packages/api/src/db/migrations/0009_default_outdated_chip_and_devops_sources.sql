@@ -15,17 +15,6 @@ ALTER TABLE chip_filters
 -- 2) Add default «Устаревшее» chip filter (-200, age > 3 days) to every agent
 --    that doesn't already have one. Uses the same key as the front-end default,
 --    so re-running is a no-op.
-DO $$
-DECLARE
-  v_max_pos INT;
-BEGIN
-  FOR v_max_pos IN
-    SELECT COALESCE(MAX(position), -1) FROM chip_filters GROUP BY agent_id
-  LOOP
-    NULL;
-  END LOOP;
-END $$;
-
 INSERT INTO chip_filters (agent_id, key, label, pattern, operator, score_modifier, color, icon, is_active, position, created_at, updated_at)
 SELECT
   a.id,
