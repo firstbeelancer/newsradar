@@ -140,7 +140,7 @@ function parseDate(dateStr: string): Date | null {
 export async function parseRssFeed(url: string): Promise<RssParseResult> {
   const { response, text: xml } = await safeFetchText(url, {
     timeoutMs: 30_000,
-    maxBytes: 1_500_000,
+    maxBytes: 5_000_000,
     userAgent: "NewsRadar/1.0 RSS Fetcher",
     headers: {
       Accept: "application/rss+xml, application/xml, text/xml, application/atom+xml, */*",

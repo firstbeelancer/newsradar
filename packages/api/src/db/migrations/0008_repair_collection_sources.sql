@@ -32,6 +32,35 @@ SET is_active = FALSE,
     updated_at = NOW()
 WHERE name IN ('Open Observability', 'IT-Костыли', 'MinIO Blog');
 
+UPDATE sources
+SET is_active = FALSE,
+    fetch_status = 'error',
+    last_error = 'Disabled: source RSS URL is unavailable or blocked',
+    updated_at = NOW()
+WHERE name IN (
+  '3dnew',
+  'AIGA Eye on Design',
+  'CVE Daily — Critical',
+  'Construction Dive',
+  'Content Marketing Institute',
+  'Cossa (Telegram)',
+  'ForumHouse',
+  'Kaspersky Daily (Telegram)',
+  'Kaspersky Daily RU',
+  'Medical Xpress',
+  'Medscape',
+  'NIH News Releases',
+  'Remontnik.ru',
+  'vc.ru (Telegram)',
+  'РемСтрой',
+  'Справочник Строительство',
+  'Строй Свой Дом',
+  'Техно Инсайдер',
+  'Хабр — Маркетинг',
+  'Хабр — Медицина',
+  'Хабр — Строительство'
+);
+
 CREATE OR REPLACE FUNCTION _nr_insert_source_and_link(
   p_workspace_id UUID,
   p_agent_id UUID,
