@@ -93,6 +93,12 @@ export interface ScoreResult {
 /**
  * Evaluate article using AI across 5 criteria.
  * Each score is 0–100.
+ *
+ * Промт-структура соответствует OpenAI/Anthropic conventions:
+ *   - system: persona + формат ответа (всё, что описывает «кто ты» и «как отвечать»)
+ *   - user:   конкретные данные для оценки (заголовок, тело, критерии)
+ * Раньше user промт начинался с «You are a news scoring assistant for a…»,
+ * что дублировало system и сбивало модель с толку в длинных сессиях.
  */
 export async function scoreWithAI(
   title: string,
@@ -107,36 +113,32 @@ export async function scoreWithAI(
   const tone = agentTone ?? "professional";
   const body = buildScoringBody(description, content);
 
-  const prompt = `You are a news scoring assistant for a "${topic}" channel.
-Evaluate the following article on 5 criteria, each 0–100.
+  const systemPrompt = `You are a news scoring assistant for the "${topic}" channel (tone: ${tone}).
 
-Article title: ${title}
-Article body:
-${body || "N/A"}
+Your job is to score one news article against 5 criteria, each 0–100:
+1. relevance — how well it matches the topic "${topic}" and its audience
+2. novelty — how fresh; does it repeat old news
+3. hype — potential for discussion, shares, interest
+4. practical — actionable / useful for work
+5. local — how relevant for a Russian-speaking audience
 
-Channel tone: ${tone}
-
-Scoring criteria:
-1. relevance — How well does this match the topic "${topic}" and its audience?
-2. novelty — How fresh and new is this? Does it repeat old news?
-3. hype — How likely is this to generate discussion, shares, interest?
-4. practical — How actionable or useful is this for work/business/tech?
-5. local — How relevant is this for a Russian-speaking audience?
-
-Respond with ONLY a JSON object, no other text:
+Respond with ONLY a JSON object and nothing else, no prose, no markdown:
 {"relevance":N,"novelty":N,"hype":N,"practical":N,"local":N}
 
-Each value must be an integer 0–100.`;
+Each N must be an integer 0–100. The first character of your reply must be '{' and the last must be '}'.`;
+
+  const userPrompt = `Article title: ${title}
+
+Article body:
+${body || "(no body provided)"}
+
+Score this article. JSON only.`;
 
   try {
     const response = await complete({
       messages: [
-        {
-          role: "system",
-          content:
-            'You are a scoring assistant. Respond with only a JSON object like {"relevance":85,"novelty":70,"hype":60,"practical":40,"local":90}. No other text.',
-        },
-        { role: "user", content: prompt },
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
       ],
       workspaceId,
       process: "scoring",
