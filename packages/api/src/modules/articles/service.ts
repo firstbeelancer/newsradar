@@ -1,4 +1,4 @@
-import { eq, and, desc, asc, sql, type SQL } from "drizzle-orm";
+import { eq, and, desc, asc, ne, sql, type SQL } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import { agents, articles, articleScores, favoriteArticles, sources, workspaces } from "../../db/schema.js";
 import { AppError } from "../../middleware/error-handler.js";
@@ -453,18 +453,28 @@ export async function listFavorites(
 }
 
 export async function deleteAllArticles(workspaceId: string) {
+  // Per ТЗ §2.8: "Новости хранятся 3 дня, затем удаляются, кроме избранных."
+  // Ручное «Удалить всё» тоже должно сохранять избранное, иначе пользователь
+  // теряет своё избранное одним нажатием кнопки.
   const deleted = await db
     .delete(articles)
-    .where(eq(articles.workspaceId, workspaceId))
+    .where(and(eq(articles.workspaceId, workspaceId), ne(articles.isFavorite, true)))
     .returning({ id: articles.id });
 
   return { deleted: deleted.length };
 }
 
 export async function deleteArticlesByAgent(workspaceId: string, agentId: string) {
+  // То же правило для удаления по агенту — избранные статьи не трогаем.
   const deleted = await db
     .delete(articles)
-    .where(and(eq(articles.workspaceId, workspaceId), eq(articles.agentId, agentId)))
+    .where(
+      and(
+        eq(articles.workspaceId, workspaceId),
+        eq(articles.agentId, agentId),
+        ne(articles.isFavorite, true)
+      )
+    )
     .returning({ id: articles.id });
 
   return { deleted: deleted.length };

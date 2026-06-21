@@ -48,11 +48,36 @@ describe('DeepSearch web search provider', () => {
     ]);
   });
 
-  it('returns no external sources when web search is disabled or has no key', async () => {
+  it('returns no external sources when web search is disabled', async () => {
     const fetchMock = vi.fn();
 
-    await expect(runWebSearch('query', { provider: 'disabled', maxResults: 5 }, fetchMock as never)).resolves.toEqual([]);
-    await expect(runWebSearch('query', { provider: 'brave', maxResults: 5 }, fetchMock as never)).resolves.toEqual([]);
+    await expect(
+      runWebSearch('query', { provider: 'disabled', maxResults: 5 }, fetchMock as never),
+    ).resolves.toEqual([]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('throws a descriptive error when a non-disabled provider has no API key', async () => {
+    const fetchMock = vi.fn();
+
+    await expect(
+      runWebSearch('query', { provider: 'brave', maxResults: 5 }, fetchMock as never),
+    ).rejects.toThrow(/API-ключ/);
+    await expect(
+      runWebSearch('query', { provider: 'perplexity', maxResults: 5 }, fetchMock as never),
+    ).rejects.toThrow(/API-ключ/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('throws a descriptive error for unsupported providers (tavily, serpapi)', async () => {
+    const fetchMock = vi.fn();
+
+    await expect(
+      runWebSearch('query', { provider: 'tavily', apiKey: 'k', maxResults: 5 }, fetchMock as never),
+    ).rejects.toThrow(/Tavily/);
+    await expect(
+      runWebSearch('query', { provider: 'serpapi', apiKey: 'k', maxResults: 5 }, fetchMock as never),
+    ).rejects.toThrow(/SerpAPI/);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

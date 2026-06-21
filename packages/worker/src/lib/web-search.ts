@@ -161,7 +161,19 @@ export async function runWebSearch(
   const apiKey = settings.apiKey?.trim();
   const maxResults = clampMaxResults(settings.maxResults);
 
-  if (provider === "disabled" || !apiKey || !query.trim()) {
+  if (provider === "disabled") {
+    return [];
+  }
+
+  if (!apiKey) {
+    // Не подавляем ошибку: в worker это приведёт к тихому пустому списку,
+    // и владелец не поймёт, почему DeepSearch не находит источники.
+    throw new Error(
+      `DeepSearch web search: для провайдера «${provider}» не задан API-ключ. Открой Настройки → DeepSearch / внешний поиск и вставь ключ.`
+    );
+  }
+
+  if (!query.trim()) {
     return [];
   }
 
@@ -169,8 +181,20 @@ export async function runWebSearch(
     return runCompatibleSearch(query, settings, fetchImpl, provider);
   }
 
+  if (provider === "tavily") {
+    throw new Error(
+      "DeepSearch web search: провайдер Tavily пока не подключён в Newsradar. Используй Brave / Perplexity / Grok или дождись адаптера."
+    );
+  }
+
+  if (provider === "serpapi") {
+    throw new Error(
+      "DeepSearch web search: провайдер SerpAPI пока не подключён в Newsradar. Используй Brave / Perplexity / Grok или дождись адаптера."
+    );
+  }
+
   if (provider !== "brave") {
-    return [];
+    throw new Error(`DeepSearch web search: неизвестный провайдер «${provider}».`);
   }
 
   const baseUrl = settings.baseUrl?.trim() || "https://api.search.brave.com/res/v1/web/search";

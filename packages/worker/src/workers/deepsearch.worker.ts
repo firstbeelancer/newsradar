@@ -247,6 +247,7 @@ export async function processDeepsearch(
       customPrompt,
     });
 
+    let resolvedProviderInfo: { provider: string; model: string; baseUrl: string; source: string } | undefined;
     const reportText = (await complete({
       workspaceId,
       process: "deepsearch",
@@ -260,6 +261,20 @@ export async function processDeepsearch(
         },
         { role: "user", content: prompt },
       ],
+      onProviderResolved: (info) => {
+        resolvedProviderInfo = info;
+        logger.info(
+          {
+            resultId,
+            articleId,
+            process: "deepsearch",
+            provider: info.provider,
+            model: info.model,
+            source: info.source,
+          },
+          "DeepSearch AI provider resolved",
+        );
+      },
     })).trim();
 
     if (!reportText) {
@@ -277,6 +292,9 @@ export async function processDeepsearch(
       externalSourceCount: externalSourcesWithText.length,
       webSearchProvider: webSearchSettings.provider,
       webSearchError,
+      aiProvider: resolvedProviderInfo?.provider ?? null,
+      aiModel: resolvedProviderInfo?.model ?? null,
+      aiProviderSource: resolvedProviderInfo?.source ?? null,
       promptVersion: "deepsearch-worker-v2-web-search",
     };
 
@@ -293,8 +311,10 @@ export async function processDeepsearch(
       .where(and(eq(deepsearchResults.id, resultId), eq(deepsearchResults.workspaceId, workspaceId)));
 
     await updateOperationLog(operationLogId, {
-      status: "success",
-      message: "DeepSearch завершен",
+      status: webSearchError ? "warning" : "success",
+      message: webSearchError
+        ? `DeepSearch завершен с предупреждением: внешний поиск не сработал (${webSearchError})`
+        : "DeepSearch завершен",
       finishedAt,
       metadata: {
         resultId,
@@ -303,6 +323,9 @@ export async function processDeepsearch(
         externalSourceCount: externalSourcesWithText.length,
         webSearchProvider: webSearchSettings.provider,
         webSearchError,
+        aiProvider: resolvedProviderInfo?.provider ?? null,
+        aiModel: resolvedProviderInfo?.model ?? null,
+        aiProviderSource: resolvedProviderInfo?.source ?? null,
         preview: reportText.slice(0, 280),
       },
     });

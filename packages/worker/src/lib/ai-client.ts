@@ -30,6 +30,17 @@ export interface AiCompleteOptions {
   process?: "search" | "translation" | "ingest_analysis" | "scoring" | "generation" | "deepsearch";
   temperature?: number;
   maxTokens?: number;
+  /**
+   * Callback, вызываемый сразу после того, как провайдер и модель резолвятся,
+   * но до HTTP-запроса. Используется, чтобы зафиксировать в логах,
+   * какой именно провайдер/модель реально сработают (а не env-fallback).
+   */
+  onProviderResolved?: (info: {
+    provider: string;
+    baseUrl: string;
+    model: string;
+    source: "explicit-key" | "workspace-provider" | "env-fallback";
+  }) => void;
 }
 
 export interface AiStreamOptions extends AiCompleteOptions {
@@ -93,12 +104,14 @@ async function resolveProvider(
   baseUrl: string;
   apiKey: string;
   model: string;
+  source: "explicit-key" | "workspace-provider" | "env-fallback";
 }> {
   if (opts.apiKey) {
     const envProvider = resolveEnvProvider(opts);
     return {
       ...envProvider,
       model: resolveModel(opts),
+      source: "explicit-key",
     };
   }
 
@@ -129,6 +142,7 @@ async function resolveProvider(
           resolveEnvProvider({ provider: selected.provider as "openai" | "anthropic" | "openrouter" | "google" }).baseUrl,
         apiKey: decrypt(selected.apiKeyEncrypted),
         model: opts.model ?? selected.model,
+        source: "workspace-provider",
       };
     }
   }
@@ -137,6 +151,7 @@ async function resolveProvider(
   return {
     ...envProvider,
     model: resolveModel(opts),
+    source: "env-fallback",
   };
 }
 
@@ -166,11 +181,26 @@ function getHeaders(
       "Content-Type": "application/json",
     };
   }
-  // openai, openrouter, google all use Bearer auth
-  return {
+  // openai, openrouter, google all use Bearer auth.
+  // OpenRouter требует HTTP-Referer + X-Title для атрибуции в дашборде аналитики,
+  // иначе провайдер в OpenRouter Analytics показывается как «Unknown».
+  const headers: Record<string, string> = {
     Authorization: `Bearer ${apiKey}`,
     "Content-Type": "application/json",
   };
+
+  if (provider === "openrouter") {
+    if (env.OPENROUTER_APP_URL) {
+      headers["HTTP-Referer"] = env.OPENROUTER_APP_URL;
+    } else if (env.DOMAIN) {
+      headers["HTTP-Referer"] = env.DOMAIN.startsWith("http") ? env.DOMAIN : `https://${env.DOMAIN}`;
+    }
+    if (env.OPENROUTER_APP_NAME) {
+      headers["X-Title"] = env.OPENROUTER_APP_NAME;
+    }
+  }
+
+  return headers;
 }
 
 /* ─── Request body builders ─── */
@@ -370,7 +400,8 @@ function parseNonStreamingResponse(
  * @returns The complete response text.
  */
 export async function complete(opts: AiCompleteOptions): Promise<string> {
-  const { provider, baseUrl, apiKey, model } = await resolveProvider(opts);
+  const resolved = await resolveProvider(opts);
+  const { provider, baseUrl, apiKey, model, source } = resolved;
   const sanitizedApiKey = sanitizeApiKey(apiKey);
   const temperature = opts.temperature ?? 0.7;
   const maxTokens = opts.maxTokens ?? 4_000;
@@ -378,6 +409,12 @@ export async function complete(opts: AiCompleteOptions): Promise<string> {
   if (!sanitizedApiKey) {
     throw new Error("No API key provided for AI completion");
   }
+
+  // Сообщаем вызывающему коду, какой провайдер и модель реально выбраны,
+  // чтобы в журнал операций / лог попало понятное имя (Alpha Owl / Sonar и т.п.).
+  // Это закрывает ситуацию, когда владелец видит в OpenRouter Analytics сессии
+  // ChatGPT или Sonar и не понимает, откуда они.
+  opts.onProviderResolved?.({ provider, baseUrl, model, source });
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 120_000);
@@ -410,7 +447,8 @@ export async function complete(opts: AiCompleteOptions): Promise<string> {
  * @returns The full aggregated response text.
  */
 export async function streamComplete(opts: AiStreamOptions): Promise<string> {
-  const { provider, baseUrl, apiKey, model } = await resolveProvider(opts);
+  const resolved = await resolveProvider(opts);
+  const { provider, baseUrl, apiKey, model } = resolved;
   const sanitizedApiKey = sanitizeApiKey(apiKey);
   const temperature = opts.temperature ?? 0.7;
   const maxTokens = opts.maxTokens ?? 4_000;

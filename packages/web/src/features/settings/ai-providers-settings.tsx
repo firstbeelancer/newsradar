@@ -402,7 +402,60 @@ export function AIProvidersSettings() {
 
       {!loading && providers.length > 0 && (
         <div className="space-y-3">
+          {/* Сводка: какой провайдер сейчас реально обслуживает каждый процесс.
+              Если ни один не назначен явно, worker выберет:
+              • единственный активный провайдер — на все процессы;
+              • если активных несколько — упадёт на env-fallback (PLATFORM_AI_MODEL). */}
+          <Card className="bg-muted/40">
+            <CardContent className="p-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <Check className="h-4 w-4 text-success" />
+                <p className="text-sm font-semibold">Активные назначения процессов</p>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Эти провайдеры сейчас вызываются в worker для соответствующего шага пайплайна.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-1">
+                {PROCESS_OPTIONS.map((proc) => {
+                  const activeProviders = providers.filter(
+                    (p) => p.isActive && (p.assignedTo || []).includes(proc.value),
+                  );
+                  const activeCount = providers.filter((p) => p.isActive).length;
+                  const soleActiveProvider =
+                    activeCount === 1 ? providers.find((p) => p.isActive) : null;
+                  const effectiveProvider =
+                    activeProviders.length > 0
+                      ? activeProviders[0]
+                      : soleActiveProvider ?? null;
+                  return (
+                    <div
+                      key={proc.value}
+                      className="rounded-md border border-border/60 bg-background px-3 py-2"
+                    >
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{proc.label}</p>
+                      {effectiveProvider ? (
+                        <p className="text-sm font-medium truncate mt-0.5">
+                          {effectiveProvider.name}
+                          <span className="ml-1 text-[11px] font-normal text-muted-foreground">
+                            · {effectiveProvider.model}
+                          </span>
+                        </p>
+                      ) : (
+                        <p className="text-sm text-warning mt-0.5">
+                          ⚠️ нет активного провайдера (будет env-fallback)
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
           {providers.map((provider) => {
+            const assignedProcesses = provider.assignedTo || [];
+            const isUnassigned = assignedProcesses.length === 0;
+            const isSoleActive = providers.filter((p) => p.isActive).length === 1 && provider.isActive;
             const testResult = testResults[provider.id];
             const isTesting = testingId === provider.id;
             const isDeleting = deletingId === provider.id;
@@ -424,6 +477,20 @@ export function AIProvidersSettings() {
                           <Badge variant="default" className="text-[10px] shrink-0">
                             {PROVIDER_LABELS[provider.provider] || provider.provider}
                           </Badge>
+                          {/* Предупреждение о неоднозначности: провайдер активен, но не назначен ни на один процесс,
+                              при этом есть другие активные провайдеры. Worker упадёт на env-fallback, и в OpenRouter
+                              прилетит модель не из этого провайдера. */}
+                          {isUnassigned && providers.filter((p) => p.isActive).length > 1 && (
+                            <Badge variant="warning" className="text-[10px] shrink-0" title="Провайдер активен, но не назначен ни на один процесс. Worker будет использовать другой провайдер или env-fallback.">
+                              не назначен
+                            </Badge>
+                          )}
+                          {/* Если это единственный активный провайдер, worker автоматически назначит его на все процессы (backfillLegacyAssignments). */}
+                          {isUnassigned && isSoleActive && (
+                            <Badge variant="default" className="text-[10px] shrink-0" title="Единственный активный провайдер — worker автоматически использует его для всех процессов.">
+                              авто-назначение
+                            </Badge>
+                          )}
                         </div>
                         <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
                           <Globe className="h-3 w-3 shrink-0" />

@@ -142,6 +142,18 @@ Each value must be an integer 0–100.`;
       process: "scoring",
       temperature: 0.1,
       maxTokens: 80,
+      onProviderResolved: (info) => {
+        logger?.info(
+          {
+            process: "scoring",
+            provider: info.provider,
+            model: info.model,
+            source: info.source,
+            title,
+          },
+          "Scoring AI provider resolved",
+        );
+      },
     });
 
     // Parse JSON from response

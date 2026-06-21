@@ -8,6 +8,7 @@ const envSchema = z.object({
   NODE_ENV: z
     .enum(["development", "production", "test"])
     .default("development"),
+  DOMAIN: z.string().default("localhost"),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   REDIS_URL: z.string().min(1, "REDIS_URL is required"),
   JWT_SECRET: z.preprocess(
@@ -27,6 +28,11 @@ const envSchema = z.object({
   PLATFORM_AI_MODEL: z.string().default("tencent/hy3-preview:free"),
   PLATFORM_AI_API_KEY: z.string().optional(),
   OPENROUTER_API_KEY: z.string().optional(),
+
+  // OpenRouter analytics attribution (HTTP-Referer / X-Title).
+  // Если заданы, в OpenRouter Analytics приложение видно по имени вместо «Unknown».
+  OPENROUTER_APP_URL: z.string().optional(),
+  OPENROUTER_APP_NAME: z.string().optional(),
 
   // S3-compatible storage
   S3_ENDPOINT: z.string().optional(),

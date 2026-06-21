@@ -22,6 +22,7 @@ import {
   CheckSquare,
   Sparkles,
   X,
+  Zap,
 } from 'lucide-react';
 
 const PAGE_SIZE = 20;
@@ -53,7 +54,7 @@ export function FeedPage() {
   const agentIdFromRoute = (routeParams as Record<string, string> | undefined)?.agentId;
 
   const queryClient = useQueryClient();
-  const { agents, fetchAgents } = useAgentsStore();
+  const { agents, fetchAgents, collectAgent } = useAgentsStore();
   const { sources, fetchSources, fetchSourcesByAgent } = useSourcesStore();
   const {
     selectedArticleIds,
@@ -78,6 +79,7 @@ export function FeedPage() {
     favoritesOnly: false,
   });
   const [isSelectingAll, setIsSelectingAll] = useState(false);
+  const [agentCollectLoading, setAgentCollectLoading] = useState(false);
 
   useEffect(() => {
     fetchAgents();
@@ -138,6 +140,29 @@ export function FeedPage() {
   );
 
   const agentName = agents.find((a) => a.id === filters.agentId)?.name;
+
+  // Кнопка «Собрать» на странице агента. Не требует диалога «Все агенты / один агент»:
+  // если пользователь зашёл в конкретного агента, он ожидает собрать именно его.
+  const handleCollectAgent = useCallback(async () => {
+    if (!filters.agentId || agentCollectLoading) return;
+    setAgentCollectLoading(true);
+    try {
+      await collectAgent(filters.agentId);
+      addToast({
+        title: 'Сбор запущен',
+        description: `${agentName ?? 'Агент'} собирает новости. Следи за статус-баром и журналом.`,
+        variant: 'success',
+      });
+    } catch (error) {
+      addToast({
+        title: 'Не удалось запустить сбор',
+        description: error instanceof Error ? error.message : 'Попробуй ещё раз',
+        variant: 'danger',
+      });
+    } finally {
+      setAgentCollectLoading(false);
+    }
+  }, [addToast, agentCollectLoading, agentName, collectAgent, filters.agentId]);
   const selectedArticlesVisible = articles.filter((article) => selectedArticleIds.includes(article.id));
   const hasVisibleSelection = selectedArticlesVisible.length > 0;
   const selectedCount = selectedArticleIds.length;
@@ -326,6 +351,19 @@ export function FeedPage() {
               </p>
             </div>
           </div>
+          {/* Кнопка «Собрать» прямо в контексте агента: собирает только его,
+              не предлагает выбирать «Все агенты» (это уже есть на дашборде). */}
+          {filters.agentId && (
+            <Button
+              size="sm"
+              onClick={handleCollectAgent}
+              loading={agentCollectLoading}
+              title={`Собрать новости для агента «${agentName ?? ''}»`}
+            >
+              <Zap className="h-4 w-4" />
+              Собрать для агента
+            </Button>
+          )}
         </div>
 
         {/* Search */}

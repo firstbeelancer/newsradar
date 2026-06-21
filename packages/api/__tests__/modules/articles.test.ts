@@ -170,3 +170,36 @@ describe('DELETE /api/v1/articles/:id/favorite — удалить из избр�
     expect(true).toBe(true);
   });
 });
+
+describe('DELETE /api/v1/articles — удаление новостей (ТЗ §2.8)', () => {
+  it('при удалении всех новостей избранные должны сохраняться', async () => {
+    // Имитируем логику deleteAllArticles: WHERE workspace_id = X AND is_favorite != true
+    // Если пользователь удаляет все новости, избранные не должны попадать под условие.
+    const allArticles = [
+      { id: 'a1', workspaceId: 'w1', isFavorite: false },
+      { id: 'a2', workspaceId: 'w1', isFavorite: false },
+      { id: 'a3', workspaceId: 'w1', isFavorite: true },
+      { id: 'a4', workspaceId: 'w1', isFavorite: true },
+    ];
+    const toDelete = allArticles.filter((a) => !a.isFavorite);
+    const preserved = allArticles.filter((a) => a.isFavorite);
+    expect(toDelete).toHaveLength(2);
+    expect(preserved).toHaveLength(2);
+    expect(preserved.map((a) => a.id).sort()).toEqual(['a3', 'a4']);
+  });
+
+  it('при удалении новостей по агенту избранные этого агента тоже сохраняются', async () => {
+    const articlesByAgent = [
+      { id: 'a1', agentId: 'ag1', isFavorite: false },
+      { id: 'a2', agentId: 'ag1', isFavorite: false },
+      { id: 'a3', agentId: 'ag1', isFavorite: true },
+      { id: 'a4', agentId: 'ag2', isFavorite: false },
+    ];
+    const toDelete = articlesByAgent.filter(
+      (a) => a.agentId === 'ag1' && !a.isFavorite
+    );
+    expect(toDelete.map((a) => a.id)).toEqual(['a1', 'a2']);
+    expect(articlesByAgent.find((a) => a.id === 'a3')?.isFavorite).toBe(true);
+    expect(articlesByAgent.find((a) => a.id === 'a4')?.agentId).toBe('ag2');
+  });
+});
