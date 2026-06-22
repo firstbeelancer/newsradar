@@ -122,6 +122,14 @@ Your job is to score one news article against 5 criteria, each 0–100:
 4. practical — actionable / useful for work
 5. local — how relevant for a Russian-speaking audience
 
+Hard rules for relevance:
+- If NONE of the channel tags/topics appear in the article (title or body), relevance MUST be 0–15. Off-topic news is off-topic even if the article is interesting.
+- If only 1 tag/topic matches tangentially (e.g. the article mentions "AI" but the channel is "DevOps & infrastructure"), relevance MUST be ≤ 35.
+- If 2–3 tags/topics match, relevance 40–70.
+- If the article is squarely on the channel's main topic AND matches several tags, relevance 75–100.
+- The word "agent" alone (in "AI agent", "user agent", "AgentLoop" etc.) does NOT make an article relevant to a DevOps / infrastructure channel. You must verify the *kind* of agent (AI/software agent vs ops/infrastructure automation agent).
+- A high relevance for a slightly interesting off-topic article is worse than a low relevance for an on-topic one. The channel owner has explicitly tagged what they want; respect that.
+
 Respond with ONLY a JSON object and nothing else, no prose, no markdown:
 {"relevance":N,"novelty":N,"hype":N,"practical":N,"local":N}
 
@@ -299,6 +307,29 @@ export function analyzeKeywordMatch(
     totalKeywords: normalizedKeywords.length,
     matchedKeywords,
   };
+}
+
+/* ─── 2.5 Relevance cap (pure function) ─── */
+
+/**
+ * Tiered relevance cap, exported as a pure function for unit testing.
+ * If the agent has explicit keywords and NONE match the article, the article
+ * is treated as off-topic and the final weighted score is clamped to a small
+ * value so it doesn't bubble to the top of the feed.
+ *
+ *   - totalKeywords >= 5 and 0 matches → cap 20 (the agent has a clear theme)
+ *   - totalKeywords >= 2 and 0 matches → cap 35 (smaller tag set, allow more wiggle)
+ *   - 1 tag and 0 matches               → cap 50 (very thin tag set)
+ *   - 0 tags                            → undefined (backfill keyword extraction may be noisy)
+ */
+export function computeRelevanceCap(
+  totalKeywords: number,
+  matchedCount: number
+): number | undefined {
+  if (totalKeywords <= 0 || matchedCount > 0) return undefined;
+  if (totalKeywords >= 5) return 20;
+  if (totalKeywords >= 2) return 35;
+  return 50;
 }
 
 /* ─── 3. Freshness ─── */
@@ -692,14 +723,22 @@ export async function scoreArticle(
     sourceTrustScore
   );
 
-  const relevanceCap =
-    keywordStats.totalKeywords > 0 &&
-    keywordStats.matchedCount === 0 &&
-    aiScores.relevance < 75
-      ? aiFallbackUsed
-        ? 35
-        : 45
-      : undefined;
+  // Hard cap: if the agent has explicit keywords and NONE of them match the
+  // article, the article is off-topic for this agent. We cap the final weighted
+  // score to keep such articles out of the top of the feed.
+  //
+  // Tiered by how strict we want to be:
+  //   - totalKeywords >= 5 and 0 matches → cap 20 (the agent has a clear theme)
+  //   - totalKeywords >= 2 and 0 matches → cap 35 (smaller tag set, allow more wiggle)
+  //   - 1 tag and 0 matches               → cap 50 (very thin tag set)
+  //   - 0 tags                            → no cap (backfill keyword extraction may be noisy)
+  //
+  // Это закрывает ситуацию, когда AI стаставит relevance 75+ на чуждой теме
+  // (например, «AI agent» в ленте DevOps-агента), и статья проходит в топ.
+  const relevanceCap = computeRelevanceCap(
+    keywordStats.totalKeywords,
+    keywordStats.matchedCount,
+  );
 
   const uncappedWeightedScore = clampScore(baseScore + chipModifierTotal);
   const weightedScore = relevanceCap === undefined
