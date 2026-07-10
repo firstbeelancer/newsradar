@@ -9,7 +9,7 @@
  */
 
 import { db } from "../db/index.js";
-import { sources, articles, agents, agentSources, operationLogs } from "../db/schema.js";
+import { sources, articles, agents, agentSources } from "../db/schema.js";
 import { eq, and, sql } from "drizzle-orm";
 import { parseRssFeed } from "../lib/rss-parser.js";
 import { parseTelegramChannel } from "../lib/telegram-parser.js";
@@ -18,6 +18,7 @@ import { fetchArticleText } from "../lib/article-extractor.js";
 import { rawDedupQueue } from "../connection/redis.js";
 import type { Job } from "bullmq";
 import type { Logger } from "pino";
+import { appendCollectionResult } from "./collection-results.js";
 
 export interface FetchSourceJob {
   sourceId: string;
@@ -240,14 +241,7 @@ export async function processFetchSource(
     // Update operation log with progress
     if (operationId) {
       try {
-        const existingLog = await db
-          .select({ metadata: operationLogs.metadata })
-          .from(operationLogs)
-          .where(eq(operationLogs.id, operationId))
-          .limit(1);
-        const existingMeta = (existingLog[0]?.metadata as Record<string, unknown>) ?? {};
-        const results = (existingMeta.results as Array<Record<string, unknown>>) ?? [];
-        results.push({
+        await appendCollectionResult(operationId, {
           sourceId,
           sourceName: source.name,
           fetched: fetchedCount,
@@ -256,12 +250,6 @@ export async function processFetchSource(
           skippedStale,
           status: "success",
         });
-        await db
-          .update(operationLogs)
-          .set({
-            metadata: { ...existingMeta, results },
-          })
-          .where(eq(operationLogs.id, operationId));
       } catch (logErr) {
         logger.warn({ err: String(logErr), operationId }, "Failed to update operation log");
       }
@@ -291,25 +279,12 @@ export async function processFetchSource(
     // Update operation log with the terminal source error only.
     if (operationId && isFinalAttempt(job)) {
       try {
-        const existingLog = await db
-          .select({ metadata: operationLogs.metadata })
-          .from(operationLogs)
-          .where(eq(operationLogs.id, operationId))
-          .limit(1);
-        const existingMeta = (existingLog[0]?.metadata as Record<string, unknown>) ?? {};
-        const results = (existingMeta.results as Array<Record<string, unknown>>) ?? [];
-        results.push({
+        await appendCollectionResult(operationId, {
           sourceId,
           sourceName: source?.name ?? "unknown",
           status: "error",
           error: errorMessage,
         });
-        await db
-          .update(operationLogs)
-          .set({
-            metadata: { ...existingMeta, results },
-          })
-          .where(eq(operationLogs.id, operationId));
       } catch (logErr) {
         logger.warn({ err: String(logErr), operationId }, "Failed to update operation log on error");
       }
