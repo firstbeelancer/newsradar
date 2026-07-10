@@ -2,6 +2,7 @@ import { and, count, desc, eq } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import { agents, articles, operationLogs, workspaces, agentSources, sources } from "../../db/schema.js";
 import { AppError } from "../../middleware/error-handler.js";
+import { deduplicateCollectionSources, type CollectionSourceRef } from "./collection-sources.js";
 
 async function assertWorkspaceOwner(params: { userId: string; workspaceId: string }) {
   const workspace = await db.query.workspaces.findFirst({
@@ -145,6 +146,7 @@ export async function collectAllAgents(params: { userId: string; workspaceId: st
     try {
       const { getFetchSourceQueue } = await import("../../lib/queues.js");
       const fetchQueue = getFetchSourceQueue();
+      const collectionSources: CollectionSourceRef[] = [];
 
       for (const agent of activeAgents) {
         const linkedSources = await db
@@ -153,16 +155,18 @@ export async function collectAllAgents(params: { userId: string; workspaceId: st
           .innerJoin(sources, eq(agentSources.sourceId, sources.id))
           .where(and(eq(agentSources.agentId, agent.id), eq(sources.isActive, true)));
 
-        for (const source of linkedSources) {
-          await fetchQueue.add("fetch-source", {
-            sourceId: source.id,
-            operationId: log.id,
-          }, {
-            attempts: 3,
-            backoff: { type: "exponential", delay: 5000 },
-          });
-          totalQueued++;
-        }
+        collectionSources.push(...linkedSources);
+      }
+
+      for (const source of deduplicateCollectionSources(collectionSources)) {
+        await fetchQueue.add("fetch-source", {
+          sourceId: source.id,
+          operationId: log.id,
+        }, {
+          attempts: 3,
+          backoff: { type: "exponential", delay: 5000 },
+        });
+        totalQueued++;
       }
 
       // Add delayed finalization job
