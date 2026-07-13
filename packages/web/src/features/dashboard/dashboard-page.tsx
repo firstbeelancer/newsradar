@@ -9,6 +9,7 @@ import { Badge } from '@shared/ui/badge';
 import { Skeleton } from '@shared/ui/skeleton';
 import { AgentCollectDialog } from '@/features/agents/agent-collect-dialog';
 import { useToast } from '@shared/ui/toast';
+import { formatDateTime } from '@shared/lib/utils';
 import {
   Plus,
   Bot,
@@ -451,10 +452,7 @@ export function DashboardPage() {
                         {item.source_name}
                       </Badge>
                       <span className="shrink-0 text-[10px] text-muted-foreground">
-                        {new Date(item.published_at).toLocaleDateString('ru-RU', {
-                          day: 'numeric',
-                          month: 'short',
-                        })}
+                        {formatDateTime(item.published_at)}
                       </span>
                     </div>
                   </Link>

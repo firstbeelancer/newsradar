@@ -5,6 +5,7 @@ import { AppError } from "../../middleware/error-handler.js";
 import type { PaginatedResult, Cursor } from "../../lib/pagination.js";
 import { encodeCursor, decodeCursor } from "../../lib/pagination.js";
 import type { Source, NewSource } from "../../db/types.js";
+import { probeRssBody, probeTelegramBody, telegramPreviewUrl } from "./source-probe.js";
 
 // ─── CRUD ───
 
@@ -109,9 +110,9 @@ export async function testSource(id: string, workspaceId: string) {
 
   // Basic connectivity test based on source type
   if (source.type === "rss") {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 10000);
       const response = await fetch(source.url, {
         method: "GET",
         signal: controller.signal,
@@ -120,8 +121,6 @@ export async function testSource(id: string, workspaceId: string) {
           Accept: "application/rss+xml, application/xml, text/xml, */*",
         },
       });
-      clearTimeout(timeout);
-
       if (!response.ok) {
         return {
           success: false,
@@ -132,28 +131,59 @@ export async function testSource(id: string, workspaceId: string) {
 
       const contentType = response.headers.get("content-type") ?? "";
       const body = await response.text();
-      const hasXml = body.trimStart().startsWith("<?xml") || body.includes("<rss") || body.includes("<feed");
+      const probe = probeRssBody(body);
+      const success = probe.validXml && probe.articleCount > 0;
 
       return {
-        success: hasXml,
+        success,
         status: response.status,
         contentType,
         bodyPreview: body.slice(0, 500),
-        message: hasXml ? "Valid RSS feed detected" : "Response is not valid RSS/XML",
+        articles_found: probe.articleCount,
+        dated_articles_found: probe.datedArticleCount,
+        message: !probe.validXml
+          ? "Response is not valid RSS/XML"
+          : probe.articleCount === 0
+            ? "RSS/XML contains no articles"
+            : probe.datedArticleCount === 0
+              ? `Valid feed with ${probe.articleCount} articles, but publication dates are missing`
+              : `Valid feed with ${probe.articleCount} articles`,
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       return { success: false, message };
+    } finally {
+      clearTimeout(timeout);
     }
   }
 
   if (source.type === "telegram") {
-    // Telegram testing requires a bot token — return a stub result
-    return {
-      success: true,
-      message: "Telegram source validation requires bot configuration. Source structure is valid.",
-      note: "Actual message fetching will be done by the collection worker",
-    };
+    // Public channel previews can be validated without a bot token.
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    try {
+      const response = await fetch(telegramPreviewUrl(source.channelUsername, source.url), {
+        signal: controller.signal,
+        headers: { "User-Agent": "NewsRadar/1.0 Telegram Fetcher" },
+      });
+      if (!response.ok) {
+        return { success: false, status: response.status, message: `HTTP ${response.status}: ${response.statusText}` };
+      }
+      const articleCount = probeTelegramBody(await response.text());
+      return {
+        success: articleCount > 0,
+        status: response.status,
+        articles_found: articleCount,
+        message: articleCount > 0
+          ? `Telegram preview contains ${articleCount} messages`
+          : "Telegram channel is unavailable, private, empty, or has no public preview",
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      return { success: false, message };
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   return { success: false, message: "Unknown source type" };

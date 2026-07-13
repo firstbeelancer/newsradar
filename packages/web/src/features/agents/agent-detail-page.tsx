@@ -52,7 +52,7 @@ import {
   Sparkles,
   type LucideIcon,
 } from 'lucide-react';
-import { cleanArticleText } from '@shared/lib/utils';
+import { cleanArticleText, formatDateTime } from '@shared/lib/utils';
 
 // Map agent.icon string to Lucide icon component
 const ICON_MAP: Record<string, LucideIcon> = {
@@ -214,12 +214,7 @@ function AgentArticlesList({ agentId }: { agentId: string }) {
                 <div className="mt-2 flex items-center gap-3 text-[11px] text-muted-foreground">
                   <span className="font-medium">{article.source_name}</span>
                   <span>
-                    {new Date(article.published_at).toLocaleDateString('ru-RU', {
-                      day: 'numeric',
-                      month: 'short',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
+                    {formatDateTime(article.published_at)}
                   </span>
                 </div>
               </div>

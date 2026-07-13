@@ -13,8 +13,9 @@ import { sources, articles, agents, agentSources } from "../db/schema.js";
 import { eq, and, sql } from "drizzle-orm";
 import { parseRssFeed } from "../lib/rss-parser.js";
 import { parseTelegramChannel } from "../lib/telegram-parser.js";
-import { checkRawDedup, computeRawHash } from "../lib/dedup.js";
+import { checkRawDedup } from "../lib/dedup.js";
 import { fetchArticleText } from "../lib/article-extractor.js";
+import { fetchPublicationDate } from "../lib/publication-date.js";
 import { rawDedupQueue } from "../connection/redis.js";
 import type { Job } from "bullmq";
 import type { Logger } from "pino";
@@ -55,7 +56,7 @@ function isFinalAttempt(job: Job<FetchSourceJob>): boolean {
 export async function processFetchSource(
   job: Job<FetchSourceJob>,
   logger: Logger
-): Promise<{ fetched: number; newArticles: number; duplicates: number; skippedStale: number }> {
+): Promise<{ fetched: number; newArticles: number; duplicates: number; skippedStale: number; skippedUndated: number }> {
   const { sourceId, operationId } = job.data;
 
   logger.info({ sourceId, jobId: job.id, operationId }, "Fetching source");
@@ -74,14 +75,14 @@ export async function processFetchSource(
 
   if (!source.isActive) {
     logger.warn({ sourceId }, "Source is inactive, skipping");
-    return { fetched: 0, newArticles: 0, duplicates: 0, skippedStale: 0 };
+    return { fetched: 0, newArticles: 0, duplicates: 0, skippedStale: 0, skippedUndated: 0 };
   }
 
   // Resolve agent/workspace
   const agentRef = await resolveAgentForSource(sourceId);
   if (!agentRef) {
     logger.warn({ sourceId }, "No agent linked to source");
-    return { fetched: 0, newArticles: 0, duplicates: 0, skippedStale: 0 };
+    return { fetched: 0, newArticles: 0, duplicates: 0, skippedStale: 0, skippedUndated: 0 };
   }
 
   // Fetch based on source type
@@ -89,10 +90,11 @@ export async function processFetchSource(
   let newCount = 0;
   let dupCount = 0;
   let skippedStale = 0;
+  let skippedUndated = 0;
 
   // 3-day freshness cutoff (TZ §8.1 + §2.8: «Новости хранятся 3 дня, затем удаляются,
   // кроме избранных». Сбор старых новостей не имеет смысла, только засоряет feed.
-  // If pubDate is missing/invalid we keep the article — only known-old items get skipped.)
+  // Missing dates are resolved from article metadata; unresolved items are skipped.
   const STALE_AFTER_MS = 3 * 24 * 60 * 60 * 1000;
   const freshCutoff = Date.now() - STALE_AFTER_MS;
 
@@ -112,11 +114,19 @@ export async function processFetchSource(
         "RSS feed parsed"
       );
 
-      for (const item of result.items) {
-        if (isStale(item.pubDate)) {
+      const MAX_FEED_ITEMS = 100;
+      const MAX_DATE_LOOKUPS = 20;
+      let dateLookups = 0;
+      let undatedStaleBoundaryReached = false;
+
+      for (const item of result.items.slice(0, MAX_FEED_ITEMS)) {
+        let publishedAt = item.pubDate;
+
+        if (isStale(publishedAt)) {
           skippedStale++;
           continue;
         }
+
         const { isDuplicate, hash } = await checkRawDedup(
           item.link,
           item.title,
@@ -126,6 +136,39 @@ export async function processFetchSource(
         if (isDuplicate) {
           dupCount++;
           continue;
+        }
+
+        if (!publishedAt) {
+          if (undatedStaleBoundaryReached) {
+            skippedStale++;
+            continue;
+          }
+          if (dateLookups >= MAX_DATE_LOOKUPS) {
+            skippedUndated++;
+            continue;
+          }
+
+          dateLookups++;
+          try {
+            publishedAt = await fetchPublicationDate(item.link);
+          } catch (dateError) {
+            logger.warn(
+              { sourceId, link: item.link, err: String(dateError) },
+              "Failed to resolve article publication date"
+            );
+          }
+
+          if (isStale(publishedAt)) {
+            skippedStale++;
+            // RSS/Atom feeds are conventionally newest-first. Stop resolving
+            // older undated pages after the first confirmed stale entry.
+            undatedStaleBoundaryReached = true;
+            continue;
+          }
+          if (!publishedAt) {
+            skippedUndated++;
+            continue;
+          }
         }
 
         const fetchedContent =
@@ -144,7 +187,7 @@ export async function processFetchSource(
             content: articleContent,
             link: item.link,
             guid: item.guid || item.link,
-            publishedAt: item.pubDate,
+            publishedAt,
             author: item.author,
             sourceId: source.id,
             agentId: agentRef.agentId,
@@ -234,7 +277,7 @@ export async function processFetchSource(
       .where(eq(sources.id, sourceId));
 
     logger.info(
-      { sourceId, fetched: fetchedCount, new: newCount, duplicates: dupCount, skippedStale },
+      { sourceId, fetched: fetchedCount, new: newCount, duplicates: dupCount, skippedStale, skippedUndated },
       "Source fetch complete"
     );
 
@@ -248,6 +291,7 @@ export async function processFetchSource(
           new: newCount,
           duplicates: dupCount,
           skippedStale,
+          skippedUndated,
           status: "success",
         });
       } catch (logErr) {
@@ -260,6 +304,7 @@ export async function processFetchSource(
       newArticles: newCount,
       duplicates: dupCount,
       skippedStale,
+      skippedUndated,
     };
   } catch (err) {
     // Update source error stats

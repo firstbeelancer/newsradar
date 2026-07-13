@@ -52,7 +52,13 @@ function parseXml(xml: string): Record<string, unknown> {
   let match: RegExpExecArray | null;
   while ((match = itemRegex.exec(xml)) !== null) {
     const itemXml = match[0];
-    const pubDateStr = extractTag(itemXml, "pubDate");
+    const pubDateStr =
+      extractTag(itemXml, "pubDate") ||
+      extractTag(itemXml, "dc:date") ||
+      extractTag(itemXml, "prism:publicationDate") ||
+      extractTag(itemXml, "published") ||
+      extractTag(itemXml, "updated") ||
+      extractTag(itemXml, "date");
     items.push({
       title: extractTag(itemXml, "title"),
       description: extractTag(itemXml, "description"),
@@ -151,38 +157,42 @@ export async function parseRssFeed(url: string): Promise<RssParseResult> {
     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
   }
 
-    if (!xml.trim()) {
-      throw new Error("Empty RSS feed response");
-    }
+  if (!xml.trim()) {
+    throw new Error("Empty RSS feed response");
+  }
 
-    const hasXml =
-      xml.trimStart().startsWith("<?xml") ||
-      xml.includes("<rss") ||
-      xml.includes("<feed") ||
-      xml.includes("<RDF");
+  const hasXml =
+    xml.trimStart().startsWith("<?xml") ||
+    xml.includes("<rss") ||
+    xml.includes("<feed") ||
+    xml.includes("<RDF");
 
-    if (!hasXml) {
-      throw new Error("Response is not valid RSS/XML");
-    }
+  if (!hasXml) {
+    throw new Error("Response is not valid RSS/XML");
+  }
 
-    const parsed = parseXml(xml);
-    const rawItems = (parsed.items ?? []) as Array<Record<string, unknown>>;
+  return parseRssXml(xml);
+}
 
-    const items: RssItem[] = rawItems
-      .map((raw) => ({
-        title: String(raw.title ?? "").trim(),
-        description: cleanArticleText(String(raw.description ?? "").trim()),
-        content: cleanArticleText(String(raw.content ?? "").trim()),
-        link: String(raw.link ?? "").trim(),
-        guid: String(raw.guid ?? raw.link ?? "").trim(),
-        pubDate: raw.pubDate instanceof Date ? raw.pubDate : null,
-        author: raw.author ? String(raw.author) : null,
-      }))
-      .filter((item) => item.title && item.link);
+export function parseRssXml(xml: string): RssParseResult {
+  const parsed = parseXml(xml);
+  const rawItems = (parsed.items ?? []) as Array<Record<string, unknown>>;
 
-    return {
-      items,
-      feedTitle: String(parsed.title ?? ""),
-      feedDescription: String(parsed.description ?? ""),
-    };
+  const items: RssItem[] = rawItems
+    .map((raw) => ({
+      title: String(raw.title ?? "").trim(),
+      description: cleanArticleText(String(raw.description ?? "").trim()),
+      content: cleanArticleText(String(raw.content ?? "").trim()),
+      link: String(raw.link ?? "").trim(),
+      guid: String(raw.guid ?? raw.link ?? "").trim(),
+      pubDate: raw.pubDate instanceof Date ? raw.pubDate : null,
+      author: raw.author ? String(raw.author) : null,
+    }))
+    .filter((item) => item.title && item.link);
+
+  return {
+    items,
+    feedTitle: String(parsed.title ?? ""),
+    feedDescription: String(parsed.description ?? ""),
+  };
 }

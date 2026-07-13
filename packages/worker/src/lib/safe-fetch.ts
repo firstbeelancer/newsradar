@@ -167,7 +167,50 @@ async function readTextWithLimit(response: Response, maxBytes: number): Promise<
     offset += chunk.byteLength;
   }
 
-  return new TextDecoder().decode(merged);
+  return decodeTextBytes(merged, response.headers.get("content-type"));
+}
+
+function normalizeCharset(charset: string): string {
+  const normalized = charset.trim().toLowerCase().replace(/["']/g, "");
+  const aliases: Record<string, string> = {
+    cp1251: "windows-1251",
+    "win-1251": "windows-1251",
+    windows1251: "windows-1251",
+    koi8r: "koi8-r",
+    utf8: "utf-8",
+  };
+  return aliases[normalized] ?? normalized;
+}
+
+function detectTextEncoding(bytes: Uint8Array, contentType?: string | null): string {
+  if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+    return "utf-8";
+  }
+  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+    return "utf-16le";
+  }
+  if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+    return "utf-16be";
+  }
+
+  const headerCharset = contentType?.match(/charset\s*=\s*["']?([^;\s"']+)/i)?.[1];
+  if (headerCharset) {
+    return normalizeCharset(headerCharset);
+  }
+
+  // XML declarations are ASCII-compatible even when the document body is not.
+  const head = Array.from(bytes.subarray(0, 512), (byte) => String.fromCharCode(byte)).join("");
+  const xmlCharset = head.match(/<\?xml[^>]*encoding\s*=\s*["']([^"']+)["']/i)?.[1];
+  return xmlCharset ? normalizeCharset(xmlCharset) : "utf-8";
+}
+
+export function decodeTextBytes(bytes: Uint8Array, contentType?: string | null): string {
+  const encoding = detectTextEncoding(bytes, contentType);
+  try {
+    return new TextDecoder(encoding).decode(bytes);
+  } catch {
+    return new TextDecoder("utf-8").decode(bytes);
+  }
 }
 
 function mergeHeaders(options: SafeFetchOptions): Headers {

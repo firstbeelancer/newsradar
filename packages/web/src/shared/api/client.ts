@@ -260,8 +260,8 @@ export function normalizeAgent(raw: BackendAgent): Agent {
 }
 
 export function normalizeArticle(raw: BackendArticle): Article {
-  const publishedAt = raw.published_at ?? raw.publishedAt ?? raw.created_at ?? raw.createdAt ?? new Date(0).toISOString();
-  const createdAt = raw.created_at ?? raw.createdAt ?? publishedAt;
+  const publishedAt = raw.published_at ?? raw.publishedAt ?? null;
+  const createdAt = raw.created_at ?? raw.createdAt ?? new Date(0).toISOString();
   const collectedAt = raw.collected_at ?? raw.collectedAt ?? createdAt;
   const normalizedScore = normalizeArticleScore(raw.score);
 
@@ -824,7 +824,7 @@ export interface Article {
   agent_id: string;
   agent_name?: string;
   agent_color?: string;
-  published_at: string;
+  published_at: string | null;
   collected_at: string;
   score: number;
   is_favorite: boolean;
