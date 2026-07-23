@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray } from "drizzle-orm";
+import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import { agents, articles, operationLogs, workspaces, agentSources, sources } from "../../db/schema.js";
 import { AppError } from "../../middleware/error-handler.js";
