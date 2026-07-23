@@ -5,13 +5,13 @@
  * Also recovers articles whose titles were polluted by model thinking leaks
  * (e.g. "<think>The user wants me to translate...").
  */
-import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
+import { and, eq, ilike, inArray, lt, or, sql } from "drizzle-orm";
 import type { Logger } from "pino";
 import { db } from "../db/index.js";
 import { articles } from "../db/schema.js";
 import { translateQueue } from "../connection/redis.js";
 
-const MAX_BATCH = 25;
+const MAX_BATCH = 40;
 const STUCK_AFTER_MS = 10 * 60 * 1000; // 10 minutes without update
 
 async function enqueueRetranslate(articleId: string, hourBucket: number, logger: Logger): Promise<boolean> {
@@ -65,9 +65,10 @@ export async function requeueStuckTranslations(logger: Logger): Promise<number> 
     .from(articles)
     .where(
       or(
-        sql`${articles.title} ILIKE '<think%'`,
-        sql`${articles.title} ILIKE 'The user wants me to%'`,
-        sql`${articles.title} ILIKE '%</think>%'`
+        ilike(articles.title, "<think%"),
+        ilike(articles.title, "%The user wants me to%"),
+        ilike(articles.title, "%I need to translate%"),
+        sql`${articles.title} LIKE '%</think>%'`
       )
     )
     .limit(MAX_BATCH);
@@ -88,7 +89,7 @@ export async function requeueStuckTranslations(logger: Logger): Promise<number> 
     }
   }
 
-  if (queued > 0) {
+  if (queued > 0 || polluted.length > 0 || stuck.length > 0) {
     logger.info(
       { queued, stuck: stuck.length, polluted: polluted.length },
       "Requeued stuck/polluted translation articles"

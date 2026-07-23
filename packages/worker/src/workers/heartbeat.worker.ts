@@ -23,9 +23,9 @@ const HEARTBEAT_KEY = "newsradar:worker:heartbeat";
 const HEARTBEAT_META_KEY = "newsradar:worker:meta";
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const HEARTBEAT_TTL_S = 120;
-const WORKER_BUILD_MARKER = "2026-07-23-pipeline-status-xai-v1";
-// Every 10 ticks ≈ 5 minutes
-const REQUEUE_EVERY_TICKS = 10;
+const WORKER_BUILD_MARKER = "2026-07-23-pipeline-status-xai-v2";
+// Every 2 ticks ≈ 1 minute — recover polluted titles faster after deploy
+const REQUEUE_EVERY_TICKS = 2;
 
 /**
  * Start the heartbeat loop.
