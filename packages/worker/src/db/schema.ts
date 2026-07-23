@@ -347,7 +347,7 @@ export const aiProviders = pgTable(
     index("ai_providers_workspace_id_idx").on(table.workspaceId),
     index("ai_providers_is_active_idx").on(table.isActive),
     check("ai_providers_type_check", sql`${table.type} IN ('platform', 'byok')`),
-    check("ai_providers_provider_check", sql`${table.provider} IN ('openai', 'anthropic', 'openrouter', 'google')`),
+    check("ai_providers_provider_check", sql`${table.provider} IN ('openai', 'anthropic', 'openrouter', 'google', 'xai')`),
   ]
 );
 

@@ -4,7 +4,7 @@ import { Card, CardContent } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
 import { Checkbox } from '@shared/ui/checkbox';
-import { Bookmark, ExternalLink, Calendar, Search, Sparkles, Clock } from 'lucide-react';
+import { Bookmark, ExternalLink, Calendar, Search, Sparkles, Clock, Languages, Loader2 } from 'lucide-react';
 import { cn, truncate, formatDateTime, cleanArticleText } from '@shared/lib/utils';
 import type { Article } from '@shared/api/client';
 
@@ -65,6 +65,14 @@ export function ArticleCard({
   const preview = cleanArticleText(article.ai_summary || article.description || article.content || article.original_description || '');
   const agentStyle = getArticleAgentStyle(article.agent_color);
   const isStale = isArticleStale(article.published_at);
+  const needsTranslation = Boolean(article.needs_translation);
+  const processingLabel = needsTranslation || article.status === 'fetched' || article.status === 'new'
+    ? 'Перевод…'
+    : article.status === 'translated'
+      ? 'Саммари…'
+      : article.status === 'analyzed'
+        ? 'Скоринг…'
+        : null;
 
   return (
     <Card
@@ -122,6 +130,24 @@ export function ArticleCard({
                 >
                   <Clock className="h-3 w-3" />
                   Устаревшее
+                </Badge>
+              )}
+              {processingLabel && (
+                <Badge
+                  variant="outline"
+                  title={
+                    needsTranslation
+                      ? 'Агент ещё переводит материал на русский'
+                      : 'Агент ещё обрабатывает материал (саммари / оценка)'
+                  }
+                  className="gap-1 border-cyan-200 bg-cyan-50 text-cyan-700 text-[10px]"
+                >
+                  {needsTranslation || article.status === 'fetched' ? (
+                    <Languages className="h-3 w-3" />
+                  ) : (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  )}
+                  {processingLabel}
                 </Badge>
               )}
               {article.agent_name && (

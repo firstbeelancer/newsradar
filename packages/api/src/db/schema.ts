@@ -292,7 +292,7 @@ export const aiProviders = pgTable(
     check("ai_providers_type_check", sql`${table.type} IN ('platform', 'byok')`),
     check(
       "ai_providers_provider_check",
-      sql`${table.provider} IN ('openai', 'anthropic', 'openrouter', 'google')`
+      sql`${table.provider} IN ('openai', 'anthropic', 'openrouter', 'google', 'xai')`
     ),
   ]
 );

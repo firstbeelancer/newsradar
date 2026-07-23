@@ -5,7 +5,7 @@ import { generatedPosts, operationLogs } from "../db/schema.js";
 import { redis } from "../connection/redis.js";
 import { complete, streamComplete } from "../lib/ai-client.js";
 
-type ProviderName = "openai" | "anthropic" | "openrouter" | "google";
+type ProviderName = "openai" | "anthropic" | "openrouter" | "google" | "xai";
 type GenerationStatus = "pending" | "generating" | "completed" | "error";
 
 export interface PreparedGenerationJob {
@@ -58,7 +58,7 @@ async function publishProgress(operationId: string, state: ProgressState): Promi
 }
 
 function normalizeProvider(provider?: string): ProviderName | undefined {
-  if (provider === "openai" || provider === "anthropic" || provider === "openrouter" || provider === "google") {
+  if (provider === "openai" || provider === "anthropic" || provider === "openrouter" || provider === "google" || provider === "xai") {
     return provider;
   }
   return undefined;

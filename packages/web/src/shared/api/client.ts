@@ -96,6 +96,10 @@ interface BackendArticle {
   is_favorite?: boolean;
   status?: string | null;
   language?: string | null;
+  needsTranslation?: boolean | null;
+  needs_translation?: boolean | null;
+  detectedLang?: string | null;
+  detected_lang?: string | null;
   sourceId?: string;
   source_id?: string;
   sourceName?: string | null;
@@ -285,6 +289,8 @@ export function normalizeArticle(raw: BackendArticle): Article {
     is_favorite: raw.is_favorite ?? raw.isFavorite ?? false,
     status: (raw.status as Article['status']) ?? 'new',
     language: raw.language ?? undefined,
+    needs_translation: raw.needs_translation ?? raw.needsTranslation ?? false,
+    detected_lang: raw.detected_lang ?? raw.detectedLang ?? undefined,
     metadata: raw.metadata,
   };
 }
@@ -830,6 +836,8 @@ export interface Article {
   is_favorite: boolean;
   status: 'new' | 'read' | 'archived' | 'fetched' | 'translated' | 'analyzed' | 'scored' | 'deduped' | 'published';
   language?: string;
+  needs_translation?: boolean;
+  detected_lang?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -982,6 +990,20 @@ export interface OperationLog {
 export interface DashboardSummary {
   total_articles: number;
   favorite_count: number;
+}
+
+export interface PipelineStatus {
+  translating: number;
+  fetched_pending: number;
+  awaiting_analysis: number;
+  awaiting_scoring: number;
+  active_operations: number;
+  is_busy: boolean;
+  queues: {
+    translate: { waiting: number; active: number; delayed: number; failed: number };
+    ingest: { waiting: number; active: number; delayed: number; failed: number };
+    scoring: { waiting: number; active: number; delayed: number; failed: number };
+  };
 }
 
 export interface DashboardCollectAllResult {
@@ -1242,6 +1264,46 @@ export const dashboardApi = {
       total_articles: Number(payload.total_articles ?? payload.totalArticles ?? 0),
       favorite_count: Number(payload.favorite_count ?? payload.favoriteCount ?? 0),
     })),
+  pipeline: () =>
+    apiGet<{
+      translating?: number;
+      fetchedPending?: number;
+      fetched_pending?: number;
+      awaitingAnalysis?: number;
+      awaiting_analysis?: number;
+      awaitingScoring?: number;
+      awaiting_scoring?: number;
+      activeOperations?: number;
+      active_operations?: number;
+      isBusy?: boolean;
+      is_busy?: boolean;
+      queues?: {
+        translate?: { waiting?: number; active?: number; delayed?: number; failed?: number };
+        ingest?: { waiting?: number; active?: number; delayed?: number; failed?: number };
+        scoring?: { waiting?: number; active?: number; delayed?: number; failed?: number };
+      };
+    }>('/dashboard/pipeline').then((payload) => {
+      const emptyQ = { waiting: 0, active: 0, delayed: 0, failed: 0 };
+      const normQ = (q?: { waiting?: number; active?: number; delayed?: number; failed?: number }) => ({
+        waiting: Number(q?.waiting ?? 0),
+        active: Number(q?.active ?? 0),
+        delayed: Number(q?.delayed ?? 0),
+        failed: Number(q?.failed ?? 0),
+      });
+      return {
+        translating: Number(payload.translating ?? 0),
+        fetched_pending: Number(payload.fetched_pending ?? payload.fetchedPending ?? 0),
+        awaiting_analysis: Number(payload.awaiting_analysis ?? payload.awaitingAnalysis ?? 0),
+        awaiting_scoring: Number(payload.awaiting_scoring ?? payload.awaitingScoring ?? 0),
+        active_operations: Number(payload.active_operations ?? payload.activeOperations ?? 0),
+        is_busy: Boolean(payload.is_busy ?? payload.isBusy ?? false),
+        queues: {
+          translate: normQ(payload.queues?.translate) || emptyQ,
+          ingest: normQ(payload.queues?.ingest) || emptyQ,
+          scoring: normQ(payload.queues?.scoring) || emptyQ,
+        },
+      } satisfies PipelineStatus;
+    }),
   collectAll: () =>
     apiPost<{
       operationId?: string;

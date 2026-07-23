@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@shar
 import { Badge } from '@shared/ui/badge';
 import { Skeleton } from '@shared/ui/skeleton';
 import { AgentCollectDialog } from '@/features/agents/agent-collect-dialog';
+import { OperationLogRow } from '@/features/dashboard/operation-log-row';
 import { useToast } from '@shared/ui/toast';
 import { formatDateTime } from '@shared/lib/utils';
 import {
@@ -16,7 +17,6 @@ import {
   Bookmark,
   ArrowRight,
   Newspaper,
-  TrendingUp,
   Zap,
   ChevronRight,
   Trash2,
@@ -389,32 +389,7 @@ export function DashboardPage() {
               ) : operationLogs.length === 0 ? (
                 <p className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">Журнал пока пуст</p>
               ) : (
-                operationLogs.map((log) => (
-                  <div key={log.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted">
-                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">{log.message || log.operation_type}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(log.created_at).toLocaleString('ru-RU', {
-                            day: '2-digit',
-                            month: 'short',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </p>
-                      </div>
-                    </div>
-                    <Badge
-                      variant={log.status === 'success' ? 'success' : log.status === 'failed' ? 'danger' : 'default'}
-                      className="shrink-0"
-                    >
-                      {log.status}
-                    </Badge>
-                  </div>
-                ))
+                operationLogs.map((log) => <OperationLogRow key={log.id} log={log} />)
               )}
             </CardContent>
           </Card>

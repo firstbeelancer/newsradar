@@ -22,12 +22,14 @@ const envSchema = z.object({
 
   // AI Platform Provider (shared across all workspaces)
   PLATFORM_AI_PROVIDER: z
-    .enum(["openai", "anthropic", "openrouter", "google"])
+    .enum(["openai", "anthropic", "openrouter", "google", "xai"])
     .default("openrouter"),
   PLATFORM_AI_BASE_URL: z.string().url().default("https://openrouter.ai/api/v1"),
   PLATFORM_AI_MODEL: z.string().default("tencent/hy3-preview:free"),
   PLATFORM_AI_API_KEY: z.string().optional(),
   OPENROUTER_API_KEY: z.string().optional(),
+  // Optional dedicated xAI/Grok key (also usable as PLATFORM_AI_API_KEY with provider=xai)
+  XAI_API_KEY: z.string().optional(),
 
   // OpenRouter analytics attribution (HTTP-Referer / X-Title).
   // Если заданы, в OpenRouter Analytics приложение видно по имени вместо «Unknown».

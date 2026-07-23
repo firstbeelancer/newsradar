@@ -2,6 +2,7 @@ import type { Redis } from "ioredis";
 import type pino from "pino";
 import { env } from "../config/env.js";
 import { getAiTelemetry } from "../lib/ai-client.js";
+import { requeueStuckTranslations } from "./requeue-stuck-translations.js";
 
 /**
  * Heartbeat worker state.
@@ -9,18 +10,22 @@ import { getAiTelemetry } from "../lib/ai-client.js";
 interface HeartbeatState {
   timer: ReturnType<typeof setInterval> | null;
   isRunning: boolean;
+  tickCount: number;
 }
 
 const state: HeartbeatState = {
   timer: null,
   isRunning: false,
+  tickCount: 0,
 };
 
 const HEARTBEAT_KEY = "newsradar:worker:heartbeat";
 const HEARTBEAT_META_KEY = "newsradar:worker:meta";
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const HEARTBEAT_TTL_S = 120;
-const WORKER_BUILD_MARKER = "2026-05-18-translate-debug-v5";
+const WORKER_BUILD_MARKER = "2026-07-23-pipeline-status-xai-v1";
+// Every 10 ticks ≈ 5 minutes
+const REQUEUE_EVERY_TICKS = 10;
 
 /**
  * Start the heartbeat loop.
@@ -55,7 +60,7 @@ export function startHeartbeat(redis: Redis, logger: pino.Logger): void {
             aiProvider: env.PLATFORM_AI_PROVIDER,
             aiModel: env.PLATFORM_AI_MODEL,
             aiBaseUrl: env.PLATFORM_AI_BASE_URL,
-            hasAiKey: Boolean(env.OPENROUTER_API_KEY || env.PLATFORM_AI_API_KEY),
+            hasAiKey: Boolean(env.OPENROUTER_API_KEY || env.PLATFORM_AI_API_KEY || env.XAI_API_KEY),
             lastAiError: aiTelemetry.lastError,
             lastAiSuccessAt: aiTelemetry.lastSuccessAt,
           }),
@@ -67,6 +72,18 @@ export function startHeartbeat(redis: Redis, logger: pino.Logger): void {
         { key: HEARTBEAT_KEY, metaKey: HEARTBEAT_META_KEY, ttl: HEARTBEAT_TTL_S, build: WORKER_BUILD_MARKER },
         "Heartbeat written"
       );
+
+      state.tickCount += 1;
+      if (state.tickCount % REQUEUE_EVERY_TICKS === 0) {
+        try {
+          await requeueStuckTranslations(logger);
+        } catch (err) {
+          logger.warn(
+            { err: err instanceof Error ? err.message : String(err) },
+            "Stuck translation requeue failed"
+          );
+        }
+      }
     } catch (err) {
       logger.error(
         { err: err instanceof Error ? err.message : String(err) },

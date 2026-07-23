@@ -40,7 +40,7 @@ import {
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type ProviderSlug = 'openai' | 'anthropic' | 'openrouter' | 'google';
+type ProviderSlug = 'openai' | 'anthropic' | 'openrouter' | 'google' | 'xai';
 type ProviderMode = 'platform' | 'byok';
 
 interface AIProvider {
@@ -88,6 +88,7 @@ const DEFAULT_BASE_URLS: Record<ProviderSlug, string> = {
   anthropic: 'https://api.anthropic.com/v1',
   openrouter: 'https://openrouter.ai/api/v1',
   google: 'https://generativelanguage.googleapis.com/v1',
+  xai: 'https://api.x.ai/v1',
 };
 
 const PROVIDER_LABELS: Record<ProviderSlug, string> = {
@@ -95,6 +96,7 @@ const PROVIDER_LABELS: Record<ProviderSlug, string> = {
   anthropic: 'Anthropic',
   openrouter: 'OpenRouter',
   google: 'Google AI',
+  xai: 'xAI / Grok',
 };
 
 const EMPTY_FORM: ProviderFormData = {
@@ -641,7 +643,7 @@ export function AIProvidersSettings() {
             </div>
             <div className="space-y-1.5">
               <Label>Модель</Label>
-              <Input value={form.model} onChange={(e) => setForm((prev) => ({ ...prev, model: e.target.value }))} placeholder="openrouter/owl-alpha" />
+              <Input value={form.model} onChange={(e) => setForm((prev) => ({ ...prev, model: e.target.value }))} placeholder="grok-3-mini / openrouter/auto" />
             </div>
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div className="space-y-0.5">

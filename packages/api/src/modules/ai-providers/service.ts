@@ -306,6 +306,8 @@ function getDefaultBaseUrl(provider: string): string {
       return "https://openrouter.ai/api/v1";
     case "google":
       return "https://generativelanguage.googleapis.com/v1";
+    case "xai":
+      return "https://api.x.ai/v1";
     default:
       return "https://api.openai.com/v1";
   }
@@ -321,7 +323,7 @@ async function pingProvider(
   const timeout = setTimeout(() => controller.abort(), 15000);
 
   try {
-    if (provider === "openai" || provider === "openrouter") {
+    if (provider === "openai" || provider === "openrouter" || provider === "xai") {
       const response = await fetch(`${baseUrl}/models`, {
         method: "GET",
         headers: {

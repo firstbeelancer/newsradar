@@ -10,7 +10,7 @@
 import { db } from "../db/index.js";
 import { articles } from "../db/schema.js";
 import { eq } from "drizzle-orm";
-import { buildTitleOnlyPreview, detectLanguage, translateArticle } from "../lib/translator.js";
+import { detectLanguage, translateArticle } from "../lib/translator.js";
 import { fetchArticleText } from "../lib/article-extractor.js";
 import { setAiTelemetryError } from "../lib/ai-client.js";
 import { ingestAnalysisQueue } from "../connection/redis.js";
@@ -132,37 +132,26 @@ export async function processTranslate(
     return { translated: true, originalLanguage: detectedLang };
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
-    setAiTelemetryError(`Translation pipeline fallback: ${errorMessage}`);
-    logger.error({ articleId, err: errorMessage }, "Translation failed");
-    const fallbackPreview =
-      article.aiSummary ||
-      article.description ||
-      sourceContent ||
-      buildTitleOnlyPreview(article.title || sourceTitle);
+    setAiTelemetryError(`Translation pipeline failure: ${errorMessage}`);
+    logger.error({ articleId, err: errorMessage }, "Translation failed — keeping article pending and retrying");
 
-    // Even on failure, continue pipeline with original text
+    // Keep article in pre-translation state so the feed can show "Перевод…"
+    // and BullMQ can retry. Do NOT mark status=translated on failure —
+    // that previously leaked Chinese/English titles into the ready feed.
     await db
       .update(articles)
       .set({
-        description: fallbackPreview,
-        content: sourceContent || article.content || null,
-        aiSummary: fallbackPreview,
+        originalTitle: originalTitle,
+        originalDescription: originalDescription,
         language: detectedLang,
         detectedLang: detectedLang,
         needsTranslation: true,
-        originalTitle: originalTitle,
-        originalDescription: originalDescription,
-        status: "translated",
+        status: "fetched",
         updatedAt: new Date(),
       })
       .where(eq(articles.id, articleId));
 
-    await ingestAnalysisQueue.add(
-      `ingest-analysis-${articleId}`,
-      { articleId },
-      { jobId: `ingest-analysis-${articleId}` }
-    );
-
-    return { translated: false, originalLanguage: detectedLang };
+    // Rethrow so BullMQ applies attempts/backoff instead of silently "succeeding".
+    throw err instanceof Error ? err : new Error(errorMessage);
   }
 }

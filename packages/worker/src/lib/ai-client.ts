@@ -25,7 +25,7 @@ export interface AiCompleteOptions {
   model?: string;
   apiKey?: string;
   baseUrl?: string;
-  provider?: "openai" | "anthropic" | "openrouter" | "google";
+  provider?: "openai" | "anthropic" | "openrouter" | "google" | "xai";
   workspaceId?: string;
   process?: "search" | "translation" | "ingest_analysis" | "scoring" | "generation" | "deepsearch";
   temperature?: number;
@@ -70,7 +70,7 @@ export function setAiTelemetryError(message: string): void {
 function resolveEnvProvider(
   opts?: Pick<AiCompleteOptions, "provider" | "baseUrl" | "apiKey">
 ): {
-  provider: "openai" | "anthropic" | "openrouter" | "google";
+  provider: "openai" | "anthropic" | "openrouter" | "google" | "xai";
   baseUrl: string;
   apiKey: string;
 } {
@@ -82,13 +82,17 @@ function resolveEnvProvider(
       : provider === "anthropic"
         ? "https://api.anthropic.com/v1"
         : provider === "google"
-        ? "https://generativelanguage.googleapis.com/v1"
-          : env.PLATFORM_AI_BASE_URL);
+          ? "https://generativelanguage.googleapis.com/v1"
+          : provider === "xai"
+            ? "https://api.x.ai/v1"
+            : env.PLATFORM_AI_BASE_URL);
   const apiKey =
     opts?.apiKey ??
     (provider === "openrouter"
       ? env.OPENROUTER_API_KEY ?? env.PLATFORM_AI_API_KEY ?? ""
-      : env.PLATFORM_AI_API_KEY ?? "");
+      : provider === "xai"
+        ? env.XAI_API_KEY ?? env.PLATFORM_AI_API_KEY ?? ""
+        : env.PLATFORM_AI_API_KEY ?? "");
 
   return { provider, baseUrl, apiKey };
 }
@@ -100,7 +104,7 @@ function normalizeAssignedTo(processes: unknown): string[] {
 async function resolveProvider(
   opts: AiCompleteOptions
 ): Promise<{
-  provider: "openai" | "anthropic" | "openrouter" | "google";
+  provider: "openai" | "anthropic" | "openrouter" | "google" | "xai";
   baseUrl: string;
   apiKey: string;
   model: string;
@@ -136,10 +140,10 @@ async function resolveProvider(
     const selected = explicit ?? pool[0];
     if (selected?.apiKeyEncrypted) {
       return {
-        provider: selected.provider as "openai" | "anthropic" | "openrouter" | "google",
+        provider: selected.provider as "openai" | "anthropic" | "openrouter" | "google" | "xai",
         baseUrl:
           selected.baseUrl ??
-          resolveEnvProvider({ provider: selected.provider as "openai" | "anthropic" | "openrouter" | "google" }).baseUrl,
+          resolveEnvProvider({ provider: selected.provider as "openai" | "anthropic" | "openrouter" | "google" | "xai" }).baseUrl,
         apiKey: decrypt(selected.apiKeyEncrypted),
         model: opts.model ?? selected.model,
         source: "workspace-provider",
@@ -309,7 +313,7 @@ function formatProviderError(status: number, errorText: string): string {
 }
 
 async function postCompletionRequest(opts: {
-  provider: "openai" | "anthropic" | "openrouter" | "google";
+  provider: "openai" | "anthropic" | "openrouter" | "google" | "xai";
   baseUrl: string;
   apiKey: string;
   model: string;

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { authMiddleware } from "../../middleware/auth.js";
-import { getDashboardData, collectAllAgents } from "./service.js";
+import { getDashboardData, collectAllAgents, getPipelineStatus } from "./service.js";
 
 const router = Router();
 
@@ -13,6 +13,16 @@ router.get("/", authMiddleware, async (req, res, next) => {
   try {
     const { workspaceId } = workspaceQuerySchema.parse(req.query);
     const data = await getDashboardData({ userId: req.user!.sub, workspaceId });
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/pipeline", authMiddleware, async (req, res, next) => {
+  try {
+    const { workspaceId } = workspaceQuerySchema.parse(req.query);
+    const data = await getPipelineStatus({ userId: req.user!.sub, workspaceId });
     res.json({ success: true, data });
   } catch (err) {
     next(err);

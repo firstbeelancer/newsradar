@@ -21,7 +21,7 @@ const router = Router();
 const createSchema = z.object({
   name: z.string().min(1).max(100),
   type: z.enum(["platform", "byok"]),
-  provider: z.enum(["openai", "anthropic", "openrouter", "google"]),
+  provider: z.enum(["openai", "anthropic", "openrouter", "google", "xai"]),
   baseUrl: z.string().optional(),
   apiKey: z.string().optional(),
   model: z.string().max(100).default("gpt-4o-mini"),

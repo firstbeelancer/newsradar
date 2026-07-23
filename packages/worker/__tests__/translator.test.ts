@@ -6,6 +6,11 @@ describe('translator helpers', () => {
     expect(detectLanguage('I have become addicted to printing tattoos')).toBe('en');
   });
 
+  it('detects Chinese titles that previously leaked into the feed untranslated', () => {
+    expect(detectLanguage('Agent 越能干，安全越难做？')).toBe('zh');
+    expect(detectLanguage('医疗与生命科学领导者必须回答的 10 个 Agentic AI 关键问题')).toBe('zh');
+  });
+
   it('builds a multi-sentence summary instead of copying only the first sentence', () => {
     const text = [
       'Первое предложение короткое.',

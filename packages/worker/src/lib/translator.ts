@@ -18,12 +18,24 @@ export function detectLanguage(text: string): string {
   if (!text || text.trim().length === 0) return "ru";
 
   const sample = text.slice(0, 500);
+  const totalChars = sample.replace(/\s/g, "").length;
+  if (totalChars === 0) return "ru";
 
   const cyrillicChars = (sample.match(/[\u0400-\u04FF]/g) ?? []).length;
-  const totalChars = sample.replace(/\s/g, "").length;
-
-  if (totalChars > 0 && cyrillicChars / totalChars > 0.4) {
+  if (cyrillicChars / totalChars > 0.4) {
     return "ru";
+  }
+
+  // CJK: Chinese / Japanese / Korean — previously fell through as "unknown"
+  // and often skipped meaningful translation heuristics.
+  const hangulChars = (sample.match(/[\uAC00-\uD7AF]/g) ?? []).length;
+  const hiraganaKatakana = (sample.match(/[\u3040-\u30FF]/g) ?? []).length;
+  const hanChars = (sample.match(/[\u3400-\u9FFF\uF900-\uFAFF]/g) ?? []).length;
+  const cjkChars = hangulChars + hiraganaKatakana + hanChars;
+  if (cjkChars / totalChars > 0.15) {
+    if (hangulChars / totalChars > 0.1) return "ko";
+    if (hiraganaKatakana / totalChars > 0.05) return "ja";
+    return "zh";
   }
 
   const lower = sample.toLowerCase();
@@ -45,7 +57,7 @@ export function detectLanguage(text: string): string {
   }
 
   const latinChars = (sample.match(/[a-zA-Z]/g) ?? []).length;
-  if (totalChars > 0 && latinChars / totalChars > 0.5) {
+  if (latinChars / totalChars > 0.5) {
     return "en";
   }
 

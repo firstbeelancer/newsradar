@@ -1,8 +1,9 @@
-import { and, count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, inArray } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import { agents, articles, operationLogs, workspaces, agentSources, sources } from "../../db/schema.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { deduplicateCollectionSources, type CollectionSourceRef } from "./collection-sources.js";
+import { getAllQueues } from "../../lib/queues.js";
 
 async function assertWorkspaceOwner(params: { userId: string; workspaceId: string }) {
   const workspace = await db.query.workspaces.findFirst({
@@ -208,5 +209,115 @@ export async function collectAllAgents(params: { userId: string; workspaceId: st
     agent_count: activeAgents.length,
     queuedCount: totalQueued,
     queued_count: totalQueued,
+  };
+}
+
+/**
+ * Pipeline status for status bar / dashboard:
+ * how many articles are still being translated, analyzed or scored,
+ * plus lightweight queue depths from BullMQ.
+ */
+export async function getPipelineStatus(params: { userId: string; workspaceId: string }) {
+  await assertWorkspaceOwner(params);
+
+  const [needsTranslationRows] = await db
+    .select({ count: count(articles.id) })
+    .from(articles)
+    .where(and(eq(articles.workspaceId, params.workspaceId), eq(articles.needsTranslation, true)));
+
+  const [fetchedRows] = await db
+    .select({ count: count(articles.id) })
+    .from(articles)
+    .where(
+      and(
+        eq(articles.workspaceId, params.workspaceId),
+        inArray(articles.status, ["fetched", "new"])
+      )
+    );
+
+  const [translatedRows] = await db
+    .select({ count: count(articles.id) })
+    .from(articles)
+    .where(and(eq(articles.workspaceId, params.workspaceId), eq(articles.status, "translated")));
+
+  const [analyzedRows] = await db
+    .select({ count: count(articles.id) })
+    .from(articles)
+    .where(and(eq(articles.workspaceId, params.workspaceId), eq(articles.status, "analyzed")));
+
+  const [runningOps] = await db
+    .select({ count: count(operationLogs.id) })
+    .from(operationLogs)
+    .where(
+      and(
+        eq(operationLogs.userId, params.userId),
+        eq(operationLogs.workspaceId, params.workspaceId),
+        inArray(operationLogs.status, ["running", "pending"])
+      )
+    );
+
+  let queues: Record<string, { waiting: number; active: number; delayed: number; failed: number }> = {};
+  try {
+    const allQueues = getAllQueues();
+    const stats = await Promise.all(
+      allQueues.map(async (queue) => {
+        const counts = await queue.getJobCounts("waiting", "active", "delayed", "failed");
+        return [
+          queue.name,
+          {
+            waiting: counts.waiting ?? 0,
+            active: counts.active ?? 0,
+            delayed: counts.delayed ?? 0,
+            failed: counts.failed ?? 0,
+          },
+        ] as const;
+      })
+    );
+    queues = Object.fromEntries(stats);
+  } catch {
+    queues = {};
+  }
+
+  const translating = Number(needsTranslationRows?.count ?? 0);
+  const awaitingAnalysis = Number(translatedRows?.count ?? 0);
+  const awaitingScoring = Number(analyzedRows?.count ?? 0);
+  const fetchedPending = Number(fetchedRows?.count ?? 0);
+  const activeOperations = Number(runningOps?.count ?? 0);
+
+  const translateQ = queues["translate-v3"] ?? queues.translate ?? { waiting: 0, active: 0, delayed: 0, failed: 0 };
+  const scoreQ = queues["score-article-v2"] ?? queues.score ?? { waiting: 0, active: 0, delayed: 0, failed: 0 };
+  const ingestQ = queues["ingest-analysis-v2"] ?? queues["ingest-analysis"] ?? { waiting: 0, active: 0, delayed: 0, failed: 0 };
+
+  return {
+    translating,
+    fetchedPending,
+    awaitingAnalysis,
+    awaitingScoring,
+    activeOperations,
+    isBusy:
+      translating > 0 ||
+      awaitingAnalysis > 0 ||
+      awaitingScoring > 0 ||
+      activeOperations > 0 ||
+      (translateQ.active ?? 0) + (translateQ.waiting ?? 0) > 0 ||
+      (scoreQ.active ?? 0) + (scoreQ.waiting ?? 0) > 0 ||
+      (ingestQ.active ?? 0) + (ingestQ.waiting ?? 0) > 0,
+    queues: {
+      translate: translateQ,
+      ingest: ingestQ,
+      scoring: scoreQ,
+      all: queues,
+    },
+    // snake_case mirrors for frontend normalizers
+    fetched_pending: fetchedPending,
+    awaiting_analysis: awaitingAnalysis,
+    awaiting_scoring: awaitingScoring,
+    active_operations: activeOperations,
+    is_busy:
+      translating > 0 ||
+      awaitingAnalysis > 0 ||
+      awaitingScoring > 0 ||
+      activeOperations > 0 ||
+      (translateQ.active ?? 0) + (translateQ.waiting ?? 0) > 0,
   };
 }
