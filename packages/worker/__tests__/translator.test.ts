@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildExtractiveSummary, buildTitleOnlyPreview, detectLanguage } from '../src/lib/translator.js';
+import { buildExtractiveSummary, buildTitleOnlyPreview, detectLanguage, sanitizeTranslationOutput } from '../src/lib/translator.js';
 
 describe('translator helpers', () => {
   it('detects English from title and body text', () => {
@@ -9,6 +9,11 @@ describe('translator helpers', () => {
   it('detects Chinese titles that previously leaked into the feed untranslated', () => {
     expect(detectLanguage('Agent 越能干，安全越难做？')).toBe('zh');
     expect(detectLanguage('医疗与生命科学领导者必须回答的 10 个 Agentic AI 关键问题')).toBe('zh');
+  });
+
+  it('strips leaked model reasoning from translation output', () => {
+    expect(sanitizeTranslationOutput('<think>plan</think>Короткий перевод.')).toBe('Короткий перевод.');
+    expect(sanitizeTranslationOutput('The user wants me to translate a Chinese text')).toBe('');
   });
 
   it('builds a multi-sentence summary instead of copying only the first sentence', () => {

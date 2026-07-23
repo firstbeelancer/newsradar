@@ -180,6 +180,38 @@ async function translateViaGoogleGtx(
 }
 
 /**
+ * Models sometimes leak chain-of-thought / instruction echo into the completion
+ * (e.g. "<think>The user wants me to translate..."). Treat those as failures.
+ */
+export function sanitizeTranslationOutput(text: string): string {
+  let cleaned = text ?? "";
+  cleaned = cleaned.replace(/<think\b[^>]*>[\s\S]*?<\/think>/gi, " ");
+  cleaned = cleaned.replace(/<\/?think\b[^>]*>/gi, " ");
+  cleaned = cleaned.replace(/^\s*(assistant|system|user)\s*:\s*/i, "");
+  cleaned = cleaned.trim();
+
+  // Common leak patterns from reasoning / instruction-following models.
+  if (
+    /^the user wants me to/i.test(cleaned) ||
+    /^i need to translate/i.test(cleaned) ||
+    /^here(?:'s| is) (?:the )?translation/i.test(cleaned) ||
+    cleaned.startsWith("<think")
+  ) {
+    return "";
+  }
+
+  return cleaned;
+}
+
+function looksLikeRussian(text: string): boolean {
+  const sample = text.slice(0, 400);
+  const total = sample.replace(/\s/g, "").length;
+  if (total === 0) return false;
+  const cyr = (sample.match(/[\u0400-\u04FF]/g) ?? []).length;
+  return cyr / total > 0.25;
+}
+
+/**
  * Translate text to Russian.
  */
 export async function translateToRussian(
@@ -195,7 +227,7 @@ export async function translateToRussian(
   }
 
   const truncated = text.slice(0, 8_000);
-  const systemPrompt = `You are a professional translator. Translate the following text from ${detectedLang.toUpperCase()} to Russian (RU). Preserve the original meaning, tone, and formatting. Respond with ONLY the translated text.`;
+  const systemPrompt = `You are a professional translator. Translate the following text from ${detectedLang.toUpperCase()} to Russian (RU). Preserve the original meaning, tone, and formatting. Respond with ONLY the translated Russian text. Do not include reasoning, notes, XML tags, or English commentary.`;
 
   try {
     const { complete } = await import("./ai-client.js");
@@ -206,18 +238,26 @@ export async function translateToRussian(
       ],
       workspaceId,
       process: "translation",
-      temperature: 0.3,
+      temperature: 0.2,
       maxTokens: 4_000,
     });
 
-    return result.trim();
-  } catch (aiError) {
-    const fallback = await translateViaGoogleGtx(truncated, detectedLang);
-    if (fallback) {
-      return fallback;
+    const cleaned = sanitizeTranslationOutput(result);
+    if (cleaned && looksLikeRussian(cleaned)) {
+      return cleaned;
     }
-    throw aiError;
+
+    // AI returned garbage / English reasoning — fall through to GTX.
+  } catch {
+    // fall through to GTX
   }
+
+  const fallback = await translateViaGoogleGtx(truncated, detectedLang);
+  const cleanedFallback = sanitizeTranslationOutput(fallback);
+  if (!cleanedFallback) {
+    throw new Error("Translation failed: empty result after sanitize");
+  }
+  return cleanedFallback;
 }
 
 /**
