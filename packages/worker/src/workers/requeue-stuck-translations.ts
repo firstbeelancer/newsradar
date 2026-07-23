@@ -36,7 +36,7 @@ async function safeAdd(
 
 export async function requeueStuckTranslations(logger: Logger): Promise<number> {
   const threshold = new Date(Date.now() - STUCK_AFTER_MS);
-  const hourBucket = Math.floor(Date.now() / (60 * 60 * 1000));
+  const stamp = Date.now();
   let queued = 0;
 
   const stuck = await db
@@ -52,7 +52,7 @@ export async function requeueStuckTranslations(logger: Logger): Promise<number> 
     .limit(MAX_BATCH);
 
   for (const row of stuck) {
-    const jobId = `retranslate-stuck-${row.id}-${hourBucket}`;
+    const jobId = `retranslate-stuck-${row.id}-${stamp}`;
     if (
       await safeAdd(
         () =>
@@ -101,7 +101,7 @@ export async function requeueStuckTranslations(logger: Logger): Promise<number> 
       .where(inArray(articles.id, ids));
 
     for (const row of polluted) {
-      const jobId = `retranslate-polluted-${row.id}-${hourBucket}`;
+      const jobId = `retranslate-polluted-${row.id}-${stamp}`;
       if (
         await safeAdd(
           () =>
@@ -133,7 +133,7 @@ export async function requeueStuckTranslations(logger: Logger): Promise<number> 
     .limit(MAX_BATCH);
 
   for (const row of stuckTranslated) {
-    const jobId = `reingest-stuck-${row.id}-${hourBucket}`;
+    const jobId = `reingest-stuck-${row.id}-${stamp}`;
     if (
       await safeAdd(
         () =>
@@ -164,7 +164,7 @@ export async function requeueStuckTranslations(logger: Logger): Promise<number> 
     .limit(MAX_BATCH);
 
   for (const row of stuckAnalyzed) {
-    const jobId = `rescore-stuck-${row.id}-${hourBucket}`;
+    const jobId = `rescore-stuck-${row.id}-${stamp}`;
     if (
       await safeAdd(
         () =>

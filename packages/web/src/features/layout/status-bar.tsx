@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { dashboardApi, operationLogsApi, type OperationLog, type PipelineStatus } from '@shared/api/client';
-import { Loader2, Play, Search, Sparkles, BarChart3, X, Square, Languages, Brain, AlertTriangle } from 'lucide-react';
+import { Loader2, Play, Search, Sparkles, BarChart3, X, Square, Languages, Brain, AlertTriangle, RotateCcw } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 
 const OPERATION_LABELS: Record<string, { label: string; icon: React.ElementType; color: string }> = {
@@ -53,6 +53,8 @@ export function StatusBar() {
   const [expanded, setExpanded] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [cancellingAll, setCancellingAll] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const [retryMsg, setRetryMsg] = useState<string | null>(null);
 
   const fetchActiveOps = useCallback(async () => {
     try {
@@ -97,6 +99,20 @@ export function StatusBar() {
       // Ignore cancel failures in status bar.
     } finally {
       setCancellingAll(false);
+    }
+  };
+
+  const handleRetryStuck = async () => {
+    setRetrying(true);
+    setRetryMsg(null);
+    try {
+      const result = await dashboardApi.retryPipeline();
+      setRetryMsg(result.message || `Поставлено в очередь: ${result.totalQueued ?? 0}`);
+      await fetchActiveOps();
+    } catch (err) {
+      setRetryMsg(err instanceof Error ? err.message : 'Не удалось перезапустить');
+    } finally {
+      setRetrying(false);
     }
   };
 
@@ -240,7 +256,28 @@ export function StatusBar() {
               Стоп всё
             </button>
           )}
+          {(hasStuckOnly || stuckChips.length > 0) && (
+            <button
+              onClick={(event) => {
+                event.stopPropagation();
+                void handleRetryStuck();
+              }}
+              disabled={retrying}
+              className={cn(
+                'inline-flex shrink-0 items-center gap-1 rounded-lg bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white transition-colors hover:bg-amber-600 disabled:opacity-50',
+                activeOps.length === 0 && 'ml-auto'
+              )}
+              title="Перепоставить зависания в очередь worker"
+            >
+              {retrying ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+              Перезапустить
+            </button>
+          )}
         </div>
+
+        {retryMsg && (
+          <p className="mt-1.5 text-[11px] font-medium text-amber-800">{retryMsg}</p>
+        )}
 
         {expanded && (
           <div className="mt-2 space-y-1.5">

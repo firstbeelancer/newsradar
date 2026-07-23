@@ -3,7 +3,12 @@ import { db } from "../../db/index.js";
 import { agents, articles, operationLogs, workspaces, agentSources, sources } from "../../db/schema.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { deduplicateCollectionSources, type CollectionSourceRef } from "./collection-sources.js";
-import { getAllQueues } from "../../lib/queues.js";
+import {
+  getAllQueues,
+  getIngestAnalysisQueue,
+  getScoreArticleQueue,
+  getTranslateQueue,
+} from "../../lib/queues.js";
 
 async function assertWorkspaceOwner(params: { userId: string; workspaceId: string }) {
   const workspace = await db.query.workspaces.findFirst({
@@ -351,5 +356,122 @@ export async function getPipelineStatus(params: { userId: string; workspaceId: s
     active_operations: activeOperationsFresh,
     active_operations_all: activeOperations,
     is_busy: isBusy,
+  };
+}
+
+/**
+ * Manually re-enqueue stuck pipeline articles for this workspace.
+ * Use when status bar shows "Зависло" and heartbeat hasn't caught up yet.
+ * Rescore alone does NOT help — those articles never reached scoring.
+ */
+export async function retryStuckPipeline(params: { userId: string; workspaceId: string }) {
+  await assertWorkspaceOwner(params);
+  const stamp = Date.now();
+  const translateQueue = getTranslateQueue();
+  const ingestQueue = getIngestAnalysisQueue();
+  const scoreQueue = getScoreArticleQueue();
+
+  const needsTranslate = await db
+    .select({ id: articles.id })
+    .from(articles)
+    .where(
+      and(
+        eq(articles.workspaceId, params.workspaceId),
+        eq(articles.needsTranslation, true)
+      )
+    )
+    .limit(80);
+
+  const stuckTranslated = await db
+    .select({ id: articles.id })
+    .from(articles)
+    .where(and(eq(articles.workspaceId, params.workspaceId), eq(articles.status, "translated")))
+    .limit(80);
+
+  const stuckAnalyzed = await db
+    .select({ id: articles.id })
+    .from(articles)
+    .where(and(eq(articles.workspaceId, params.workspaceId), eq(articles.status, "analyzed")))
+    .limit(80);
+
+  let translateQueued = 0;
+  let ingestQueued = 0;
+  let scoreQueued = 0;
+  const errors: string[] = [];
+
+  for (const row of needsTranslate) {
+    const jobId = `manual-retranslate-${row.id}-${stamp}`;
+    try {
+      await translateQueue.add(
+        jobId,
+        { articleId: row.id, force: true },
+        { jobId, removeOnComplete: { count: 100 }, removeOnFail: { count: 50 }, attempts: 3 }
+      );
+      translateQueued += 1;
+    } catch (err) {
+      errors.push(`translate ${row.id}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  for (const row of stuckTranslated) {
+    const jobId = `manual-reingest-${row.id}-${stamp}`;
+    try {
+      await ingestQueue.add(
+        jobId,
+        { articleId: row.id },
+        { jobId, removeOnComplete: { count: 100 }, removeOnFail: { count: 50 }, attempts: 3 }
+      );
+      ingestQueued += 1;
+    } catch (err) {
+      errors.push(`ingest ${row.id}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  for (const row of stuckAnalyzed) {
+    const jobId = `manual-rescore-${row.id}-${stamp}`;
+    try {
+      await scoreQueue.add(
+        jobId,
+        { articleId: row.id },
+        { jobId, removeOnComplete: { count: 100 }, removeOnFail: { count: 50 }, attempts: 3 }
+      );
+      scoreQueued += 1;
+    } catch (err) {
+      errors.push(`score ${row.id}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  // Close stale running ops so status bar stays clean
+  await db
+    .update(operationLogs)
+    .set({
+      status: "failed",
+      message: "Авто-закрыто: зависла >30 мин (pipeline retry)",
+      finishedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(operationLogs.userId, params.userId),
+        eq(operationLogs.workspaceId, params.workspaceId),
+        inArray(operationLogs.status, ["running", "pending"]),
+        sql`COALESCE(${operationLogs.startedAt}, ${operationLogs.createdAt}) < NOW() - INTERVAL '30 minutes'`
+      )
+    );
+
+  return {
+    translateQueued,
+    ingestQueued,
+    scoreQueued,
+    totalQueued: translateQueued + ingestQueued + scoreQueued,
+    candidates: {
+      translate: needsTranslate.length,
+      ingest: stuckTranslated.length,
+      score: stuckAnalyzed.length,
+    },
+    errors: errors.slice(0, 10),
+    message:
+      translateQueued + ingestQueued + scoreQueued > 0
+        ? `Перезапущено: перевод ${translateQueued}, саммари ${ingestQueued}, скоринг ${scoreQueued}`
+        : "Нечего перезапускать — backlog пуст",
   };
 }

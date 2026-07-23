@@ -1288,12 +1288,18 @@ export const dashboardApi = {
   pipeline: () =>
     apiGet<{
       translating?: number;
+      translating_stuck?: number;
+      translatingStuck?: number;
       fetchedPending?: number;
       fetched_pending?: number;
       awaitingAnalysis?: number;
       awaiting_analysis?: number;
+      analysis_stuck?: number;
+      analysisStuck?: number;
       awaitingScoring?: number;
       awaiting_scoring?: number;
+      scoring_stuck?: number;
+      scoringStuck?: number;
       activeOperations?: number;
       active_operations?: number;
       isBusy?: boolean;
@@ -1313,24 +1319,12 @@ export const dashboardApi = {
       });
       return {
         translating: Number(payload.translating ?? 0),
-        translating_stuck: Number(
-          (payload as { translating_stuck?: number; translatingStuck?: number }).translating_stuck ??
-            (payload as { translatingStuck?: number }).translatingStuck ??
-            0
-        ),
+        translating_stuck: Number(payload.translating_stuck ?? payload.translatingStuck ?? 0),
         fetched_pending: Number(payload.fetched_pending ?? payload.fetchedPending ?? 0),
         awaiting_analysis: Number(payload.awaiting_analysis ?? payload.awaitingAnalysis ?? 0),
-        analysis_stuck: Number(
-          (payload as { analysis_stuck?: number; analysisStuck?: number }).analysis_stuck ??
-            (payload as { analysisStuck?: number }).analysisStuck ??
-            0
-        ),
+        analysis_stuck: Number(payload.analysis_stuck ?? payload.analysisStuck ?? 0),
         awaiting_scoring: Number(payload.awaiting_scoring ?? payload.awaitingScoring ?? 0),
-        scoring_stuck: Number(
-          (payload as { scoring_stuck?: number; scoringStuck?: number }).scoring_stuck ??
-            (payload as { scoringStuck?: number }).scoringStuck ??
-            0
-        ),
+        scoring_stuck: Number(payload.scoring_stuck ?? payload.scoringStuck ?? 0),
         active_operations: Number(payload.active_operations ?? payload.activeOperations ?? 0),
         is_busy: Boolean(payload.is_busy ?? payload.isBusy ?? false),
         queues: {
@@ -1340,6 +1334,14 @@ export const dashboardApi = {
         },
       } satisfies PipelineStatus;
     }),
+  retryPipeline: () =>
+    apiPost<{
+      translateQueued?: number;
+      ingestQueued?: number;
+      scoreQueued?: number;
+      totalQueued?: number;
+      message?: string;
+    }>('/dashboard/pipeline/retry', {}),
   collectAll: () =>
     apiPost<{
       operationId?: string;
