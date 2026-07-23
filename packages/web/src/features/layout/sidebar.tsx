@@ -45,16 +45,18 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="fixed left-0 top-0 z-40 flex h-[100dvh] w-64 flex-col border-r border-cyan-100/70 bg-white/75 shadow-2xl shadow-blue-950/5 backdrop-blur-2xl">
+    <aside className="fixed left-0 top-0 z-40 flex h-[100dvh] w-64 flex-col border-r border-cyan-100/80 bg-white/80 shadow-[12px_0_40px_rgba(15,51,122,0.06)] backdrop-blur-2xl">
       <div className="flex items-center justify-between px-5 py-5">
         <div className="flex items-center gap-3">
           <div className="relative flex h-11 w-11 items-center justify-center rounded-2xl nr-glow-hover">
-            <span className="absolute inset-1 rounded-2xl bg-cyan-300/20 blur-md" />
+            <span className="absolute inset-0 rounded-2xl bg-gradient-to-br from-cyan-300/30 to-blue-500/20 blur-md" />
             <img src={NEWSRADAR_ICON_SRC} alt="Newsradar" className="relative h-full w-full object-contain nr-icon-orb" />
           </div>
           <div>
-            <span className="block text-lg font-black tracking-tight text-slate-950">Newsradar</span>
-            <span className="block text-[11px] font-medium text-cyan-700">AI news radar</span>
+            <span className="block bg-gradient-to-r from-slate-950 to-slate-700 bg-clip-text text-lg font-black tracking-tight text-transparent">
+              Newsradar
+            </span>
+            <span className="block text-[11px] font-semibold tracking-wide text-cyan-700/90">AI news studio</span>
           </div>
         </div>
         <NotificationBell />
@@ -74,10 +76,10 @@ export function Sidebar() {
                   to={item.to}
                   search={item.search}
                   className={cn(
-                    'group flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-semibold transition-all',
+                    'group relative flex items-center gap-3 overflow-hidden rounded-2xl px-3 py-2.5 text-sm font-semibold transition-all',
                     isActive
-                      ? 'bg-gradient-to-r from-blue-600 to-cyan-500 text-white shadow-lg shadow-cyan-200/70'
-                      : 'text-slate-500 hover:-translate-y-0.5 hover:bg-white hover:text-slate-950 hover:shadow-md hover:shadow-cyan-100/80'
+                      ? 'bg-gradient-to-r from-blue-600 via-blue-500 to-cyan-400 text-white shadow-lg shadow-cyan-200/80'
+                      : 'text-slate-500 hover:-translate-y-0.5 hover:bg-white/90 hover:text-slate-950 hover:shadow-md hover:shadow-cyan-100/80'
                   )}
                 >
                   <Icon className={cn('h-[18px] w-[18px] transition-transform group-hover:scale-110', isActive && 'drop-shadow')} />

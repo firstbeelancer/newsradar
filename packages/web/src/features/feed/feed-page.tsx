@@ -330,7 +330,8 @@ export function FeedPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-4">
+      <div className="nr-surface rounded-3xl p-4 sm:p-5">
+        <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             {filters.agentId && (
@@ -338,16 +339,17 @@ export function FeedPage() {
                 variant="ghost"
                 size="icon-sm"
                 onClick={() => setFilters((f) => ({ ...f, agentId: '' }))}
+                className="rounded-xl"
               >
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             )}
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">
+              <h1 className="text-2xl font-black tracking-tight text-slate-950">
                 {agentName ? agentName : 'Лента новостей'}
               </h1>
-              <p className="text-muted-foreground mt-1 text-sm">
-                {articles.length} новостей
+              <p className="mt-1 text-sm font-medium text-slate-500">
+                {articles.length} новостей в текущей выборке
               </p>
             </div>
           </div>
@@ -368,15 +370,16 @@ export function FeedPage() {
 
         {/* Search */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-600/70" />
           <Input
             placeholder="Поиск по новостям..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
+            className="rounded-2xl border-cyan-100 bg-white/80 pl-10 shadow-sm"
           />
         </div>
-
+        </div>
+      </div>
         {/* Filters */}
         <FeedFilters agents={agents} sources={sources} filters={filters} onChange={setFilters} />
 
@@ -414,7 +417,6 @@ export function FeedPage() {
             {sortBy === 'score' && sortOrder === 'desc' ? 'Сначала высокий скор' : sortBy === 'score' && sortOrder === 'asc' ? 'Сначала низкий скор' : 'По скору'}
           </Button>
         </div>
-      </div>
 
       {selectedCount > 0 && (
         <div className="sticky top-2 z-20 rounded-xl border border-accent/25 bg-white/95 p-3 shadow-lg shadow-cyan-100/50 backdrop-blur">

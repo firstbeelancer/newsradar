@@ -78,25 +78,25 @@ export function OperationLogRow({ log }: { log: OperationLog }) {
   return (
     <div
       className={cn(
-        'rounded-lg border border-border transition-colors',
-        open && 'border-cyan-200 bg-cyan-50/30',
-        expandable && 'cursor-pointer hover:bg-muted/40'
+        'rounded-2xl border border-cyan-100/80 bg-white/80 transition-all',
+        open && 'border-cyan-200 bg-gradient-to-b from-cyan-50/70 to-white shadow-sm shadow-cyan-100/60',
+        expandable && 'cursor-pointer hover:-translate-y-0.5 hover:border-cyan-200 hover:shadow-md hover:shadow-cyan-100/50'
       )}
     >
       <button
         type="button"
-        className="flex w-full items-center justify-between gap-3 p-3 text-left"
+        className="flex w-full items-center justify-between gap-3 p-3.5 text-left"
         onClick={() => expandable && setOpen((v) => !v)}
         aria-expanded={open}
         disabled={!expandable}
       >
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-50 ring-1 ring-slate-100">
             <StatusIcon status={log.status} />
           </div>
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium">{log.message || log.operation_type}</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="truncate text-sm font-semibold text-slate-900">{log.message || log.operation_type}</p>
+            <p className="text-xs font-medium text-muted-foreground">
               {new Date(log.created_at).toLocaleString('ru-RU', {
                 day: '2-digit',
                 month: 'short',
@@ -108,7 +108,7 @@ export function OperationLogRow({ log }: { log: OperationLog }) {
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Badge variant={statusVariant(log.status)} className="shrink-0">
+          <Badge variant={statusVariant(log.status)} className="shrink-0 rounded-full px-2.5">
             {STATUS_LABELS[log.status] || log.status}
           </Badge>
           {expandable &&

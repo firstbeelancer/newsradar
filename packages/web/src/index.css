@@ -227,8 +227,94 @@
 
   /* Glassmorphism card */
   .nr-glass {
-    background: rgba(255, 255, 255, 0.7);
+    background: rgba(255, 255, 255, 0.72);
     backdrop-filter: blur(20px) saturate(180%);
-    border: 1px solid rgba(255, 255, 255, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.45);
+  }
+
+  /* Soft page section surface */
+  .nr-surface {
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.78) 100%);
+    border: 1px solid rgba(167, 214, 255, 0.45);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.85) inset,
+      0 18px 40px rgba(15, 51, 122, 0.07);
+    backdrop-filter: blur(18px);
+  }
+
+  /* Dashboard hero */
+  .nr-hero {
+    position: relative;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 12% 20%, rgba(0, 214, 255, 0.22), transparent 42%),
+      radial-gradient(circle at 88% 10%, rgba(37, 99, 235, 0.18), transparent 38%),
+      linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(236, 247, 255, 0.88) 55%, rgba(255, 255, 255, 0.9) 100%);
+    border: 1px solid rgba(125, 211, 252, 0.45);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.9) inset,
+      0 20px 50px rgba(15, 51, 122, 0.08);
+  }
+
+  .nr-hero::after {
+    content: '';
+    position: absolute;
+    right: -40px;
+    top: -50px;
+    width: 180px;
+    height: 180px;
+    border-radius: 999px;
+    background: radial-gradient(circle, rgba(34, 211, 238, 0.28), transparent 70%);
+    pointer-events: none;
+  }
+
+  /* Stat tiles */
+  .nr-stat {
+    position: relative;
+    overflow: hidden;
+    transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+  }
+  .nr-stat:hover {
+    transform: translateY(-2px);
+    border-color: rgba(56, 189, 248, 0.45);
+    box-shadow:
+      0 0 0 1px rgba(56, 189, 248, 0.08),
+      0 14px 30px rgba(15, 51, 122, 0.1);
+  }
+  .nr-stat::before {
+    content: '';
+    position: absolute;
+    inset: auto -20% -40% auto;
+    width: 90px;
+    height: 90px;
+    border-radius: 999px;
+    background: radial-gradient(circle, rgba(56, 189, 248, 0.18), transparent 70%);
+    pointer-events: none;
+  }
+
+  /* Feed article polish */
+  .nr-article {
+    transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+  }
+  .nr-article:hover {
+    transform: translateY(-1px);
+    box-shadow:
+      0 12px 28px rgba(15, 51, 122, 0.08),
+      0 0 0 1px rgba(56, 189, 248, 0.12);
+  }
+
+  /* Soft chips */
+  .nr-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border-radius: 999px;
+    border: 1px solid rgba(186, 230, 253, 0.8);
+    background: rgba(255, 255, 255, 0.75);
+    padding: 0.15rem 0.55rem;
+    font-size: 11px;
+    font-weight: 600;
+    color: #475569;
   }
 }

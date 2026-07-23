@@ -140,20 +140,22 @@ export function StatusBar() {
     <div className="fixed bottom-[68px] left-0 right-0 z-30 md:bottom-0 md:left-64">
       <div
         className={cn(
-          'mx-2 mb-2 rounded-xl border border-cyan-100/80 bg-white/90 shadow-lg shadow-blue-950/10 backdrop-blur-xl transition-all md:mx-4',
-          expanded ? 'p-3' : 'px-3 py-2'
+          'mx-2 mb-2 rounded-2xl border border-cyan-200/70 bg-white/92 shadow-[0_12px_40px_rgba(15,51,122,0.12)] backdrop-blur-2xl transition-all md:mx-4',
+          expanded ? 'p-3.5' : 'px-3.5 py-2.5'
         )}
       >
         <div className="flex cursor-pointer items-center gap-3" onClick={() => setExpanded(!expanded)}>
-          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-cyan-600" />
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-md shadow-cyan-200/70">
+            <Loader2 className="h-4 w-4 animate-spin" />
+          </div>
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             {summaryItems.map(([label, count]) => (
-              <span key={label} className="inline-flex items-center gap-1 text-xs font-medium text-slate-700">
+              <span key={label} className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-0.5 text-xs font-semibold text-slate-700 ring-1 ring-slate-100">
                 {label}
                 {count > 1 ? ` ×${count}` : ''}
               </span>
             ))}
-            <span className="text-xs text-muted-foreground">— выполняется</span>
+            <span className="text-xs font-medium text-muted-foreground">— выполняется</span>
           </div>
           {activeOps.length > 0 && (
             <button

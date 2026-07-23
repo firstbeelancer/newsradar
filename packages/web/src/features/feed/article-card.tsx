@@ -77,14 +77,14 @@ export function ArticleCard({
   return (
     <Card
       className={cn(
-        'overflow-hidden border-l-[5px] transition-all hover:shadow-md',
-        selectable && isSelected && 'ring-2 ring-accent',
-        isStale && 'opacity-80'
+        'nr-article overflow-hidden border-l-[5px] border-cyan-100/80',
+        selectable && isSelected && 'ring-2 ring-accent shadow-md shadow-cyan-100',
+        isStale && 'opacity-85'
       )}
       style={agentStyle}
       onClick={() => selectable && onSelect?.(article.id)}
     >
-      <CardContent className="p-4">
+      <CardContent className="p-4 sm:p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
           {selectable && (
             <Checkbox
@@ -100,25 +100,25 @@ export function ArticleCard({
               <Link
                 to="/feed/article/$id"
                 params={{ id: article.id }}
-                className="flex-1 text-sm font-medium leading-snug transition-colors hover:text-accent line-clamp-2"
+                className="flex-1 text-[15px] font-semibold leading-snug text-slate-900 transition-colors hover:text-accent line-clamp-2"
                 onClick={(event) => selectable && event.preventDefault()}
               >
                 {article.title}
               </Link>
-              <Badge className={cn('shrink-0 text-[10px] tabular-nums', scoreColor(article.score))}>
+              <Badge className={cn('shrink-0 rounded-full px-2 text-[10px] font-bold tabular-nums', scoreColor(article.score))}>
                 {scorePercent}
               </Badge>
             </div>
 
             {preview ? (
-              <p className="mt-1.5 line-clamp-2 text-xs text-muted-foreground">{truncate(preview, 180)}</p>
+              <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-slate-500">{truncate(preview, 180)}</p>
             ) : (
-              <p className="mt-1.5 text-xs italic text-muted-foreground/80">Краткое превью пока не сформировано.</p>
+              <p className="mt-2 text-xs italic text-muted-foreground/80">Краткое превью пока не сформировано.</p>
             )}
 
-            <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
-              <span className="font-medium">{article.source_name}</span>
-              <span className="flex items-center gap-1">
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+              <span className="nr-chip">{article.source_name}</span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-0.5 font-medium text-slate-500">
                 <Calendar className="h-3 w-3" />
                 {formatDateTime(article.published_at)}
               </span>
@@ -174,7 +174,7 @@ export function ArticleCard({
                 onGeneratePost?.(article);
               }}
               title="Отправить в генерацию поста"
-              className="w-full gap-1 border-accent/30 text-accent hover:bg-accent/10"
+              className="w-full gap-1 rounded-xl border-accent/25 bg-gradient-to-r from-blue-50 to-cyan-50 text-accent hover:from-blue-100 hover:to-cyan-100"
             >
               <Sparkles className="h-3.5 w-3.5" />
               <span className="text-xs">Генерация</span>
