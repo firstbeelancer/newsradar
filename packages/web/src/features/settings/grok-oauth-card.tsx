@@ -188,7 +188,7 @@ export function GrokOauthCard({ onConnected }: Props) {
 
             {connected && (
               <div className="flex flex-wrap gap-2 text-xs text-cyan-100/90">
-                <span className="rounded-full bg-white/10 px-2.5 py-1">model: {status?.model || 'grok-3-mini'}</span>
+                <span className="rounded-full bg-white/10 px-2.5 py-1">model: {status?.model || 'grok-4.5'}</span>
                 {status?.connectedAt && (
                   <span className="rounded-full bg-white/10 px-2.5 py-1">
                     с {new Date(status.connectedAt).toLocaleString('ru-RU')}

@@ -472,6 +472,65 @@ export async function getAgentSources(agentId: string, workspaceId: string) {
   return rows.map((r) => r.source);
 }
 
+/** Probe every source linked to the agent (RSS/Telegram health check). */
+export async function testAgentSources(agentId: string, workspaceId: string) {
+  const linked = await getAgentSources(agentId, workspaceId);
+  const { testSource } = await import("../sources/service.js");
+
+  const results: Array<{
+    sourceId: string;
+    name: string;
+    url: string;
+    type: string;
+    isActive: boolean;
+    success: boolean;
+    message?: string;
+    articles_found?: number;
+    status?: number;
+  }> = [];
+
+  // Sequential to avoid thundering herd on external feeds
+  for (const source of linked) {
+    try {
+      const probe = await testSource(source.id, workspaceId);
+      results.push({
+        sourceId: source.id,
+        name: source.name,
+        url: source.url,
+        type: source.type,
+        isActive: source.isActive,
+        success: Boolean(probe.success),
+        message: probe.message,
+        articles_found: (probe as { articles_found?: number }).articles_found,
+        status: (probe as { status?: number }).status,
+      });
+    } catch (err) {
+      results.push({
+        sourceId: source.id,
+        name: source.name,
+        url: source.url,
+        type: source.type,
+        isActive: source.isActive,
+        success: false,
+        message: err instanceof Error ? err.message : "Probe failed",
+      });
+    }
+  }
+
+  const ok = results.filter((r) => r.success).length;
+  const failed = results.length - ok;
+  return {
+    total: results.length,
+    ok,
+    failed,
+    results,
+    summary:
+      results.length === 0
+        ? "Нет источников у агента"
+        : `Работают: ${ok} · Не работают: ${failed} · Всего: ${results.length}`,
+  };
+}
+
 // ─── Collect trigger ───
 
 export async function triggerCollection(agentId: string, workspaceId: string, userId: string) {

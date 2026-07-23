@@ -994,9 +994,12 @@ export interface DashboardSummary {
 
 export interface PipelineStatus {
   translating: number;
+  translating_stuck: number;
   fetched_pending: number;
   awaiting_analysis: number;
+  analysis_stuck: number;
   awaiting_scoring: number;
+  scoring_stuck: number;
   active_operations: number;
   is_busy: boolean;
   queues: {
@@ -1135,6 +1138,24 @@ export const agentsApi = {
   sources: (id: string) => apiGet<{ data: BackendSource[] }>(`/agents/${id}/sources`).then((res) =>
     (Array.isArray(res) ? res : res.data ?? []).map(normalizeSource)
   ),
+  testSources: (id: string) =>
+    apiPost<{
+      total: number;
+      ok: number;
+      failed: number;
+      summary: string;
+      results: Array<{
+        sourceId: string;
+        name: string;
+        url: string;
+        type: string;
+        isActive: boolean;
+        success: boolean;
+        message?: string;
+        articles_found?: number;
+        status?: number;
+      }>;
+    }>(`/agents/${id}/sources/test`, {}),
   linkSource: (agentId: string, sourceId: string) =>
     apiPost<{ agentId: string; sourceId: string }, { sourceId: string }>(`/agents/${agentId}/sources`, { sourceId }),
   unlinkSource: (agentId: string, sourceId: string) =>
@@ -1292,9 +1313,24 @@ export const dashboardApi = {
       });
       return {
         translating: Number(payload.translating ?? 0),
+        translating_stuck: Number(
+          (payload as { translating_stuck?: number; translatingStuck?: number }).translating_stuck ??
+            (payload as { translatingStuck?: number }).translatingStuck ??
+            0
+        ),
         fetched_pending: Number(payload.fetched_pending ?? payload.fetchedPending ?? 0),
         awaiting_analysis: Number(payload.awaiting_analysis ?? payload.awaitingAnalysis ?? 0),
+        analysis_stuck: Number(
+          (payload as { analysis_stuck?: number; analysisStuck?: number }).analysis_stuck ??
+            (payload as { analysisStuck?: number }).analysisStuck ??
+            0
+        ),
         awaiting_scoring: Number(payload.awaiting_scoring ?? payload.awaitingScoring ?? 0),
+        scoring_stuck: Number(
+          (payload as { scoring_stuck?: number; scoringStuck?: number }).scoring_stuck ??
+            (payload as { scoringStuck?: number }).scoringStuck ??
+            0
+        ),
         active_operations: Number(payload.active_operations ?? payload.activeOperations ?? 0),
         is_busy: Boolean(payload.is_busy ?? payload.isBusy ?? false),
         queues: {

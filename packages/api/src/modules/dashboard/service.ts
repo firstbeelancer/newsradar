@@ -288,20 +288,50 @@ export async function getPipelineStatus(params: { userId: string; workspaceId: s
   const scoreQ = queues["score-article-v2"] ?? queues.score ?? { waiting: 0, active: 0, delayed: 0, failed: 0 };
   const ingestQ = queues["ingest-analysis-v2"] ?? queues["ingest-analysis"] ?? { waiting: 0, active: 0, delayed: 0, failed: 0 };
 
+  const translateLive = (translateQ.active ?? 0) + (translateQ.waiting ?? 0);
+  const ingestLive = (ingestQ.active ?? 0) + (ingestQ.waiting ?? 0);
+  const scoreLive = (scoreQ.active ?? 0) + (scoreQ.waiting ?? 0);
+
+  // "В работе" только если в BullMQ реально есть jobs.
+  // DB backlog без очереди = застрявшие статьи (не крутим спиннер).
+  const translatingStuck = Math.max(0, translating - translateLive);
+  const analysisStuck = Math.max(0, awaitingAnalysis - ingestLive);
+  const scoringStuck = Math.max(0, awaitingScoring - scoreLive);
+
+  // Stale operation logs older than 30m should not keep the bar alive forever.
+  const [freshRunningOps] = await db
+    .select({ count: count(operationLogs.id) })
+    .from(operationLogs)
+    .where(
+      and(
+        eq(operationLogs.userId, params.userId),
+        eq(operationLogs.workspaceId, params.workspaceId),
+        inArray(operationLogs.status, ["running", "pending"]),
+        sql`COALESCE(${operationLogs.startedAt}, ${operationLogs.createdAt}) > NOW() - INTERVAL '30 minutes'`
+      )
+    );
+  const activeOperationsFresh = Number(freshRunningOps?.count ?? 0);
+
+  const isBusy =
+    translateLive > 0 ||
+    ingestLive > 0 ||
+    scoreLive > 0 ||
+    activeOperationsFresh > 0;
+
   return {
-    translating,
+    translating: translateLive,
+    translatingBacklog: translating,
+    translatingStuck,
     fetchedPending,
-    awaitingAnalysis,
-    awaitingScoring,
-    activeOperations,
-    isBusy:
-      translating > 0 ||
-      awaitingAnalysis > 0 ||
-      awaitingScoring > 0 ||
-      activeOperations > 0 ||
-      (translateQ.active ?? 0) + (translateQ.waiting ?? 0) > 0 ||
-      (scoreQ.active ?? 0) + (scoreQ.waiting ?? 0) > 0 ||
-      (ingestQ.active ?? 0) + (ingestQ.waiting ?? 0) > 0,
+    awaitingAnalysis: ingestLive,
+    analysisBacklog: awaitingAnalysis,
+    analysisStuck,
+    awaitingScoring: scoreLive,
+    scoringBacklog: awaitingScoring,
+    scoringStuck,
+    activeOperations: activeOperationsFresh,
+    activeOperationsAll: activeOperations,
+    isBusy,
     queues: {
       translate: translateQ,
       ingest: ingestQ,
@@ -309,15 +339,17 @@ export async function getPipelineStatus(params: { userId: string; workspaceId: s
       all: queues,
     },
     // snake_case mirrors for frontend normalizers
+    translating_backlog: translating,
+    translating_stuck: translatingStuck,
     fetched_pending: fetchedPending,
-    awaiting_analysis: awaitingAnalysis,
-    awaiting_scoring: awaitingScoring,
-    active_operations: activeOperations,
-    is_busy:
-      translating > 0 ||
-      awaitingAnalysis > 0 ||
-      awaitingScoring > 0 ||
-      activeOperations > 0 ||
-      (translateQ.active ?? 0) + (translateQ.waiting ?? 0) > 0,
+    awaiting_analysis: ingestLive,
+    analysis_backlog: awaitingAnalysis,
+    analysis_stuck: analysisStuck,
+    awaiting_scoring: scoreLive,
+    scoring_backlog: awaitingScoring,
+    scoring_stuck: scoringStuck,
+    active_operations: activeOperationsFresh,
+    active_operations_all: activeOperations,
+    is_busy: isBusy,
   };
 }

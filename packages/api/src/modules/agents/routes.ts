@@ -14,6 +14,7 @@ import {
   linkSource,
   unlinkSource,
   getAgentSources,
+  testAgentSources,
 } from "./service.js";
 
 const router = Router();
@@ -183,6 +184,17 @@ router.get("/:id/sources", authMiddleware, workspaceAuth, async (req, res, next)
     const workspaceId = req.workspaceId!;
     const sources = await getAgentSources(req.params.id, workspaceId);
     res.json({ success: true, data: sources });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Bulk-check all linked sources (RSS/Telegram probe)
+router.post("/:id/sources/test", authMiddleware, workspaceAuth, async (req, res, next) => {
+  try {
+    const workspaceId = req.workspaceId!;
+    const result = await testAgentSources(req.params.id, workspaceId);
+    res.json({ success: true, data: result });
   } catch (err) {
     next(err);
   }

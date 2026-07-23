@@ -116,7 +116,7 @@ async function runCompatibleSearch(
   provider: WebSearchProvider
 ): Promise<WebSearchSource[]> {
   const endpoint = compatibleEndpoint(settings.baseUrl, provider);
-  const model = settings.model?.trim() || (provider === "grok" ? "grok-3-mini" : "sonar");
+  const model = settings.model?.trim() || (provider === "grok" ? "grok-4.5" : "sonar");
   const maxResults = clampMaxResults(settings.maxResults);
 
   const response = await fetchImpl(endpoint, {

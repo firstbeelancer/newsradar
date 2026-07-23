@@ -13,7 +13,7 @@ import {
 } from '@shared/ui/dropdown-menu';
 import {
   Bot, MoreVertical, Pencil, Trash2, Play, CircleDot, Link2, ChevronDown, ChevronUp,
-  Rss, MessageCircle, Plus, Filter,
+  Rss, MessageCircle, Plus, Filter, Loader2, CheckCircle2, XCircle, Activity,
   Shield, Brain, Megaphone, Heart, Paintbrush, Globe, Zap, Star,
   Eye, Search, BookOpen, Target, Lightbulb, Compass, Newspaper,
   Hammer, Wrench, type LucideIcon,
@@ -68,6 +68,11 @@ function SourceToggleList({ agentId, onSourceDeleted }: { agentId: string; onSou
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingSource, setEditingSource] = useState<Source | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [checkSummary, setCheckSummary] = useState<string | null>(null);
+  const [probeById, setProbeById] = useState<
+    Record<string, { success: boolean; message?: string; articles_found?: number }>
+  >({});
 
   useEffect(() => {
     let cancelled = false;
@@ -121,6 +126,28 @@ function SourceToggleList({ agentId, onSourceDeleted }: { agentId: string; onSou
     }
   }, [editingSource]);
 
+  const handleCheckSources = useCallback(async () => {
+    setChecking(true);
+    setCheckSummary(null);
+    try {
+      const result = await agentsApi.testSources(agentId);
+      const map: Record<string, { success: boolean; message?: string; articles_found?: number }> = {};
+      for (const row of result.results || []) {
+        map[row.sourceId] = {
+          success: row.success,
+          message: row.message,
+          articles_found: row.articles_found,
+        };
+      }
+      setProbeById(map);
+      setCheckSummary(result.summary);
+    } catch (err) {
+      setCheckSummary(err instanceof Error ? err.message : 'Не удалось проверить источники');
+    } finally {
+      setChecking(false);
+    }
+  }, [agentId]);
+
   if (loading) {
     return (
       <div className="space-y-2">
@@ -137,60 +164,108 @@ function SourceToggleList({ agentId, onSourceDeleted }: { agentId: string; onSou
 
   return (
     <>
-      <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
-        {sources.map((source) => (
-          <div
-            key={source.id}
-            className={cn(
-              'flex items-center gap-2 rounded-lg px-2.5 py-2 transition-colors group/src',
-              source.is_active ? 'bg-muted/40 hover:bg-muted/60' : 'bg-muted/20 opacity-60 hover:opacity-80'
-            )}
-          >
-            {/* Type icon */}
-            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground">
-              {source.type === 'telegram' ? (
-                <MessageCircle className="h-3.5 w-3.5" />
-              ) : (
-                <Rss className="h-3.5 w-3.5" />
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-8 gap-1.5 text-xs"
+          onClick={() => void handleCheckSources()}
+          disabled={checking}
+        >
+          {checking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Activity className="h-3.5 w-3.5" />}
+          {checking ? 'Проверяю…' : 'Проверить источники'}
+        </Button>
+        {checkSummary && (
+          <span className="text-[11px] font-medium text-muted-foreground">{checkSummary}</span>
+        )}
+      </div>
+
+      <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
+        {sources.map((source) => {
+          const probe = probeById[source.id];
+          return (
+            <div
+              key={source.id}
+              className={cn(
+                'flex items-center gap-2 rounded-lg px-2.5 py-2 transition-colors group/src',
+                probe
+                  ? probe.success
+                    ? 'bg-emerald-50/80 ring-1 ring-emerald-100'
+                    : 'bg-rose-50/80 ring-1 ring-rose-100'
+                  : source.is_active
+                    ? 'bg-muted/40 hover:bg-muted/60'
+                    : 'bg-muted/20 opacity-60 hover:opacity-80'
               )}
-            </div>
-
-            {/* Name + URL */}
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-medium truncate leading-tight">{source.name}</p>
-              <p className="text-[10px] text-muted-foreground truncate">{source.url}</p>
-            </div>
-
-            {/* Edit button */}
-            <button
-              type="button"
-              onClick={() => setEditingSource(source)}
-              className="shrink-0 opacity-100 sm:opacity-0 sm:group-hover/src:opacity-100 transition-opacity p-0.5 rounded hover:bg-accent/10 text-muted-foreground hover:text-accent"
-              title="Редактировать источник"
             >
-              <Pencil className="h-3 w-3" />
-            </button>
+              {/* Type icon */}
+              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground">
+                {source.type === 'telegram' ? (
+                  <MessageCircle className="h-3.5 w-3.5" />
+                ) : (
+                  <Rss className="h-3.5 w-3.5" />
+                )}
+              </div>
 
-            {/* Toggle switch — standalone, NOT inside a <button> */}
-            <Switch
-              checked={source.is_active}
-              onCheckedChange={(checked) => handleToggle(source.id, checked)}
-              disabled={togglingId === source.id}
-              className="shrink-0 scale-75"
-            />
+              {/* Name + URL + probe */}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <p className="text-xs font-medium truncate leading-tight">{source.name}</p>
+                  {probe && (
+                    probe.success ? (
+                      <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-600" />
+                    ) : (
+                      <XCircle className="h-3 w-3 shrink-0 text-rose-600" />
+                    )
+                  )}
+                </div>
+                <p className="text-[10px] text-muted-foreground truncate">{source.url}</p>
+                {probe?.message && (
+                  <p
+                    className={cn(
+                      'mt-0.5 text-[10px] truncate',
+                      probe.success ? 'text-emerald-700' : 'text-rose-700'
+                    )}
+                    title={probe.message}
+                  >
+                    {probe.success && probe.articles_found != null
+                      ? `${probe.message}`
+                      : probe.message}
+                  </p>
+                )}
+              </div>
 
-            {/* Delete button */}
-            <button
-              type="button"
-              onClick={() => handleDelete(source.id)}
-              disabled={deletingId === source.id}
-              className="shrink-0 opacity-100 sm:opacity-0 sm:group-hover/src:opacity-100 transition-opacity p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
-              title="Удалить источник"
-            >
-              <Trash2 className="h-3 w-3" />
-            </button>
-          </div>
-        ))}
+              {/* Edit button */}
+              <button
+                type="button"
+                onClick={() => setEditingSource(source)}
+                className="shrink-0 opacity-100 sm:opacity-0 sm:group-hover/src:opacity-100 transition-opacity p-0.5 rounded hover:bg-accent/10 text-muted-foreground hover:text-accent"
+                title="Редактировать источник"
+              >
+                <Pencil className="h-3 w-3" />
+              </button>
+
+              {/* Toggle switch — standalone, NOT inside a <button> */}
+              <Switch
+                checked={source.is_active}
+                onCheckedChange={(checked) => handleToggle(source.id, checked)}
+                disabled={togglingId === source.id}
+                className="shrink-0 scale-75"
+              />
+
+              {/* Delete button */}
+              <button
+                type="button"
+                onClick={() => handleDelete(source.id)}
+                disabled={deletingId === source.id}
+                className="shrink-0 opacity-100 sm:opacity-0 sm:group-hover/src:opacity-100 transition-opacity p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                title="Удалить источник"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </div>
+          );
+        })}
       </div>
 
       <SourceForm

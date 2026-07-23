@@ -1,38 +1,34 @@
 /**
- * Re-queue articles stuck with needs_translation=true so the feed eventually
- * recovers after AI/provider outages.
- *
- * Also recovers articles whose titles were polluted by model thinking leaks
- * (e.g. "<think>The user wants me to translate...").
+ * Re-queue articles stuck mid-pipeline after AI/provider outages:
+ * - needs_translation / polluted titles → translate
+ * - status=translated without progress → ingest/summary
+ * - status=analyzed without score → scoring
  */
 import { and, eq, ilike, inArray, lt, or, sql } from "drizzle-orm";
 import type { Logger } from "pino";
 import { db } from "../db/index.js";
 import { articles } from "../db/schema.js";
-import { translateQueue } from "../connection/redis.js";
+import {
+  ingestAnalysisQueue,
+  scoreArticleQueue,
+  translateQueue,
+} from "../connection/redis.js";
 
 const MAX_BATCH = 40;
 const STUCK_AFTER_MS = 10 * 60 * 1000; // 10 minutes without update
 
-async function enqueueRetranslate(articleId: string, hourBucket: number, logger: Logger): Promise<boolean> {
-  const jobId = `retranslate-stuck-${articleId}-${hourBucket}`;
+async function safeAdd(
+  add: () => Promise<unknown>,
+  logger: Logger,
+  meta: Record<string, unknown>
+): Promise<boolean> {
   try {
-    await translateQueue.add(
-      jobId,
-      { articleId, force: true },
-      {
-        jobId,
-        attempts: 3,
-        backoff: { type: "exponential", delay: 10_000 },
-        removeOnComplete: { count: 200 },
-        removeOnFail: { count: 100 },
-      }
-    );
+    await add();
     return true;
   } catch (err) {
     logger.debug(
-      { articleId, err: err instanceof Error ? err.message : String(err) },
-      "Skip stuck translation requeue"
+      { ...meta, err: err instanceof Error ? err.message : String(err) },
+      "Skip stuck pipeline requeue"
     );
     return false;
   }
@@ -56,7 +52,27 @@ export async function requeueStuckTranslations(logger: Logger): Promise<number> 
     .limit(MAX_BATCH);
 
   for (const row of stuck) {
-    if (await enqueueRetranslate(row.id, hourBucket, logger)) queued += 1;
+    const jobId = `retranslate-stuck-${row.id}-${hourBucket}`;
+    if (
+      await safeAdd(
+        () =>
+          translateQueue.add(
+            jobId,
+            { articleId: row.id, force: true },
+            {
+              jobId,
+              attempts: 3,
+              backoff: { type: "exponential", delay: 10_000 },
+              removeOnComplete: { count: 200 },
+              removeOnFail: { count: 100 },
+            }
+          ),
+        logger,
+        { articleId: row.id, stage: "translate" }
+      )
+    ) {
+      queued += 1;
+    }
   }
 
   // Recover already-scored garbage translations from reasoning model leaks.
@@ -85,14 +101,108 @@ export async function requeueStuckTranslations(logger: Logger): Promise<number> 
       .where(inArray(articles.id, ids));
 
     for (const row of polluted) {
-      if (await enqueueRetranslate(row.id, hourBucket, logger)) queued += 1;
+      const jobId = `retranslate-polluted-${row.id}-${hourBucket}`;
+      if (
+        await safeAdd(
+          () =>
+            translateQueue.add(
+              jobId,
+              { articleId: row.id, force: true },
+              {
+                jobId,
+                attempts: 3,
+                backoff: { type: "exponential", delay: 10_000 },
+                removeOnComplete: { count: 200 },
+                removeOnFail: { count: 100 },
+              }
+            ),
+          logger,
+          { articleId: row.id, stage: "translate-polluted" }
+        )
+      ) {
+        queued += 1;
+      }
     }
   }
 
-  if (queued > 0 || polluted.length > 0 || stuck.length > 0) {
+  // translated without further progress → summary/ingest
+  const stuckTranslated = await db
+    .select({ id: articles.id })
+    .from(articles)
+    .where(and(eq(articles.status, "translated"), lt(articles.updatedAt, threshold)))
+    .limit(MAX_BATCH);
+
+  for (const row of stuckTranslated) {
+    const jobId = `reingest-stuck-${row.id}-${hourBucket}`;
+    if (
+      await safeAdd(
+        () =>
+          ingestAnalysisQueue.add(
+            jobId,
+            { articleId: row.id },
+            {
+              jobId,
+              attempts: 3,
+              backoff: { type: "exponential", delay: 8_000 },
+              removeOnComplete: { count: 200 },
+              removeOnFail: { count: 100 },
+            }
+          ),
+        logger,
+        { articleId: row.id, stage: "ingest" }
+      )
+    ) {
+      queued += 1;
+    }
+  }
+
+  // analyzed without score → scoring
+  const stuckAnalyzed = await db
+    .select({ id: articles.id })
+    .from(articles)
+    .where(and(eq(articles.status, "analyzed"), lt(articles.updatedAt, threshold)))
+    .limit(MAX_BATCH);
+
+  for (const row of stuckAnalyzed) {
+    const jobId = `rescore-stuck-${row.id}-${hourBucket}`;
+    if (
+      await safeAdd(
+        () =>
+          scoreArticleQueue.add(
+            jobId,
+            { articleId: row.id },
+            {
+              jobId,
+              attempts: 3,
+              backoff: { type: "exponential", delay: 8_000 },
+              removeOnComplete: { count: 200 },
+              removeOnFail: { count: 100 },
+            }
+          ),
+        logger,
+        { articleId: row.id, stage: "score" }
+      )
+    ) {
+      queued += 1;
+    }
+  }
+
+  if (
+    queued > 0 ||
+    polluted.length > 0 ||
+    stuck.length > 0 ||
+    stuckTranslated.length > 0 ||
+    stuckAnalyzed.length > 0
+  ) {
     logger.info(
-      { queued, stuck: stuck.length, polluted: polluted.length },
-      "Requeued stuck/polluted translation articles"
+      {
+        queued,
+        stuckTranslate: stuck.length,
+        polluted: polluted.length,
+        stuckTranslated: stuckTranslated.length,
+        stuckAnalyzed: stuckAnalyzed.length,
+      },
+      "Requeued stuck pipeline articles"
     );
   }
 

@@ -144,7 +144,7 @@ router.post("/settings/web-search/test", authMiddleware, async (req, res, next) 
           Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          model: input.model?.trim() || currentSettings.model || (provider === "grok" ? "grok-3-mini" : "sonar"),
+          model: input.model?.trim() || currentSettings.model || (provider === "grok" ? "grok-4.5" : "sonar"),
           messages: [
             { role: "system", content: "Return only JSON with a sources array." },
             { role: "user", content: input.query?.trim() || "OpenAI Anthropic AI news" },

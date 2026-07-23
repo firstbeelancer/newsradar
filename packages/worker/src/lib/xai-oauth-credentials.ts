@@ -124,7 +124,7 @@ export async function resolveWorkspaceXaiOauthCredentials(
   return {
     apiKey: accessToken,
     baseUrl: row.baseUrl || XAI_OAUTH_BASE_URL,
-    modelHint: "grok-3-mini",
+    modelHint: "grok-4.5",
   };
 }
 

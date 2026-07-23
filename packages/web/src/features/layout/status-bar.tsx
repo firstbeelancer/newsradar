@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { dashboardApi, operationLogsApi, type OperationLog, type PipelineStatus } from '@shared/api/client';
-import { Loader2, Play, Search, Sparkles, BarChart3, X, Square, Languages, Brain } from 'lucide-react';
+import { Loader2, Play, Search, Sparkles, BarChart3, X, Square, Languages, Brain, AlertTriangle } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 
 const OPERATION_LABELS: Record<string, { label: string; icon: React.ElementType; color: string }> = {
@@ -26,13 +26,25 @@ function emptyPipeline(): PipelineStatus {
   const q = { waiting: 0, active: 0, delayed: 0, failed: 0 };
   return {
     translating: 0,
+    translating_stuck: 0,
     fetched_pending: 0,
     awaiting_analysis: 0,
+    analysis_stuck: 0,
     awaiting_scoring: 0,
+    scoring_stuck: 0,
     active_operations: 0,
     is_busy: false,
     queues: { translate: q, ingest: q, scoring: q },
   };
+}
+
+/** Hide ops stuck in running/pending longer than 30 minutes. */
+function isFreshOp(op: OperationLog): boolean {
+  const raw = op.started_at || op.created_at;
+  if (!raw) return true;
+  const ts = new Date(raw).getTime();
+  if (Number.isNaN(ts)) return true;
+  return Date.now() - ts < 30 * 60 * 1000;
 }
 
 export function StatusBar() {
@@ -48,7 +60,9 @@ export function StatusBar() {
         operationLogsApi.list(undefined, 20),
         dashboardApi.pipeline().catch(() => emptyPipeline()),
       ]);
-      const active = opsResult.data.filter((op) => op.status === 'running' || op.status === 'pending');
+      const active = opsResult.data
+        .filter((op) => op.status === 'running' || op.status === 'pending')
+        .filter(isFreshOp);
       setActiveOps(active);
       setPipeline(pipelineResult);
     } catch {
@@ -86,52 +100,90 @@ export function StatusBar() {
     }
   };
 
-  const translateJobs =
-    (pipeline.queues.translate.active ?? 0) + (pipeline.queues.translate.waiting ?? 0);
-  const scoreJobs =
-    (pipeline.queues.scoring.active ?? 0) + (pipeline.queues.scoring.waiting ?? 0);
-  const ingestJobs =
-    (pipeline.queues.ingest.active ?? 0) + (pipeline.queues.ingest.waiting ?? 0);
+  // Live = actual BullMQ waiting+active (API already maps these into translating/awaiting_*)
+  type Chip = {
+    key: string;
+    label: string;
+    count: number;
+    icon: React.ElementType;
+    color: string;
+    stuck?: boolean;
+  };
+  const liveChips: Chip[] = [];
+  const stuckChips: Chip[] = [];
 
-  const pipelineChips: Array<{ key: string; label: string; count: number; icon: React.ElementType; color: string }> = [];
-  if (pipeline.translating > 0 || translateJobs > 0) {
-    pipelineChips.push({
+  if (pipeline.translating > 0) {
+    liveChips.push({
       key: 'translate',
       label: 'Перевод',
-      count: Math.max(pipeline.translating, translateJobs),
+      count: pipeline.translating,
       icon: Languages,
       color: 'text-cyan-600',
     });
+  } else if (pipeline.translating_stuck > 0) {
+    stuckChips.push({
+      key: 'translate-stuck',
+      label: 'Перевод',
+      count: pipeline.translating_stuck,
+      icon: AlertTriangle,
+      color: 'text-amber-600',
+      stuck: true,
+    });
   }
-  if (pipeline.awaiting_analysis > 0 || ingestJobs > 0) {
-    pipelineChips.push({
+
+  if (pipeline.awaiting_analysis > 0) {
+    liveChips.push({
       key: 'analysis',
       label: 'Саммари',
-      count: Math.max(pipeline.awaiting_analysis, ingestJobs),
+      count: pipeline.awaiting_analysis,
       icon: Brain,
       color: 'text-violet-600',
     });
-  }
-  if (pipeline.awaiting_scoring > 0 || scoreJobs > 0) {
-    pipelineChips.push({
-      key: 'score',
-      label: 'Скоринг',
-      count: Math.max(pipeline.awaiting_scoring, scoreJobs),
-      icon: BarChart3,
-      color: 'text-amber-500',
+  } else if (pipeline.analysis_stuck > 0) {
+    stuckChips.push({
+      key: 'analysis-stuck',
+      label: 'Саммари',
+      count: pipeline.analysis_stuck,
+      icon: AlertTriangle,
+      color: 'text-amber-600',
+      stuck: true,
     });
   }
 
-  const hasAnything = activeOps.length > 0 || pipelineChips.length > 0 || pipeline.is_busy;
-  if (!hasAnything) return null;
+  if (pipeline.awaiting_scoring > 0) {
+    liveChips.push({
+      key: 'score',
+      label: 'Скоринг',
+      count: pipeline.awaiting_scoring,
+      icon: BarChart3,
+      color: 'text-amber-500',
+    });
+  } else if (pipeline.scoring_stuck > 0) {
+    stuckChips.push({
+      key: 'score-stuck',
+      label: 'Скоринг',
+      count: pipeline.scoring_stuck,
+      icon: AlertTriangle,
+      color: 'text-amber-600',
+      stuck: true,
+    });
+  }
 
-  const summaryMap = new Map<string, number>();
+  const hasLive = activeOps.length > 0 || liveChips.length > 0;
+  const hasStuckOnly = !hasLive && stuckChips.length > 0;
+  if (!hasLive && !hasStuckOnly) return null;
+
+  const summaryMap = new Map<string, string>();
   for (const operation of activeOps) {
     const info = getOperationInfo(operation.operation_type);
-    summaryMap.set(info.label, (summaryMap.get(info.label) || 0) + 1);
+    summaryMap.set(info.label, 'live');
   }
-  for (const chip of pipelineChips) {
-    summaryMap.set(chip.label, Math.max(summaryMap.get(chip.label) || 0, chip.count));
+  for (const chip of liveChips) {
+    summaryMap.set(chip.label, 'live');
+  }
+  // stuck only shown if no live of same label
+  for (const chip of stuckChips) {
+    if (!summaryMap.has(chip.label)) summaryMap.set(chip.label, 'stuck');
   }
 
   const summaryItems = Array.from(summaryMap.entries());
@@ -140,22 +192,39 @@ export function StatusBar() {
     <div className="fixed bottom-[68px] left-0 right-0 z-30 md:bottom-0 md:left-64">
       <div
         className={cn(
-          'mx-2 mb-2 rounded-2xl border border-cyan-200/70 bg-white/92 shadow-[0_12px_40px_rgba(15,51,122,0.12)] backdrop-blur-2xl transition-all md:mx-4',
+          'mx-2 mb-2 rounded-2xl border bg-white/92 shadow-[0_12px_40px_rgba(15,51,122,0.12)] backdrop-blur-2xl transition-all md:mx-4',
+          hasLive ? 'border-cyan-200/70' : 'border-amber-200/80',
           expanded ? 'p-3.5' : 'px-3.5 py-2.5'
         )}
       >
         <div className="flex cursor-pointer items-center gap-3" onClick={() => setExpanded(!expanded)}>
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-md shadow-cyan-200/70">
-            <Loader2 className="h-4 w-4 animate-spin" />
+          <div
+            className={cn(
+              'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-white shadow-md',
+              hasLive
+                ? 'bg-gradient-to-br from-cyan-500 to-blue-600 shadow-cyan-200/70'
+                : 'bg-gradient-to-br from-amber-400 to-orange-500 shadow-amber-200/70'
+            )}
+          >
+            {hasLive ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertTriangle className="h-4 w-4" />}
           </div>
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            {summaryItems.map(([label, count]) => (
-              <span key={label} className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-0.5 text-xs font-semibold text-slate-700 ring-1 ring-slate-100">
+            {summaryItems.map(([label, kind]) => (
+              <span
+                key={label}
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ring-1',
+                  kind === 'live'
+                    ? 'bg-slate-50 text-slate-700 ring-slate-100'
+                    : 'bg-amber-50 text-amber-800 ring-amber-100'
+                )}
+              >
                 {label}
-                {count > 1 ? ` ×${count}` : ''}
               </span>
             ))}
-            <span className="text-xs font-medium text-muted-foreground">— выполняется</span>
+            <span className="text-xs font-medium text-muted-foreground">
+              — {hasLive ? 'выполняется' : 'очередь зависла (worker догонит)'}
+            </span>
           </div>
           {activeOps.length > 0 && (
             <button
@@ -175,52 +244,50 @@ export function StatusBar() {
 
         {expanded && (
           <div className="mt-2 space-y-1.5">
-            {pipelineChips.map((chip) => {
+            {[...liveChips, ...stuckChips].map((chip) => {
               const Icon = chip.icon;
               return (
                 <div key={chip.key} className="flex items-center gap-2 text-xs">
                   <Icon className={cn('h-3.5 w-3.5 shrink-0', chip.color)} />
                   <span className="truncate font-medium">{chip.label}</span>
                   <span className="flex-1 truncate text-muted-foreground">
-                    {chip.count} статей в обработке агентом
+                    {chip.stuck
+                      ? `${chip.count} статей ждут повторной постановки в очередь`
+                      : `${chip.count} jobs в очереди worker`}
                   </span>
-                  <span className="shrink-0 rounded-full bg-cyan-50 px-1.5 py-0.5 text-[10px] font-semibold text-cyan-700">
-                    В работе
+                  <span
+                    className={cn(
+                      'shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
+                      chip.stuck ? 'bg-amber-50 text-amber-700' : 'bg-cyan-50 text-cyan-700'
+                    )}
+                  >
+                    {chip.stuck ? 'Зависло' : 'В работе'}
                   </span>
                 </div>
               );
             })}
-
             {activeOps.map((operation) => {
               const info = getOperationInfo(operation.operation_type);
               const Icon = info.icon;
-              const isCancelling = cancellingId === operation.id;
-
               return (
                 <div key={operation.id} className="flex items-center gap-2 text-xs">
                   <Icon className={cn('h-3.5 w-3.5 shrink-0', info.color)} />
                   <span className="truncate font-medium">{info.label}</span>
-                  {operation.message && (
-                    <span className="flex-1 truncate text-muted-foreground">{operation.message}</span>
-                  )}
-                  <span
-                    className={cn(
-                      'shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
-                      operation.status === 'running' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'
-                    )}
-                  >
-                    {operation.status === 'running' ? 'Выполняется' : 'Ожидание'}
-                  </span>
+                  <span className="flex-1 truncate text-muted-foreground">{operation.message || 'выполняется'}</span>
                   <button
                     onClick={(event) => {
                       event.stopPropagation();
                       void handleCancel(operation.id);
                     }}
-                    disabled={isCancelling}
-                    className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:bg-danger-light hover:text-danger disabled:opacity-50"
+                    disabled={cancellingId === operation.id}
+                    className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
                     title="Остановить"
                   >
-                    <X className="h-3.5 w-3.5" />
+                    {cancellingId === operation.id ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <X className="h-3 w-3" />
+                    )}
                   </button>
                 </div>
               );

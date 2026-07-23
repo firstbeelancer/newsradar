@@ -646,7 +646,7 @@ export function AIProvidersSettings() {
             </div>
             <div className="space-y-1.5">
               <Label>Модель</Label>
-              <Input value={form.model} onChange={(e) => setForm((prev) => ({ ...prev, model: e.target.value }))} placeholder="grok-3-mini / openrouter/auto" />
+              <Input value={form.model} onChange={(e) => setForm((prev) => ({ ...prev, model: e.target.value }))} placeholder="grok-4.5 / openrouter/auto" />
             </div>
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div className="space-y-0.5">
