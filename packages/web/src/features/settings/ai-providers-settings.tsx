@@ -37,11 +37,12 @@ import {
   X,
   Save,
 } from 'lucide-react';
+import { GrokOauthCard } from './grok-oauth-card';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type ProviderSlug = 'openai' | 'anthropic' | 'openrouter' | 'google' | 'xai';
-type ProviderMode = 'platform' | 'byok';
+type ProviderMode = 'platform' | 'byok' | 'oauth';
 
 interface AIProvider {
   id: string;
@@ -383,6 +384,8 @@ export function AIProvidersSettings() {
           ))}
         </div>
       )}
+
+      {!loading && <GrokOauthCard onConnected={fetchProviders} />}
 
       {!loading && providers.length === 0 && (
         <Card>

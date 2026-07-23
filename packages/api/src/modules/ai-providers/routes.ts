@@ -13,6 +13,12 @@ import {
   deleteProvider,
   testProviderConnection,
 } from "./service.js";
+import {
+  disconnectXaiOauth,
+  getXaiOauthStatus,
+  pollXaiOauth,
+  startXaiOauth,
+} from "./xai-oauth.js";
 
 const router = Router();
 
@@ -20,7 +26,7 @@ const router = Router();
 
 const createSchema = z.object({
   name: z.string().min(1).max(100),
-  type: z.enum(["platform", "byok"]),
+  type: z.enum(["platform", "byok", "oauth"]),
   provider: z.enum(["openai", "anthropic", "openrouter", "google", "xai"]),
   baseUrl: z.string().optional(),
   apiKey: z.string().optional(),
@@ -44,6 +50,51 @@ const assignSchema = z.object({
 });
 
 // ─── Routes ───
+
+// xAI Grok OAuth (SuperGrok / X Premium+) — Hermes-compatible device code
+router.get("/xai-oauth/status", authMiddleware, async (req, res, next) => {
+  try {
+    const workspaceId = req.query.workspaceId as string;
+    if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
+    const data = await getXaiOauthStatus({ userId: req.user!.sub, workspaceId });
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/xai-oauth/start", authMiddleware, async (req, res, next) => {
+  try {
+    const workspaceId = req.query.workspaceId as string;
+    if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
+    const data = await startXaiOauth({ userId: req.user!.sub, workspaceId });
+    res.status(201).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/xai-oauth/poll", authMiddleware, async (req, res, next) => {
+  try {
+    const workspaceId = req.query.workspaceId as string;
+    if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
+    const data = await pollXaiOauth({ userId: req.user!.sub, workspaceId });
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete("/xai-oauth", authMiddleware, async (req, res, next) => {
+  try {
+    const workspaceId = req.query.workspaceId as string;
+    if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
+    const data = await disconnectXaiOauth({ userId: req.user!.sub, workspaceId });
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // List providers
 router.get("/", authMiddleware, async (req, res, next) => {

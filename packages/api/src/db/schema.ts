@@ -273,8 +273,8 @@ export const aiProviders = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     name: varchar("name", { length: 100 }).notNull(),
-    type: varchar("type", { length: 16 }).notNull(), // platform, byok
-    provider: varchar("provider", { length: 20 }).notNull(), // openai, anthropic, openrouter, google
+    type: varchar("type", { length: 16 }).notNull(), // platform, byok, oauth
+    provider: varchar("provider", { length: 20 }).notNull(), // openai, anthropic, openrouter, google, xai
     baseUrl: text("base_url"),
     apiKeyEncrypted: text("api_key_encrypted"),
     model: varchar("model", { length: 100 }).default("gpt-4o-mini").notNull(),
@@ -289,10 +289,49 @@ export const aiProviders = pgTable(
   (table) => [
     index("ai_providers_workspace_id_idx").on(table.workspaceId),
     index("ai_providers_is_active_idx").on(table.isActive),
-    check("ai_providers_type_check", sql`${table.type} IN ('platform', 'byok')`),
+    check("ai_providers_type_check", sql`${table.type} IN ('platform', 'byok', 'oauth')`),
     check(
       "ai_providers_provider_check",
       sql`${table.provider} IN ('openai', 'anthropic', 'openrouter', 'google', 'xai')`
+    ),
+  ]
+);
+
+export const xaiOauthConnections = pgTable(
+  "xai_oauth_connections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .references(() => workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    userId: uuid("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    status: varchar("status", { length: 32 }).default("disconnected").notNull(),
+    deviceCode: text("device_code"),
+    userCode: varchar("user_code", { length: 64 }),
+    verificationUri: text("verification_uri"),
+    verificationUriComplete: text("verification_uri_complete"),
+    deviceIntervalSec: integer("device_interval_sec").default(5),
+    deviceExpiresAt: timestamp("device_expires_at", { withTimezone: true }),
+    accessTokenEncrypted: text("access_token_encrypted"),
+    refreshTokenEncrypted: text("refresh_token_encrypted"),
+    idTokenEncrypted: text("id_token_encrypted"),
+    tokenType: varchar("token_type", { length: 32 }).default("Bearer"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    tokenEndpoint: text("token_endpoint"),
+    baseUrl: text("base_url").default("https://api.x.ai/v1"),
+    lastError: text("last_error"),
+    connectedAt: timestamp("connected_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("xai_oauth_connections_workspace_uidx").on(table.workspaceId),
+    index("xai_oauth_connections_status_idx").on(table.status),
+    check(
+      "xai_oauth_connections_status_check",
+      sql`${table.status} IN ('disconnected', 'pending', 'connected', 'error')`
     ),
   ]
 );

@@ -14,6 +14,10 @@ import { env } from "../config/env.js";
 import { db } from "../db/index.js";
 import { aiProviders } from "../db/schema.js";
 import { decrypt } from "./encryption.js";
+import {
+  isXaiOauthMarkerKey,
+  resolveWorkspaceXaiOauthCredentials,
+} from "./xai-oauth-credentials.js";
 
 export interface AiMessage {
   role: "system" | "user" | "assistant";
@@ -139,13 +143,45 @@ async function resolveProvider(
 
     const selected = explicit ?? pool[0];
     if (selected?.apiKeyEncrypted) {
+      const providerName = selected.provider as "openai" | "anthropic" | "openrouter" | "google" | "xai";
+      let apiKey = decrypt(selected.apiKeyEncrypted);
+      let baseUrl =
+        selected.baseUrl ??
+        resolveEnvProvider({ provider: providerName }).baseUrl;
+      let model = opts.model ?? selected.model;
+
+      // Grok SuperGrok OAuth: provider row is a marker; real bearer lives in xai_oauth_connections.
+      if (
+        providerName === "xai" &&
+        (selected.type === "oauth" || isXaiOauthMarkerKey(apiKey))
+      ) {
+        const oauth = await resolveWorkspaceXaiOauthCredentials(opts.workspaceId!);
+        if (oauth) {
+          apiKey = oauth.apiKey;
+          baseUrl = oauth.baseUrl || baseUrl;
+          if (!opts.model && oauth.modelHint) {
+            model = selected.model || oauth.modelHint;
+          }
+        }
+      }
+
       return {
-        provider: selected.provider as "openai" | "anthropic" | "openrouter" | "google" | "xai",
-        baseUrl:
-          selected.baseUrl ??
-          resolveEnvProvider({ provider: selected.provider as "openai" | "anthropic" | "openrouter" | "google" | "xai" }).baseUrl,
-        apiKey: decrypt(selected.apiKeyEncrypted),
-        model: opts.model ?? selected.model,
+        provider: providerName,
+        baseUrl,
+        apiKey,
+        model,
+        source: "workspace-provider",
+      };
+    }
+
+    // No active BYOK row — still try workspace Grok OAuth subscription.
+    const oauth = await resolveWorkspaceXaiOauthCredentials(opts.workspaceId!);
+    if (oauth) {
+      return {
+        provider: "xai",
+        baseUrl: oauth.baseUrl,
+        apiKey: oauth.apiKey,
+        model: opts.model ?? oauth.modelHint ?? resolveModel(opts),
         source: "workspace-provider",
       };
     }
