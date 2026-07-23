@@ -7,7 +7,7 @@ import { Button } from '@shared/ui/button';
 import { Skeleton } from '@shared/ui/skeleton';
 import { useArticlesStore } from '@shared/stores/articles-store';
 import { useGenerationStore } from '@shared/stores/generation-store';
-import { ApiError, deepsearchApi, type DeepSearchResult } from '@shared/api/client';
+import { ApiError, articlesApi, deepsearchApi, type DeepSearchResult } from '@shared/api/client';
 import { useToast } from '@shared/ui/toast';
 import {
   ArrowLeft,
@@ -19,6 +19,7 @@ import {
   Search,
   Sparkles,
   Loader2,
+  Languages,
 } from 'lucide-react';
 import { cn, formatDateTime, cleanArticleText } from '@shared/lib/utils';
 
@@ -44,6 +45,7 @@ export function ArticleDetail({ articleId }: ArticleDetailProps) {
   const { currentArticle, isLoading, fetchArticle, toggleFavorite } = useArticlesStore();
   const [deepSearchResult, setDeepSearchResult] = useState<DeepSearchResult | null>(null);
   const [isDeepSearchStarting, setIsDeepSearchStarting] = useState(false);
+  const [isRetranslating, setIsRetranslating] = useState(false);
 
   useEffect(() => {
     void fetchArticle(articleId);
@@ -160,6 +162,26 @@ export function ArticleDetail({ articleId }: ArticleDetailProps) {
     navigate({ to: '/generation' });
   };
 
+  const handleRetranslate = async () => {
+    setIsRetranslating(true);
+    try {
+      await articlesApi.retranslate(currentArticle.id);
+      addToast({
+        title: 'Перевод запущен',
+        description: 'Статья отправлена в очередь перевода.',
+        variant: 'success',
+      });
+    } catch (error) {
+      addToast({
+        title: 'Ошибка перевода',
+        description: error instanceof Error ? error.message : 'Не удалось поставить статью в очередь перевода',
+        variant: 'danger',
+      });
+    } finally {
+      setIsRetranslating(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Button variant="ghost" size="sm" onClick={() => navigate({ to: '/feed' })} className="-ml-2">
@@ -221,6 +243,10 @@ export function ArticleDetail({ articleId }: ArticleDetailProps) {
             <Button variant="outline" size="sm" onClick={handleDeepSearch} className="justify-center">
               {isDeepSearchStarting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
               {deepSearchResult ? 'Обновить DeepSearch' : 'DeepSearch'}
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleRetranslate} disabled={isRetranslating} className="justify-center">
+              {isRetranslating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Languages className="h-4 w-4" />}
+              Перевести
             </Button>
             <a href={currentArticle.url} target="_blank" rel="noopener noreferrer" className="block">
               <Button variant="outline" size="sm" className="w-full justify-center">

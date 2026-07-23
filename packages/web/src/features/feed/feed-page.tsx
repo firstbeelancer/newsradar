@@ -327,6 +327,23 @@ export function FeedPage() {
     navigate({ to: '/generation' });
   }, [navigate, resetGeneration, setGenerationType, setSelectedAgentId, setSelectedArticles]);
 
+  const handleRetranslate = useCallback(async (article: Article) => {
+    try {
+      await articlesApi.retranslate(article.id);
+      addToast({
+        title: 'Перевод запущен',
+        description: `«${article.title.slice(0, 60)}…» отправлена на перевод.`,
+        variant: 'success',
+      });
+    } catch (error) {
+      addToast({
+        title: 'Ошибка перевода',
+        description: error instanceof Error ? error.message : 'Не удалось поставить статью в очередь перевода',
+        variant: 'danger',
+      });
+    }
+  }, [addToast]);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -499,6 +516,7 @@ export function FeedPage() {
               onSelect={() => handleToggleArticleSelection(article)}
               onDeepSearch={handleDeepSearch}
               onGeneratePost={handleGeneratePost}
+              onRetranslate={handleRetranslate}
             />
           ))}
 

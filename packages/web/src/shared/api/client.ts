@@ -1268,6 +1268,11 @@ export const articlesApi = {
   unfavorite: (id: string) => apiDelete<BackendArticle>(`/articles/${id}/favorite`).then(normalizeArticle),
   deleteAll: () => apiDelete<{ deleted: number }>('/articles'),
   deleteByAgent: (agentId: string) => apiDelete<{ deleted: number }>(`/articles?agentId=${encodeURIComponent(agentId)}`),
+  retranslate: (id: string) =>
+    apiPost<{ success: boolean; data: { articleId: string; queued: boolean; jobId: string } }, Record<string, never>>(
+      `/articles/${id}/retranslate`,
+      {}
+    ),
 };
 
 export const operationLogsApi = {

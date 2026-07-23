@@ -16,6 +16,7 @@ interface ArticleCardProps {
   selectable?: boolean;
   onDeepSearch?: (article: Article) => void;
   onGeneratePost?: (article: Article) => void;
+  onRetranslate?: (article: Article) => void;
 }
 
 const scoreColor = (score: number): string => {
@@ -60,6 +61,7 @@ export function ArticleCard({
   selectable,
   onDeepSearch,
   onGeneratePost,
+  onRetranslate,
 }: ArticleCardProps) {
   const scorePercent = formatScore(article.score);
   const preview = cleanArticleText(article.ai_summary || article.description || article.content || article.original_description || '');
@@ -180,7 +182,19 @@ export function ArticleCard({
               <span className="text-xs">Генерация</span>
             </Button>
 
-            <div className="grid grid-cols-3 gap-1">
+            <div className="grid grid-cols-4 gap-1">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onRetranslate?.(article);
+                }}
+                title="Перевести на русский"
+                className="w-full"
+              >
+                <Languages className="h-4 w-4" />
+              </Button>
               <Button
                 variant="ghost"
                 size="icon-sm"
