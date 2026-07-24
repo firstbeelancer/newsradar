@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from '@tanstack/react-router';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
@@ -9,9 +10,9 @@ import { Skeleton } from '@shared/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shared/ui/tabs';
 import { Textarea } from '@shared/ui/textarea';
 import { useToast } from '@shared/ui/toast';
-import { deepsearchApi, generationApi, type DeepSearchResult, type GeneratedPost } from '@shared/api/client';
+import { deepsearchApi, generationApi, articlesApi, type DeepSearchResult, type GeneratedPost, type Article } from '@shared/api/client';
 import { cn, formatDateTime } from '@shared/lib/utils';
-import { Check, Copy, FileSearch, FileText, Newspaper, Save, Trash2, type LucideIcon } from 'lucide-react';
+import { Check, Copy, FileSearch, FileText, Languages, Newspaper, Save, Trash2, type LucideIcon } from 'lucide-react';
 
 const PAGE_SIZE = 20;
 
@@ -42,6 +43,16 @@ function useDeepSearchHistory() {
   });
 }
 
+function useTranslatedArticles() {
+  return useInfiniteQuery({
+    queryKey: ['history', 'translations'],
+    queryFn: ({ pageParam }) => articlesApi.list({ translated_only: true, sort_by: 'date', sort_order: 'desc' }, pageParam as string | undefined, PAGE_SIZE),
+    getNextPageParam: (lastPage) => lastPage.has_more ? (lastPage.next_cursor ?? undefined) : undefined,
+    initialPageParam: undefined as string | undefined,
+    staleTime: 30_000,
+  });
+}
+
 function sourceList(result: DeepSearchResult): Array<{ title?: string; url?: string; snippet?: string }> {
   const sources = result.findings?.externalSources;
   return Array.isArray(sources) ? sources as Array<{ title?: string; url?: string; snippet?: string }> : [];
@@ -62,10 +73,12 @@ function deepSearchCardBody(result: DeepSearchResult): string {
 }
 
 export function HistoryPage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { addToast } = useToast();
   const postsQuery = useGeneratedPosts();
   const deepSearchQuery = useDeepSearchHistory();
+  const translationsQuery = useTranslatedArticles();
   const posts: GeneratedPost[] = useMemo(
     () => postsQuery.data?.pages.flatMap((page) => page.data) ?? [],
     [postsQuery.data]
@@ -73,6 +86,10 @@ export function HistoryPage() {
   const deepSearchResults: DeepSearchResult[] = useMemo(
     () => deepSearchQuery.data?.pages.flatMap((page) => page.data) ?? [],
     [deepSearchQuery.data]
+  );
+  const translatedArticles: Article[] = useMemo(
+    () => translationsQuery.data?.pages.flatMap((page) => page.data) ?? [],
+    [translationsQuery.data]
   );
 
   const [selectedPost, setSelectedPost] = useState<GeneratedPost | null>(null);
@@ -82,7 +99,7 @@ export function HistoryPage() {
   const [saving, setSaving] = useState(false);
   const [deletingPost, setDeletingPost] = useState(false);
   const [deletingDeepSearch, setDeletingDeepSearch] = useState(false);
-  const [activeTab, setActiveTab] = useState<'posts' | 'deepsearch'>('posts');
+  const [activeTab, setActiveTab] = useState<'posts' | 'deepsearch' | 'translations'>('posts');
   const [selectedPostIds, setSelectedPostIds] = useState<Set<string>>(() => new Set());
   const [selectedDeepSearchIds, setSelectedDeepSearchIds] = useState<Set<string>>(() => new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -285,14 +302,15 @@ export function HistoryPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">История</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Посты: {posts.length} · DeepSearch: {deepSearchResults.length}</p>
+          <p className="mt-1 text-sm text-muted-foreground">Посты: {posts.length} · DeepSearch: {deepSearchResults.length} · Переводы: {translatedArticles.length}</p>
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'posts' | 'deepsearch')} className="space-y-4">
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'posts' | 'deepsearch' | 'translations')} className="space-y-4">
         <TabsList className="w-full justify-start sm:w-auto">
           <TabsTrigger value="posts" className="flex-1 sm:flex-none">Посты</TabsTrigger>
           <TabsTrigger value="deepsearch" className="flex-1 sm:flex-none">DeepSearch</TabsTrigger>
+          <TabsTrigger value="translations" className="flex-1 sm:flex-none">Переводы</TabsTrigger>
         </TabsList>
 
         <TabsContent value="posts" className="space-y-3">
@@ -366,6 +384,32 @@ export function HistoryPage() {
           )}
           {deepSearchQuery.hasNextPage && (
             <LoadMore loading={deepSearchQuery.isFetchingNextPage} onClick={() => deepSearchQuery.fetchNextPage()} />
+          )}
+        </TabsContent>
+
+        <TabsContent value="translations" className="space-y-3">
+          {translationsQuery.isLoading ? (
+            Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-24" />)
+          ) : translatedArticles.length === 0 ? (
+            <EmptyState title="Пока нет переводов" description="Нажми «Перевести» в карточке статьи — переведённые материалы появятся здесь." icon={Languages} />
+          ) : (
+            translatedArticles.map((article) => (
+              <HistoryCard
+                key={article.id}
+                icon={Languages}
+                tone="primary"
+                badge={article.detected_lang ? article.detected_lang.toUpperCase() : 'Перевод'}
+                title={article.title}
+                body={article.ai_summary || article.description || ''}
+                meta={`${formatDateTime(article.published_at)} · ${article.source_name}`}
+                selected={false}
+                onSelect={() => undefined}
+                onOpen={() => navigate({ to: '/feed/article/$id', params: { id: article.id } })}
+              />
+            ))
+          )}
+          {translationsQuery.hasNextPage && (
+            <LoadMore loading={translationsQuery.isFetchingNextPage} onClick={() => translationsQuery.fetchNextPage()} />
           )}
         </TabsContent>
       </Tabs>

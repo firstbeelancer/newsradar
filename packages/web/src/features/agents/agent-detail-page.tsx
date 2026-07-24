@@ -50,9 +50,12 @@ import {
   ArrowUpWideNarrow,
   Loader2,
   Sparkles,
+  Activity,
+  CheckCircle2,
+  XCircle,
   type LucideIcon,
 } from 'lucide-react';
-import { cleanArticleText, formatDateTime } from '@shared/lib/utils';
+import { cleanArticleText, cn, formatDateTime } from '@shared/lib/utils';
 
 // Map agent.icon string to Lucide icon component
 const ICON_MAP: Record<string, LucideIcon> = {
@@ -303,6 +306,11 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
   const [savingSourceEdit, setSavingSourceEdit] = useState(false);
   const [deletingAgentArticles, setDeletingAgentArticles] = useState(false);
   const [chipFilters, setChipFilters] = useState<ChipFilter[]>([]);
+  const [checkingSources, setCheckingSources] = useState(false);
+  const [checkSummary, setCheckSummary] = useState<string | null>(null);
+  const [probeById, setProbeById] = useState<
+    Record<string, { success: boolean; message?: string; articles_found?: number }>
+  >({});
 
   useEffect(() => {
     if (id) {
@@ -473,6 +481,30 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
       });
     } finally {
       setSavingSourceEdit(false);
+    }
+  };
+
+  const handleCheckSources = async () => {
+    if (!id) return;
+    setCheckingSources(true);
+    setCheckSummary(null);
+    setProbeById({});
+    try {
+      const result = await agentsApi.testSources(id);
+      const map: Record<string, { success: boolean; message?: string; articles_found?: number }> = {};
+      for (const row of result.results || []) {
+        map[row.sourceId] = {
+          success: row.success,
+          message: row.message,
+          articles_found: row.articles_found,
+        };
+      }
+      setProbeById(map);
+      setCheckSummary(result.summary);
+    } catch (err) {
+      setCheckSummary(err instanceof Error ? err.message : 'Не удалось проверить источники');
+    } finally {
+      setCheckingSources(false);
     }
   };
 
@@ -699,11 +731,23 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
                   </CardContent>
                 </Card>
               ) : (
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button variant="outline" size="sm" onClick={() => setAddSourceOpen(true)}>
                     <Plus className="h-4 w-4 mr-1" />
                     Новый источник
                   </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void handleCheckSources()}
+                    disabled={checkingSources}
+                  >
+                    {checkingSources ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Activity className="h-4 w-4 mr-1" />}
+                    {checkingSources ? 'Проверяю…' : 'Проверить источники'}
+                  </Button>
+                  {checkSummary && (
+                    <span className="self-center text-xs font-medium text-muted-foreground">{checkSummary}</span>
+                  )}
                 </div>
               )}
 
@@ -717,8 +761,13 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
                 </Card>
               ) : (
                 <div className="space-y-2">
-                  {sources.map((source) => (
-                    <Card key={source.id} className="hover:bg-muted/50 transition-colors group/src">
+                  {sources.map((source) => {
+                    const probe = probeById[source.id];
+                    return (
+                    <Card key={source.id} className={cn(
+                      'hover:bg-muted/50 transition-colors group/src',
+                      probe && (probe.success ? 'border-emerald-200 bg-emerald-50/50' : 'border-rose-200 bg-rose-50/50')
+                    )}>
                       <CardContent className="p-4 flex items-center justify-between gap-3">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
@@ -726,8 +775,18 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
                             <Badge variant="outline" className="text-[10px] shrink-0">
                               {source.type === 'rss' ? 'RSS' : 'Telegram'}
                             </Badge>
+                            {probe && (
+                              probe.success
+                                ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                                : <XCircle className="h-3.5 w-3.5 shrink-0 text-rose-600" />
+                            )}
                           </div>
                           <p className="text-xs text-muted-foreground truncate mt-0.5">{source.url}</p>
+                          {probe?.message && (
+                            <p className={cn('mt-0.5 text-[11px] truncate', probe.success ? 'text-emerald-700' : 'text-rose-700')} title={probe.message}>
+                              {probe.message}
+                            </p>
+                          )}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           <Switch
@@ -765,7 +824,8 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
                         </div>
                       </CardContent>
                     </Card>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

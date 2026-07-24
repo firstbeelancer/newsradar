@@ -17,6 +17,7 @@ export interface ArticleFilters {
   dateFrom?: string;
   dateTo?: string;
   isFavorite?: boolean;
+  translatedOnly?: boolean;
   sortBy?: "date" | "score";
   sortOrder?: "asc" | "desc";
   limit: number;
@@ -37,6 +38,10 @@ function buildArticleConditions(filters: ArticleFilters): SQL[] {
   }
   if (filters.isFavorite !== undefined) {
     conditions.push(eq(articles.isFavorite, filters.isFavorite));
+  }
+  if (filters.translatedOnly) {
+    conditions.push(eq(articles.needsTranslation, false));
+    conditions.push(sql`${articles.detectedLang} IS NOT NULL AND ${articles.detectedLang} != 'ru'`);
   }
   if (filters.dateFrom) {
     const fromDate = new Date(filters.dateFrom);

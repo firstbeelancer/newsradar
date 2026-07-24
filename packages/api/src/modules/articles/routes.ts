@@ -32,6 +32,7 @@ const listQuerySchema = z.object({
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
   isFavorite: z.enum(["true", "false"]).optional(),
+  translatedOnly: z.enum(["true", "false"]).optional(),
   sortBy: z.enum(["date", "score"]).optional(),
   sortOrder: z.enum(["asc", "desc"]).optional(),
 });
@@ -62,6 +63,7 @@ router.get("/", authMiddleware, async (req, res, next) => {
       dateFrom: filters.dateFrom,
       dateTo: filters.dateTo,
       isFavorite: filters.isFavorite === "true" ? true : filters.isFavorite === "false" ? false : undefined,
+      translatedOnly: filters.translatedOnly === "true" ? true : filters.translatedOnly === "false" ? false : undefined,
       sortBy: filters.sortBy ?? "date",
       sortOrder: filters.sortOrder ?? "desc",
       limit,
