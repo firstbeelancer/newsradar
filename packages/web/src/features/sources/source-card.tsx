@@ -7,7 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@shared/ui/dropdown-menu';
-import { Rss, Send, MoreVertical, Pencil, Trash2, TestTube, Download } from 'lucide-react';
+import { Rss, Send, Globe, MoreVertical, Pencil, Trash2, TestTube, Download } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import type { Source } from '@shared/api/client';
 
@@ -23,6 +23,7 @@ interface SourceCardProps {
 const typeConfig = {
   rss: { icon: Rss, label: 'RSS', className: 'bg-orange-50 text-orange-600' },
   telegram: { icon: Send, label: 'Telegram', className: 'bg-blue-50 text-blue-600' },
+  web: { icon: Globe, label: 'Веб', className: 'bg-emerald-50 text-emerald-600' },
 };
 
 export function SourceCard({ source, onEdit, onDelete, onTest, onFetch, onToggleActive }: SourceCardProps) {

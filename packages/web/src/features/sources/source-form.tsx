@@ -20,7 +20,7 @@ interface SourceFormProps {
 export function SourceForm({ source, agents, open, onOpenChange, onSubmit, isSubmitting }: SourceFormProps) {
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
-  const [type, setType] = useState<'rss' | 'telegram'>('rss');
+  const [type, setType] = useState<'rss' | 'telegram' | 'web'>('rss');
   const [agentId, setAgentId] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -92,23 +92,24 @@ export function SourceForm({ source, agents, open, onOpenChange, onSubmit, isSub
 
           <div className="space-y-1.5">
             <Label>Тип</Label>
-            <Select value={type} onValueChange={(v) => setType(v as 'rss' | 'telegram')}>
+            <Select value={type} onValueChange={(v) => setType(v as 'rss' | 'telegram' | 'web')}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="rss">RSS</SelectItem>
                 <SelectItem value="telegram">Telegram канал</SelectItem>
+                <SelectItem value="web">Веб-страница (HTML)</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <Input
-            label={type === 'rss' ? 'URL RSS-ленты' : 'Канал Telegram'}
+            label={type === 'rss' ? 'URL RSS-ленты' : type === 'telegram' ? 'Канал Telegram' : 'URL страницы новостей'}
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             error={errors.url}
-            placeholder={type === 'rss' ? 'https://example.com/feed.xml' : '@channelname'}
+            placeholder={type === 'rss' ? 'https://example.com/feed.xml' : type === 'telegram' ? '@channelname' : 'https://example.com/news/'}
             required
           />
 

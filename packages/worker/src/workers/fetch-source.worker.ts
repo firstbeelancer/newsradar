@@ -13,6 +13,7 @@ import { sources, articles, agents, agentSources } from "../db/schema.js";
 import { eq, and, sql } from "drizzle-orm";
 import { parseRssFeed } from "../lib/rss-parser.js";
 import { parseTelegramChannel } from "../lib/telegram-parser.js";
+import { parseWebPage } from "../lib/web-parser.js";
 import { checkRawDedup } from "../lib/dedup.js";
 import { fetchArticleText } from "../lib/article-extractor.js";
 import { fetchPublicationDate } from "../lib/publication-date.js";
@@ -242,6 +243,86 @@ export async function processFetchSource(
             link: item.link,
             guid: item.messageId,
             publishedAt: item.date,
+            sourceId: source.id,
+            agentId: agentRef.agentId,
+            workspaceId: agentRef.workspaceId,
+            status: "fetched",
+            language: "auto",
+            needsTranslation: true,
+            rawHash: hash,
+          })
+          .returning();
+
+        newCount++;
+
+        await rawDedupQueue.add(
+          `raw-dedup-${article.id}`,
+          { articleId: article.id },
+          { jobId: `raw-dedup-${article.id}` }
+        );
+      }
+    } else if (source.type === "web") {
+      const result = await parseWebPage(source.url);
+      fetchedCount = result.items.length;
+      logger.info(
+        { sourceId, page: result.pageTitle, items: fetchedCount },
+        "Web page parsed"
+      );
+
+      const MAX_WEB_ITEMS = 50;
+
+      for (const item of result.items.slice(0, MAX_WEB_ITEMS)) {
+        if (isStale(item.date)) {
+          skippedStale++;
+          continue;
+        }
+
+        const { isDuplicate, hash } = await checkRawDedup(
+          item.link,
+          item.title,
+          item.guid
+        );
+
+        if (isDuplicate) {
+          dupCount++;
+          continue;
+        }
+
+        let publishedAt = item.date;
+        if (!publishedAt) {
+          try {
+            publishedAt = await fetchPublicationDate(item.link);
+          } catch {
+            // undated web items are allowed — use current time as fallback
+          }
+        }
+        if (!publishedAt) {
+          publishedAt = new Date();
+        }
+
+        if (isStale(publishedAt)) {
+          skippedStale++;
+          continue;
+        }
+
+        // Fetch full article text for better AI processing
+        let fullContent = item.description;
+        try {
+          const extracted = await fetchArticleText(item.link);
+          if (extracted) fullContent = extracted;
+        } catch {
+          // description is enough
+        }
+
+        const [article] = await db
+          .insert(articles)
+          .values({
+            title: item.title,
+            description: (item.description || fullContent).slice(0, 700),
+            content: fullContent || item.description,
+            link: item.link,
+            guid: item.guid || item.link,
+            publishedAt,
             sourceId: source.id,
             agentId: agentRef.agentId,
             workspaceId: agentRef.workspaceId,

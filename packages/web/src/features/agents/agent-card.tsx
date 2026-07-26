@@ -202,6 +202,8 @@ function SourceToggleList({ agentId, onSourceDeleted }: { agentId: string; onSou
               <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground">
                 {source.type === 'telegram' ? (
                   <MessageCircle className="h-3.5 w-3.5" />
+                ) : source.type === 'web' ? (
+                  <Globe className="h-3.5 w-3.5" />
                 ) : (
                   <Rss className="h-3.5 w-3.5" />
                 )}

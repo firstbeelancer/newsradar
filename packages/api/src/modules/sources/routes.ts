@@ -18,7 +18,7 @@ const router = Router();
 // ─── Schemas ───
 
 const createSchema = z.object({
-  type: z.enum(["rss", "telegram"]),
+  type: z.enum(["rss", "telegram", "web"]),
   name: z.string().min(1).max(200),
   url: z.string().min(1),
   channelUsername: z.string().max(100).optional(),
@@ -26,7 +26,7 @@ const createSchema = z.object({
 });
 
 const updateSchema = z.object({
-  type: z.enum(["rss", "telegram"]).optional(),
+  type: z.enum(["rss", "telegram", "web"]).optional(),
   name: z.string().min(1).max(200).optional(),
   url: z.string().min(1).optional(),
   channelUsername: z.string().max(100).optional(),

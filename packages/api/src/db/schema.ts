@@ -181,7 +181,7 @@ export const sources = pgTable(
     index("sources_type_idx").on(table.type),
     index("sources_is_active_idx").on(table.isActive),
     index("sources_fetch_status_idx").on(table.fetchStatus),
-    check("sources_type_check", sql`${table.type} IN ('rss', 'telegram')`),
+    check("sources_type_check", sql`${table.type} IN ('rss', 'telegram', 'web')`),
   ]
 );
 

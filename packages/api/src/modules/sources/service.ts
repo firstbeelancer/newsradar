@@ -186,6 +186,44 @@ export async function testSource(id: string, workspaceId: string) {
     }
   }
 
+  if (source.type === "web") {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+      const response = await fetch(source.url, {
+        signal: controller.signal,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 NewsRadar/1.0",
+          Accept: "text/html,application/xhtml+xml,*/*",
+        },
+      });
+      if (!response.ok) {
+        return { success: false, status: response.status, message: `HTTP ${response.status}: ${response.statusText}` };
+      }
+      const body = await response.text();
+      // Count article-like links as a heuristic
+      const linkMatches = body.match(/<a[^>]*href=["'][^"']+["'][^>]*>[\s\S]*?<\/a>/gi) ?? [];
+      const articleLinks = linkMatches.filter((m) => {
+        const text = m.replace(/<[^>]+>/g, " ").trim();
+        return text.length >= 15;
+      });
+      const count = articleLinks.length;
+      return {
+        success: count > 0,
+        status: response.status,
+        articles_found: count,
+        message: count > 0
+          ? `Страница доступна, найдено ~${count} ссылок на статьи`
+          : "Страница доступна, но не найдено ссылок на статьи",
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      return { success: false, message };
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
   return { success: false, message: "Unknown source type" };
 }
 

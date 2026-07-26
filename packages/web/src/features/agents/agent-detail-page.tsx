@@ -297,7 +297,7 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
   const [addSourceOpen, setAddSourceOpen] = useState(false);
   const [newSourceName, setNewSourceName] = useState('');
   const [newSourceUrl, setNewSourceUrl] = useState('');
-  const [newSourceType, setNewSourceType] = useState<'rss' | 'telegram'>('rss');
+  const [newSourceType, setNewSourceType] = useState<'rss' | 'telegram' | 'web'>('rss');
   const [addingSource, setAddingSource] = useState(false);
   const [unlinkingSourceId, setUnlinkingSourceId] = useState<string | null>(null);
   const [togglingSourceId, setTogglingSourceId] = useState<string | null>(null);
@@ -712,15 +712,16 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
                       />
                       <select
                         value={newSourceType}
-                        onChange={(e) => setNewSourceType(e.target.value as 'rss' | 'telegram')}
+                        onChange={(e) => setNewSourceType(e.target.value as 'rss' | 'telegram' | 'web')}
                         className="rounded-md border border-border bg-card px-3 py-2 text-sm"
                       >
                         <option value="rss">RSS</option>
                         <option value="telegram">Telegram</option>
+                        <option value="web">Веб-страница</option>
                       </select>
                     </div>
                     <Input
-                      placeholder={newSourceType === 'rss' ? 'https://example.com/feed' : 'https://t.me/channel'}
+                      placeholder={newSourceType === 'rss' ? 'https://example.com/feed' : newSourceType === 'telegram' ? 'https://t.me/channel' : 'https://example.com/news/'}
                       value={newSourceUrl}
                       onChange={(e) => setNewSourceUrl(e.target.value)}
                     />
@@ -773,7 +774,7 @@ export function AgentDetailPage({ agentId: id }: AgentDetailPageProps) {
                           <div className="flex items-center gap-2 flex-wrap">
                             <p className="text-sm font-medium truncate">{source.name}</p>
                             <Badge variant="outline" className="text-[10px] shrink-0">
-                              {source.type === 'rss' ? 'RSS' : 'Telegram'}
+                              {source.type === 'rss' ? 'RSS' : source.type === 'telegram' ? 'Telegram' : 'Веб'}
                             </Badge>
                             {probe && (
                               probe.success

@@ -691,7 +691,7 @@ export interface AgentStats {
 
 // ─── Source Types ────────────────────────────────────────────────────────────
 
-export type SourceType = 'rss' | 'telegram';
+export type SourceType = 'rss' | 'telegram' | 'web';
 
 export interface Source {
   id: string;
