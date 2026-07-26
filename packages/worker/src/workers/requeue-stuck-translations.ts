@@ -1,7 +1,7 @@
 /**
  * Re-queue articles stuck mid-pipeline after AI/provider outages:
  * - needs_translation / polluted titles → translate
- * - status=translated without progress → ingest/summary
+ * - status=translated without progress → scoring (summary already done)
  * - status=analyzed without score → scoring
  */
 import { and, eq, ilike, inArray, lt, or, sql } from "drizzle-orm";
@@ -9,7 +9,6 @@ import type { Logger } from "pino";
 import { db } from "../db/index.js";
 import { articles } from "../db/schema.js";
 import {
-  ingestAnalysisQueue,
   scoreArticleQueue,
   translateQueue,
 } from "../connection/redis.js";
@@ -147,7 +146,7 @@ export async function requeueStuckTranslations(logger: Logger): Promise<number> 
     }
   }
 
-  // translated without further progress → summary/ingest
+  // translated without further progress → summary/ingest then score
   const stuckTranslated = await db
     .select({ id: articles.id })
     .from(articles)
@@ -155,11 +154,12 @@ export async function requeueStuckTranslations(logger: Logger): Promise<number> 
     .limit(MAX_BATCH);
 
   for (const row of stuckTranslated) {
-    const jobId = `reingest-stuck-${row.id}-${stamp}`;
+    const jobId = `rescore-from-translated-${row.id}-${stamp}`;
+    // Skip broken ingest passthrough: go straight to scoring with unique job id.
     if (
       await safeAdd(
         () =>
-          ingestAnalysisQueue.add(
+          scoreArticleQueue.add(
             jobId,
             { articleId: row.id },
             {
@@ -171,9 +171,13 @@ export async function requeueStuckTranslations(logger: Logger): Promise<number> 
             }
           ),
         logger,
-        { articleId: row.id, stage: "ingest" }
+        { articleId: row.id, stage: "score-from-translated" }
       )
     ) {
+      await db
+        .update(articles)
+        .set({ status: "analyzed", updatedAt: new Date() })
+        .where(eq(articles.id, row.id));
       queued += 1;
     }
   }

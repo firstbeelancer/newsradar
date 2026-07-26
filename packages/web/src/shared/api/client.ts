@@ -1271,10 +1271,58 @@ export const articlesApi = {
   deleteAll: () => apiDelete<{ deleted: number }>('/articles'),
   deleteByAgent: (agentId: string) => apiDelete<{ deleted: number }>(`/articles?agentId=${encodeURIComponent(agentId)}`),
   retranslate: (id: string) =>
-    apiPost<{ success: boolean; data: { articleId: string; queued: boolean; jobId: string } }, Record<string, never>>(
-      `/articles/${id}/retranslate`,
-      {}
-    ),
+    apiPost<{
+      id: string;
+      status: string;
+      articleId?: string;
+      article_id?: string;
+      queued?: boolean;
+      title?: string | null;
+    }, Record<string, never>>(`/articles/${id}/retranslate`, {}),
+  fullTranslations: {
+    list: (cursor?: string, limit = 20) =>
+      apiGet<{
+        data?: Array<Record<string, unknown>>;
+        next_cursor?: string | null;
+        nextCursor?: string | null;
+        has_more?: boolean;
+        hasMore?: boolean;
+      }>(`/articles/translations/history?limit=${limit}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`).then((payload) => {
+        const rows = payload.data ?? (Array.isArray(payload) ? payload : []);
+        return {
+          data: (rows as Array<Record<string, unknown>>).map((raw) => ({
+            id: String(raw.id),
+            article_id: String(raw.article_id ?? raw.articleId ?? ''),
+            status: String(raw.status ?? 'pending'),
+            source_lang: (raw.source_lang ?? raw.sourceLang ?? null) as string | null,
+            title: (raw.title as string | null) ?? null,
+            content: (raw.content as string | null) ?? null,
+            original_title: (raw.original_title ?? raw.originalTitle ?? null) as string | null,
+            original_url: (raw.original_url ?? raw.originalUrl ?? null) as string | null,
+            error: (raw.error as string | null) ?? null,
+            created_at: String(raw.created_at ?? raw.createdAt ?? ''),
+            completed_at: (raw.completed_at ?? raw.completedAt ?? null) as string | null,
+          })),
+          next_cursor: payload.next_cursor ?? payload.nextCursor ?? null,
+          has_more: Boolean(payload.has_more ?? payload.hasMore),
+        };
+      }),
+    get: (id: string) =>
+      apiGet<Record<string, unknown>>(`/articles/translations/${id}`).then((raw) => ({
+        id: String(raw.id),
+        article_id: String(raw.article_id ?? raw.articleId ?? ''),
+        status: String(raw.status ?? 'pending'),
+        source_lang: (raw.source_lang ?? raw.sourceLang ?? null) as string | null,
+        title: (raw.title as string | null) ?? null,
+        content: (raw.content as string | null) ?? null,
+        original_title: (raw.original_title ?? raw.originalTitle ?? null) as string | null,
+        original_url: (raw.original_url ?? raw.originalUrl ?? null) as string | null,
+        error: (raw.error as string | null) ?? null,
+        created_at: String(raw.created_at ?? raw.createdAt ?? ''),
+        completed_at: (raw.completed_at ?? raw.completedAt ?? null) as string | null,
+      })),
+    delete: (id: string) => apiDelete<{ deleted: boolean; id: string }>(`/articles/translations/${id}`),
+  },
 };
 
 export const operationLogsApi = {

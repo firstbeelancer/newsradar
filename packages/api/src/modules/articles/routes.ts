@@ -12,11 +12,15 @@ import {
   getArticleWithScore,
   deleteAllArticles,
   deleteArticlesByAgent,
-  ensureArticleExists,
   listArticleSelectionIds,
 } from "./service.js";
+import {
+  startFullTranslation,
+  listFullTranslations,
+  getFullTranslation,
+  deleteFullTranslation,
+} from "./full-translations.js";
 import { createOperationLog } from "../operation-logs/service.js";
-import { getTranslateQueue } from "../../lib/queues.js";
 import { getLatestDeepSearchForArticle } from "../deepsearch/service.js";
 
 const router = Router();
@@ -159,6 +163,54 @@ router.get("/search", authMiddleware, async (req, res, next) => {
   }
 });
 
+// Full translations history — BEFORE /:id so "translations" is not parsed as UUID
+router.get("/translations/history", authMiddleware, async (req, res, next) => {
+  try {
+    const workspaceId = req.query.workspaceId as string;
+    if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
+    const { cursor, limit } = paginationQuerySchema.parse(req.query);
+    const result = await listFullTranslations({
+      workspaceId,
+      userId: (req.user as { sub: string }).sub,
+      limit,
+      cursor: cursor ?? null,
+    });
+    res.json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/translations/:id", authMiddleware, async (req, res, next) => {
+  try {
+    const workspaceId = req.query.workspaceId as string;
+    if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
+    const row = await getFullTranslation({
+      workspaceId,
+      userId: (req.user as { sub: string }).sub,
+      id: req.params.id,
+    });
+    res.json({ success: true, data: row });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete("/translations/:id", authMiddleware, async (req, res, next) => {
+  try {
+    const workspaceId = req.query.workspaceId as string;
+    if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
+    const result = await deleteFullTranslation({
+      workspaceId,
+      userId: (req.user as { sub: string }).sub,
+      id: req.params.id,
+    });
+    res.json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Get article details
 router.get("/:id", authMiddleware, async (req, res, next) => {
   try {
@@ -232,27 +284,22 @@ router.post("/:id/retranslate", authMiddleware, async (req, res, next) => {
   try {
     const workspaceId = req.query.workspaceId as string;
     if (!workspaceId) throw new AppError(400, "workspaceId required", "VALIDATION_ERROR");
+    const userId = (req.user as { sub: string }).sub;
 
-    const article = await ensureArticleExists(req.params.id, workspaceId);
-    const translateQueue = getTranslateQueue();
-    const jobId = `retranslate-${article.id}-${Date.now()}`;
+    // Product flow: button «Перевести» creates a full translation for History → Переводы
+    // (not a feed-pipeline requeue of every foreign item).
+    const translation = await startFullTranslation({
+      workspaceId,
+      userId,
+      articleId: req.params.id,
+    });
 
-    await translateQueue.add(
-      jobId,
-      { articleId: article.id, force: true },
-      { jobId, removeOnComplete: { count: 100 }, removeOnFail: { count: 50 } }
-    );
-
-    res.json({
+    res.status(202).json({
       success: true,
       data: {
-        articleId: article.id,
-        queued: true,
-        jobId,
-        status: article.status,
-        language: article.language,
-        detectedLang: article.detectedLang,
-        needsTranslation: article.needsTranslation,
+        ...translation,
+        articleId: req.params.id,
+        queued: translation.status === "pending" || translation.status === "running",
       },
     });
   } catch (err) {

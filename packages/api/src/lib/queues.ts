@@ -12,6 +12,7 @@ const TRANSLATE_QUEUE_NAME = "translate-v3";
 const SEMANTIC_DEDUP_QUEUE_NAME = "semantic-dedup-v2";
 const INGEST_ANALYSIS_QUEUE_NAME = "ingest-analysis-v2";
 const SCORE_ARTICLE_QUEUE_NAME = "score-article-v2";
+const FULL_TRANSLATE_QUEUE_NAME = "full-translate-v1";
 
 let _fetchSourceQueue: Queue | null = null;
 let _rawDedupQueue: Queue | null = null;
@@ -19,6 +20,7 @@ let _translateQueue: Queue | null = null;
 let _semanticDedupQueue: Queue | null = null;
 let _ingestAnalysisQueue: Queue | null = null;
 let _scoreArticleQueue: Queue | null = null;
+let _fullTranslateQueue: Queue | null = null;
 let _generatePostQueue: Queue | null = null;
 let _generateDigestQueue: Queue | null = null;
 let _deepsearchQueue: Queue | null = null;
@@ -59,6 +61,11 @@ export function getIngestAnalysisQueue(): Queue {
 export function getScoreArticleQueue(): Queue {
   if (!_scoreArticleQueue) _scoreArticleQueue = createQueue(SCORE_ARTICLE_QUEUE_NAME);
   return _scoreArticleQueue;
+}
+
+export function getFullTranslateQueue(): Queue {
+  if (!_fullTranslateQueue) _fullTranslateQueue = createQueue(FULL_TRANSLATE_QUEUE_NAME);
+  return _fullTranslateQueue;
 }
 
 export function getGeneratePostQueue(): Queue {
@@ -105,6 +112,7 @@ export function getAllQueues(): Queue[] {
     getSemanticDedupQueue(),
     getIngestAnalysisQueue(),
     getScoreArticleQueue(),
+    getFullTranslateQueue(),
     getGeneratePostQueue(),
     getGenerateDigestQueue(),
     getDeepsearchQueue(),

@@ -167,14 +167,14 @@ export function ArticleDetail({ articleId }: ArticleDetailProps) {
     try {
       await articlesApi.retranslate(currentArticle.id);
       addToast({
-        title: 'Перевод запущен',
-        description: 'Статья отправлена в очередь перевода.',
+        title: 'Полный перевод запущен',
+        description: 'Результат появится в История → Переводы.',
         variant: 'success',
       });
     } catch (error) {
       addToast({
         title: 'Ошибка перевода',
-        description: error instanceof Error ? error.message : 'Не удалось поставить статью в очередь перевода',
+        description: error instanceof Error ? error.message : 'Не удалось запустить полный перевод',
         variant: 'danger',
       });
     } finally {

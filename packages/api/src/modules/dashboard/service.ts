@@ -5,7 +5,6 @@ import { AppError } from "../../middleware/error-handler.js";
 import { deduplicateCollectionSources, type CollectionSourceRef } from "./collection-sources.js";
 import {
   getAllQueues,
-  getIngestAnalysisQueue,
   getScoreArticleQueue,
   getTranslateQueue,
 } from "../../lib/queues.js";
@@ -368,7 +367,6 @@ export async function retryStuckPipeline(params: { userId: string; workspaceId: 
   await assertWorkspaceOwner(params);
   const stamp = Date.now();
   const translateQueue = getTranslateQueue();
-  const ingestQueue = getIngestAnalysisQueue();
   const scoreQueue = getScoreArticleQueue();
 
   const needsTranslate = await db
@@ -413,17 +411,23 @@ export async function retryStuckPipeline(params: { userId: string; workspaceId: 
     }
   }
 
+  // status=translated means summary already done; advance straight to scoring
   for (const row of stuckTranslated) {
-    const jobId = `manual-reingest-${row.id}-${stamp}`;
+    const jobId = `manual-score-from-translated-${row.id}-${stamp}`;
     try {
-      await ingestQueue.add(
+      await db
+        .update(articles)
+        .set({ status: "analyzed", updatedAt: new Date() })
+        .where(eq(articles.id, row.id));
+      await scoreQueue.add(
         jobId,
         { articleId: row.id },
         { jobId, removeOnComplete: { count: 100 }, removeOnFail: { count: 50 }, attempts: 3 }
       );
-      ingestQueued += 1;
+      scoreQueued += 1;
+      ingestQueued += 1; // counted as "саммари advanced"
     } catch (err) {
-      errors.push(`ingest ${row.id}: ${err instanceof Error ? err.message : String(err)}`);
+      errors.push(`score-from-translated ${row.id}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 

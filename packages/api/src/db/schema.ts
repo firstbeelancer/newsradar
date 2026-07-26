@@ -766,3 +766,41 @@ export const deepsearchResults = pgTable(
     ),
   ]
 );
+
+// ─────────────────────────────────────────────────────────────
+// On-demand full translations (History → Переводы)
+// ─────────────────────────────────────────────────────────────
+
+export const articleFullTranslations = pgTable(
+  "article_full_translations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .references(() => workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    articleId: uuid("article_id")
+      .references(() => articles.id, { onDelete: "cascade" })
+      .notNull(),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    status: varchar("status", { length: 16 }).default("pending").notNull(),
+    sourceLang: varchar("source_lang", { length: 10 }),
+    title: text("title"),
+    content: text("content"),
+    originalTitle: text("original_title"),
+    originalUrl: text("original_url"),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("article_full_translations_workspace_id_idx").on(table.workspaceId),
+    index("article_full_translations_article_id_idx").on(table.articleId),
+    index("article_full_translations_status_idx").on(table.status),
+    index("article_full_translations_created_at_idx").on(table.createdAt),
+    check(
+      "article_full_translations_status_check",
+      sql`${table.status} IN ('pending', 'running', 'completed', 'failed')`
+    ),
+  ]
+);

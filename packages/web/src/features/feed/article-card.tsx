@@ -5,7 +5,7 @@ import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
 import { Checkbox } from '@shared/ui/checkbox';
 import { Bookmark, ExternalLink, Calendar, Search, Sparkles, Clock, Languages, Loader2 } from 'lucide-react';
-import { cn, truncate, formatDateTime, cleanArticleText } from '@shared/lib/utils';
+import { cn, truncate, formatDateTime, cleanArticleText, stripEditorialTitlePrefix } from '@shared/lib/utils';
 import type { Article } from '@shared/api/client';
 
 interface ArticleCardProps {
@@ -64,6 +64,7 @@ export function ArticleCard({
   onRetranslate,
 }: ArticleCardProps) {
   const scorePercent = formatScore(article.score);
+  const displayTitle = stripEditorialTitlePrefix(article.title || '');
   const preview = cleanArticleText(article.ai_summary || article.description || article.content || article.original_description || '');
   const agentStyle = getArticleAgentStyle(article.agent_color);
   const isStale = isArticleStale(article.published_at);
@@ -105,7 +106,7 @@ export function ArticleCard({
                 className="flex-1 text-[15px] font-semibold leading-snug text-slate-900 transition-colors hover:text-accent line-clamp-2"
                 onClick={(event) => selectable && event.preventDefault()}
               >
-                {article.title}
+                {displayTitle}
               </Link>
               <Badge className={cn('shrink-0 rounded-full px-2 text-[10px] font-bold tabular-nums', scoreColor(article.score))}>
                 {scorePercent}
@@ -190,7 +191,7 @@ export function ArticleCard({
                   event.stopPropagation();
                   onRetranslate?.(article);
                 }}
-                title="Перевести на русский"
+                title="Полный перевод статьи → История → Переводы"
                 className="w-full"
               >
                 <Languages className="h-4 w-4" />

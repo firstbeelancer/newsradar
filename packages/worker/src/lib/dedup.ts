@@ -162,7 +162,9 @@ export async function assignSemanticGroup(
     .update(articles)
     .set({
       semanticGroupId: groupId,
-      status: "deduped",
+      // Keep pipeline moving: "deduped" previously stalled before scoring
+      // and never cleared status-bar «Саммари». Caller queues score next.
+      status: "analyzed",
       updatedAt: new Date(),
     })
     .where(eq(articles.id, articleId));

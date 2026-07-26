@@ -3,8 +3,8 @@
  * Worker: semantic-dedup
  * ------------------------------------------------------------------
  * Searches for semantically similar articles via pg_trgm.
- * If similarity > 0.7 → assigns semantic_group_id, status='deduped'.
- * If unique → queues for score-article.
+ * Always advances pipeline: status → analyzed, then score-article.
+ * (Previously duplicates stayed status=translated forever → fake «Саммари зависло».)
  * ------------------------------------------------------------------
  */
 
@@ -18,6 +18,28 @@ import type { Logger } from "pino";
 
 export interface SemanticDedupJob {
   articleId: string;
+}
+
+async function queueScoring(articleId: string, logger: Logger): Promise<void> {
+  // Mark analyzed so status-bar «Саммари» backlog clears once we leave translate stage.
+  await db
+    .update(articles)
+    .set({ status: "analyzed", updatedAt: new Date() })
+    .where(eq(articles.id, articleId));
+
+  const jobId = `score-article-${articleId}-${Date.now()}`;
+  await scoreArticleQueue.add(
+    jobId,
+    { articleId },
+    {
+      jobId,
+      attempts: 3,
+      backoff: { type: "exponential", delay: 8_000 },
+      removeOnComplete: { count: 200 },
+      removeOnFail: { count: 100 },
+    }
+  );
+  logger.debug({ articleId, jobId }, "Queued scoring after semantic-dedup");
 }
 
 /**
@@ -43,6 +65,7 @@ export async function processSemanticDedup(
       workspaceId: articles.workspaceId,
       agentId: articles.agentId,
       semanticGroupId: articles.semanticGroupId,
+      status: articles.status,
     })
     .from(articles)
     .where(eq(articles.id, articleId))
@@ -53,9 +76,15 @@ export async function processSemanticDedup(
     throw new Error(`Article not found: ${articleId}`);
   }
 
-  // Skip if already part of a semantic group
+  // Already fully scored — nothing to do.
+  if (article.status === "scored") {
+    return { status: "scored", matches: 0, groupId: article.semanticGroupId ?? undefined };
+  }
+
+  // Already grouped — still must reach scoring (was the stuck-summary root cause).
   if (article.semanticGroupId) {
-    logger.debug({ articleId, groupId: article.semanticGroupId }, "Already in semantic group");
+    logger.debug({ articleId, groupId: article.semanticGroupId }, "Already in semantic group → score");
+    await queueScoring(articleId, logger);
     return { status: "deduped", matches: 1, groupId: article.semanticGroupId };
   }
 
@@ -77,28 +106,20 @@ export async function processSemanticDedup(
   }
 
   if (matches.length > 0) {
-    // Found similar articles — use the first match's group or create one
     const topMatch = matches[0];
-    const groupId = topMatch.id; // Use the most similar article's ID as group ID
+    const groupId = topMatch.id;
 
     logger.info(
       { articleId, groupId, similarity: topMatch.similarity, matchCount: matches.length },
-      "Semantic duplicate found, assigning to group"
+      "Semantic duplicate found, assigning to group then scoring"
     );
 
     await assignSemanticGroup(articleId, groupId);
-
+    await queueScoring(articleId, logger);
     return { status: "deduped", matches: matches.length, groupId };
   }
 
-  // Unique article — queue for scoring
   logger.debug({ articleId }, "No semantic duplicates, queuing for scoring");
-
-  await scoreArticleQueue.add(
-    `score-article-${articleId}`,
-    { articleId },
-    { jobId: `score-article-${articleId}` }
-  );
-
+  await queueScoring(articleId, logger);
   return { status: "scored", matches: 0 };
 }

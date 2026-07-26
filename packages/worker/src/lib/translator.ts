@@ -8,7 +8,7 @@
  * ------------------------------------------------------------------
  */
 
-import { cleanArticleText } from "./text-cleaner.js";
+import { cleanArticleText, stripEditorialTitlePrefix } from "./text-cleaner.js";
 
 /**
  * Quick heuristic language detection.
@@ -327,7 +327,7 @@ export async function translateArticle(
   aiSummary: string;
   language: string;
 }> {
-  const normalizedTitle = cleanArticleText(title);
+  const normalizedTitle = stripEditorialTitlePrefix(cleanArticleText(title));
   const normalizedDescription = cleanArticleText(description ?? "");
   const normalizedContent = cleanArticleText(content ?? "");
   const detectedLang = detectLanguage(`${normalizedTitle}\n${normalizedDescription || normalizedContent}`);

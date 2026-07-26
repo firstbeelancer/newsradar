@@ -8,6 +8,7 @@ export const TRANSLATE_QUEUE_NAME = "translate-v3";
 export const SEMANTIC_DEDUP_QUEUE_NAME = "semantic-dedup-v2";
 export const INGEST_ANALYSIS_QUEUE_NAME = "ingest-analysis-v2";
 export const SCORE_ARTICLE_QUEUE_NAME = "score-article-v2";
+export const FULL_TRANSLATE_QUEUE_NAME = "full-translate-v1";
 export const GENERATE_POST_QUEUE_NAME = "generate-post";
 export const GENERATE_DIGEST_QUEUE_NAME = "generate-digest";
 export const DEEPSEARCH_QUEUE_NAME = "deepsearch";
@@ -112,6 +113,17 @@ export const scoreArticleQueue = new Queue(SCORE_ARTICLE_QUEUE_NAME, {
   },
 });
 
+/** 6b. On-demand full article translation for History. */
+export const fullTranslateQueue = new Queue(FULL_TRANSLATE_QUEUE_NAME, {
+  connection: redis,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: { type: "exponential", delay: 2_000 },
+    removeOnComplete: { count: 100 },
+    removeOnFail: { count: 50 },
+  },
+});
+
 /** 7. Generate social-media post from scored article. */
 export const generatePostQueue = new Queue(GENERATE_POST_QUEUE_NAME, {
   connection: redis,
@@ -188,6 +200,7 @@ export const allProducerQueues = [
   semanticDedupQueue,
   ingestAnalysisQueue,
   scoreArticleQueue,
+  fullTranslateQueue,
   generatePostQueue,
   generateDigestQueue,
   deepsearchQueue,

@@ -31,6 +31,22 @@ export function stripHtml(text: string): string {
     .trim();
 }
 
+/** Habr and others prefix already-Russian posts with editorial tags. */
+const EDITORIAL_TITLE_PREFIX_RE =
+  /^\s*[\[(]?\s*(?:перевод|переведено|translation|translated|перевод\s+статьи)\s*[\])]?\s*[:\-–—]?\s*/i;
+
+export function stripEditorialTitlePrefix(title: string): string {
+  if (!title) return "";
+  let cleaned = title.trim();
+  // Repeat in case of nested tags like "[Перевод] [Update] ..."
+  for (let i = 0; i < 3; i += 1) {
+    const next = cleaned.replace(EDITORIAL_TITLE_PREFIX_RE, "").trim();
+    if (next === cleaned) break;
+    cleaned = next;
+  }
+  return cleaned;
+}
+
 export function cleanArticleText(text: string): string {
   const stripped = stripHtml(text);
   if (!stripped) return "";

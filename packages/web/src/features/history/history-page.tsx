@@ -10,7 +10,7 @@ import { Skeleton } from '@shared/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shared/ui/tabs';
 import { Textarea } from '@shared/ui/textarea';
 import { useToast } from '@shared/ui/toast';
-import { deepsearchApi, generationApi, articlesApi, type DeepSearchResult, type GeneratedPost, type Article } from '@shared/api/client';
+import { deepsearchApi, generationApi, articlesApi, type DeepSearchResult, type GeneratedPost } from '@shared/api/client';
 import { cn, formatDateTime } from '@shared/lib/utils';
 import { Check, Copy, FileSearch, FileText, Languages, Newspaper, Save, Trash2, type LucideIcon } from 'lucide-react';
 
@@ -43,15 +43,36 @@ function useDeepSearchHistory() {
   });
 }
 
-function useTranslatedArticles() {
+function useFullTranslations() {
   return useInfiniteQuery({
-    queryKey: ['history', 'translations'],
-    queryFn: ({ pageParam }) => articlesApi.list({ translated_only: true, sort_by: 'date', sort_order: 'desc' }, pageParam as string | undefined, PAGE_SIZE),
+    queryKey: ['history', 'full-translations'],
+    queryFn: ({ pageParam }) => articlesApi.fullTranslations.list(pageParam as string | undefined, PAGE_SIZE),
     getNextPageParam: (lastPage) => lastPage.has_more ? (lastPage.next_cursor ?? undefined) : undefined,
     initialPageParam: undefined as string | undefined,
-    staleTime: 30_000,
+    staleTime: 10_000,
+    refetchInterval: (query) => {
+      const data = query.state.data as { pages?: Array<{ data?: Array<{ status: string }> }> } | undefined;
+      const hasActive = data?.pages?.some((page) =>
+        page.data?.some((row) => ['pending', 'running'].includes(row.status))
+      );
+      return hasActive ? 4000 : false;
+    },
   });
 }
+
+export type FullTranslationItem = {
+  id: string;
+  article_id: string;
+  status: string;
+  source_lang: string | null;
+  title: string | null;
+  content: string | null;
+  original_title: string | null;
+  original_url: string | null;
+  error: string | null;
+  created_at: string;
+  completed_at: string | null;
+};
 
 function sourceList(result: DeepSearchResult): Array<{ title?: string; url?: string; snippet?: string }> {
   const sources = result.findings?.externalSources;
@@ -78,7 +99,7 @@ export function HistoryPage() {
   const { addToast } = useToast();
   const postsQuery = useGeneratedPosts();
   const deepSearchQuery = useDeepSearchHistory();
-  const translationsQuery = useTranslatedArticles();
+  const translationsQuery = useFullTranslations();
   const posts: GeneratedPost[] = useMemo(
     () => postsQuery.data?.pages.flatMap((page) => page.data) ?? [],
     [postsQuery.data]
@@ -87,7 +108,7 @@ export function HistoryPage() {
     () => deepSearchQuery.data?.pages.flatMap((page) => page.data) ?? [],
     [deepSearchQuery.data]
   );
-  const translatedArticles: Article[] = useMemo(
+  const fullTranslations: FullTranslationItem[] = useMemo(
     () => translationsQuery.data?.pages.flatMap((page) => page.data) ?? [],
     [translationsQuery.data]
   );
@@ -99,6 +120,8 @@ export function HistoryPage() {
   const [saving, setSaving] = useState(false);
   const [deletingPost, setDeletingPost] = useState(false);
   const [deletingDeepSearch, setDeletingDeepSearch] = useState(false);
+  const [selectedTranslation, setSelectedTranslation] = useState<FullTranslationItem | null>(null);
+  const [deletingTranslation, setDeletingTranslation] = useState(false);
   const [activeTab, setActiveTab] = useState<'posts' | 'deepsearch' | 'translations'>('posts');
   const [selectedPostIds, setSelectedPostIds] = useState<Set<string>>(() => new Set());
   const [selectedDeepSearchIds, setSelectedDeepSearchIds] = useState<Set<string>>(() => new Set());
@@ -302,7 +325,7 @@ export function HistoryPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">История</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Посты: {posts.length} · DeepSearch: {deepSearchResults.length} · Переводы: {translatedArticles.length}</p>
+          <p className="mt-1 text-sm text-muted-foreground">Посты: {posts.length} · DeepSearch: {deepSearchResults.length} · Переводы: {fullTranslations.length}</p>
         </div>
       </div>
 
@@ -390,21 +413,39 @@ export function HistoryPage() {
         <TabsContent value="translations" className="space-y-3">
           {translationsQuery.isLoading ? (
             Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-24" />)
-          ) : translatedArticles.length === 0 ? (
-            <EmptyState title="Пока нет переводов" description="Нажми «Перевести» в карточке статьи — переведённые материалы появятся здесь." icon={Languages} />
+          ) : fullTranslations.length === 0 ? (
+            <EmptyState
+              title="Пока нет переводов"
+              description="Нажми иконку «Перевести» на карточке в ленте — здесь появится полный перевод статьи (не анонс из ленты)."
+              icon={Languages}
+            />
           ) : (
-            translatedArticles.map((article) => (
+            fullTranslations.map((item) => (
               <HistoryCard
-                key={article.id}
+                key={item.id}
                 icon={Languages}
                 tone="primary"
-                badge={article.detected_lang ? article.detected_lang.toUpperCase() : 'Перевод'}
-                title={article.title}
-                body={article.ai_summary || article.description || ''}
-                meta={`${formatDateTime(article.published_at)} · ${article.source_name}`}
+                badge={
+                  item.status === 'completed'
+                    ? (item.source_lang ? item.source_lang.toUpperCase() : 'Готово')
+                    : item.status === 'failed'
+                      ? 'Ошибка'
+                      : item.status === 'running'
+                        ? 'В работе'
+                        : 'В очереди'
+                }
+                title={item.title || item.original_title || 'Полный перевод'}
+                body={
+                  item.status === 'failed'
+                    ? (item.error || 'Не удалось перевести статью')
+                    : item.status === 'completed'
+                      ? (item.content || '')
+                      : 'Полный перевод ещё готовится…'
+                }
+                meta={`${formatDateTime(item.created_at)}${item.original_url ? ` · ${item.original_url}` : ''}`}
                 selected={false}
                 onSelect={() => undefined}
-                onOpen={() => navigate({ to: '/feed/article/$id', params: { id: article.id } })}
+                onOpen={() => setSelectedTranslation(item)}
               />
             ))
           )}
@@ -470,6 +511,101 @@ export function HistoryPage() {
                 <Trash2 className="h-4 w-4" />
                 Удалить отчёт
               </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!selectedTranslation} onOpenChange={(open) => !open && setSelectedTranslation(null)}>
+        <DialogContent className="max-h-[90vh] w-[96vw] max-w-3xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{selectedTranslation?.title || selectedTranslation?.original_title || 'Полный перевод'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline">
+                {selectedTranslation?.status === 'completed'
+                  ? 'Готово'
+                  : selectedTranslation?.status === 'failed'
+                    ? 'Ошибка'
+                    : selectedTranslation?.status === 'running'
+                      ? 'В работе'
+                      : 'В очереди'}
+              </Badge>
+              {selectedTranslation?.source_lang && (
+                <Badge variant="outline">{selectedTranslation.source_lang.toUpperCase()} → RU</Badge>
+              )}
+              {selectedTranslation && (
+                <span className="text-xs text-muted-foreground">{formatDateTime(selectedTranslation.created_at)}</span>
+              )}
+            </div>
+            <div className="whitespace-pre-wrap rounded-xl border border-border/60 bg-white/80 p-4 text-sm leading-relaxed">
+              {selectedTranslation?.status === 'failed'
+                ? (selectedTranslation.error || 'Ошибка перевода')
+                : selectedTranslation?.status === 'completed'
+                  ? (selectedTranslation.content || 'Пустой перевод')
+                  : 'Полный перевод ещё готовится. Вкладка обновится автоматически.'}
+            </div>
+            <div className="flex flex-wrap justify-between gap-2">
+              <Button
+                variant="danger"
+                size="sm"
+                loading={deletingTranslation}
+                onClick={async () => {
+                  if (!selectedTranslation) return;
+                  setDeletingTranslation(true);
+                  try {
+                    await articlesApi.fullTranslations.delete(selectedTranslation.id);
+                    setSelectedTranslation(null);
+                    await queryClient.invalidateQueries({ queryKey: ['history', 'full-translations'] });
+                    addToast({ title: 'Перевод удалён', variant: 'success' });
+                  } catch (error) {
+                    addToast({
+                      title: 'Не удалось удалить',
+                      description: error instanceof Error ? error.message : 'Ошибка',
+                      variant: 'danger',
+                    });
+                  } finally {
+                    setDeletingTranslation(false);
+                  }
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+                Удалить
+              </Button>
+              <div className="flex flex-wrap gap-2">
+                {selectedTranslation?.original_url && (
+                  <a href={selectedTranslation.original_url} target="_blank" rel="noreferrer">
+                    <Button variant="outline" size="sm">
+                      Оригинал
+                    </Button>
+                  </a>
+                )}
+                {selectedTranslation?.article_id && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      navigate({ to: '/feed/article/$id', params: { id: selectedTranslation.article_id } })
+                    }
+                  >
+                    Карточка в ленте
+                  </Button>
+                )}
+                {selectedTranslation?.content && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(selectedTranslation.content || '');
+                      addToast({ title: 'Скопировано', variant: 'success' });
+                    }}
+                  >
+                    <Copy className="h-4 w-4" />
+                    Копировать
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         </DialogContent>

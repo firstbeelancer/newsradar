@@ -86,3 +86,17 @@ export function cleanArticleText(text: string): string {
 
   return meaningfulLines.join(' ').replace(/\s+/g, ' ').trim();
 }
+
+/** Strip Habr-style editorial tags like «[Перевод]» from titles for display. */
+export function stripEditorialTitlePrefix(title: string): string {
+  if (!title) return '';
+  let cleaned = title.trim();
+  const re =
+    /^\s*[\[(]?\s*(?:перевод|переведено|translation|translated|перевод\s+статьи)\s*[\])]?\s*[:\-–—]?\s*/i;
+  for (let i = 0; i < 3; i += 1) {
+    const next = cleaned.replace(re, '').trim();
+    if (next === cleaned) break;
+    cleaned = next;
+  }
+  return cleaned;
+}

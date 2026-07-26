@@ -36,12 +36,14 @@ import {
   SCORE_ARTICLE_QUEUE_NAME,
   SEMANTIC_DEDUP_QUEUE_NAME,
   TRANSLATE_QUEUE_NAME,
+  FULL_TRANSLATE_QUEUE_NAME,
 } from "./connection/redis.js";
 import { processFetchSource, type FetchSourceJob } from "./workers/fetch-source.worker.js";
 import { processRawDedup, type RawDedupJob } from "./workers/raw-dedup.worker.js";
 import { processTranslate, type TranslateJob } from "./workers/translate.worker.js";
 import { processSemanticDedup, type SemanticDedupJob } from "./workers/semantic-dedup.worker.js";
 import { processScoreArticle, type ScoreArticleJob } from "./workers/score-article.worker.js";
+import { processFullTranslate, type FullTranslateJob } from "./workers/full-translate.worker.js";
 import { processGeneratePost, type GeneratePostJob } from "./workers/generate-post.worker.js";
 import { processGenerateDigest, type GenerateDigestJob } from "./workers/generate-digest.worker.js";
 import { processDeepsearch, type DeepsearchJob } from "./workers/deepsearch.worker.js";
@@ -75,6 +77,9 @@ export const ingestAnalysisQueue = createQueue(INGEST_ANALYSIS_QUEUE_NAME);
 /** 6. AI-powered scoring of article relevance & quality. */
 export const scoreArticleQueue = createQueue(SCORE_ARTICLE_QUEUE_NAME);
 
+/** 6b. On-demand full translations for History. */
+export const fullTranslateQueue = createQueue(FULL_TRANSLATE_QUEUE_NAME);
+
 /** 7. Generate social-media post from scored article. */
 export const generatePostQueue = createQueue(GENERATE_POST_QUEUE_NAME);
 
@@ -103,6 +108,7 @@ export const allQueues = [
   semanticDedupQueue,
   ingestAnalysisQueue,
   scoreArticleQueue,
+  fullTranslateQueue,
   generatePostQueue,
   generateDigestQueue,
   deepsearchQueue,
@@ -240,9 +246,10 @@ export function registerWorkers(logger: Logger): Worker[] {
       const { articleId } = job.data as { articleId: string };
       logger.debug({ articleId, jobId: job.id }, "Ingest analysis → semantic dedup");
 
-      // Forward to semantic dedup queue
+      // Forward to semantic dedup queue (unique job id so retries work)
       const { semanticDedupQueue: sdq } = await import("./connection/redis.js");
-      await sdq.add(`semantic-dedup-${articleId}`, { articleId }, { jobId: `semantic-dedup-${articleId}` });
+      const sdJobId = `semantic-dedup-${articleId}-${Date.now()}`;
+      await sdq.add(sdJobId, { articleId }, { jobId: sdJobId });
       return { forwarded: true, articleId };
     },
     { concurrency: 5 }
@@ -256,6 +263,14 @@ export function registerWorkers(logger: Logger): Worker[] {
     { concurrency: 3 }
   );
   attachWorkerLogging(scoreArticleWorker, logger);
+
+  /* 6b. full-translate (History → Переводы) */
+  const fullTranslateWorker = createWorker<FullTranslateJob>(
+    FULL_TRANSLATE_QUEUE_NAME,
+    async (job) => processFullTranslate(job, logger),
+    { concurrency: 2 }
+  );
+  attachWorkerLogging(fullTranslateWorker, logger);
 
   /* 7. generate-post */
   const generatePostWorker = createWorker<GeneratePostJob>(
@@ -312,6 +327,7 @@ export function registerWorkers(logger: Logger): Worker[] {
     semanticDedupWorker,
     ingestAnalysisWorker,
     scoreArticleWorker,
+    fullTranslateWorker,
     generatePostWorker,
     generateDigestWorker,
     deepsearchWorker,

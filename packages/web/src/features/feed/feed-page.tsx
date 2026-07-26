@@ -331,14 +331,14 @@ export function FeedPage() {
     try {
       await articlesApi.retranslate(article.id);
       addToast({
-        title: 'Перевод запущен',
-        description: `«${article.title.slice(0, 60)}…» отправлена на перевод.`,
+        title: 'Полный перевод запущен',
+        description: `«${article.title.slice(0, 60)}…» появится в История → Переводы.`,
         variant: 'success',
       });
     } catch (error) {
       addToast({
         title: 'Ошибка перевода',
-        description: error instanceof Error ? error.message : 'Не удалось поставить статью в очередь перевода',
+        description: error instanceof Error ? error.message : 'Не удалось запустить полный перевод',
         variant: 'danger',
       });
     }
