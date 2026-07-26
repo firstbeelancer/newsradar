@@ -75,7 +75,8 @@ export async function requeueStuckTranslations(logger: Logger): Promise<number> 
     }
   }
 
-  // Recover already-scored garbage translations from reasoning model leaks.
+  // Recover garbage titles/summaries from reasoning model leaks
+  // (English instruction echo often lands in description/aiSummary, not only title).
   const polluted = await db
     .select({ id: articles.id })
     .from(articles)
@@ -84,7 +85,18 @@ export async function requeueStuckTranslations(logger: Logger): Promise<number> 
         ilike(articles.title, "<think%"),
         ilike(articles.title, "%The user wants me to%"),
         ilike(articles.title, "%I need to translate%"),
-        sql`${articles.title} LIKE '%</think>%'`
+        ilike(articles.title, "%I need to summarize%"),
+        sql`${articles.title} LIKE '%</think>%'`,
+        ilike(articles.description, "%The user wants me to%"),
+        ilike(articles.description, "%I need to summarize%"),
+        ilike(articles.description, "%I need to translate%"),
+        ilike(articles.description, "%Let me create%"),
+        ilike(articles.description, "%based on the title information%"),
+        ilike(articles.aiSummary, "%The user wants me to%"),
+        ilike(articles.aiSummary, "%I need to summarize%"),
+        ilike(articles.aiSummary, "%I need to translate%"),
+        ilike(articles.aiSummary, "%Let me create%"),
+        ilike(articles.aiSummary, "%based on the title information%")
       )
     )
     .limit(MAX_BATCH);

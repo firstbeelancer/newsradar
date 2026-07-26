@@ -16,6 +16,15 @@ describe('translator helpers', () => {
     expect(sanitizeTranslationOutput('The user wants me to translate a Chinese text')).toBe('');
   });
 
+  it('salvages Russian summary after English instruction echo', () => {
+    const polluted =
+      'The user wants me to summarize the article in 2-3 informative Russian sentences. The title says: "Fighting AI with AI". Let me create a concise summary based on the title information. Спикер конференции AICon Shenzhen представил подход к защите среды выполнения ИИ-агентов.';
+    const cleaned = sanitizeTranslationOutput(polluted);
+    expect(cleaned.startsWith('Спикер')).toBe(true);
+    expect(cleaned).toContain('AICon');
+    expect(cleaned.toLowerCase()).not.toContain('the user wants');
+  });
+
   it('builds a multi-sentence summary instead of copying only the first sentence', () => {
     const text = [
       'Первое предложение короткое.',
