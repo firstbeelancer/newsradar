@@ -185,9 +185,9 @@ async function translateViaGoogleGtx(
   return translated;
 }
 
-/** English instruction-echo / chain-of-thought markers from free reasoning models. */
+/** Instruction-echo / chain-of-thought markers from free reasoning models (EN + RU). */
 const AI_LEAK_HEAD_RE =
-  /the user wants me to|i need to (?:translate|summarize|extract|compress|write|create)|let me (?:create|write|summarize|translate|extract|make)|here(?:'s| is) (?:the )?(?:translation|summary)|based on the title information|however,? the actual article content is not provided|i'll (?:summarize|translate|create|write)|as an ai|looking at the (?:title|headline|material)/i;
+  /the user wants me to|i need to (?:translate|summarize|extract|compress|write|create)|let me (?:create|write|summarize|translate|extract|make)|here(?:'s| is) (?:the )?(?:translation|summary)|based on the title information|however,? the actual article content is not provided|i'll (?:summarize|translate|create|write)|as an ai|looking at the (?:title|headline|material)|пользователь хочет|пользователь просит|мне нужно (?:сжать|суммировать|перевести|выделить|создать)|нужно (?:сжать|суммировать|перевести|выделить суть)|я должен (?:сжать|суммировать|перевести)|верн[уи] только (?:готовый )?summary|без рассуждений/i;
 
 export function looksLikeRussian(text: string): boolean {
   const sample = text.slice(0, 400);
@@ -222,14 +222,34 @@ export function sanitizeTranslationOutput(text: string): string {
   const hasLeak = cleaned.startsWith("<think") || AI_LEAK_HEAD_RE.test(head);
 
   if (hasLeak) {
-    // Free models often dump English reasoning, then append the real Russian text.
-    // Keep from the first capital Cyrillic letter (start of a Russian sentence).
-    const cyrStart = cleaned.search(/[А-ЯЁ]/);
-    if (cyrStart < 0) {
+    // Free models often dump English/Russian meta-reasoning, then append the real summary.
+    // Prefer content after a clear separator sentence that looks like news (not instruction).
+    const afterMeta = cleaned.split(
+      /(?<=[.!?…])\s+(?=[А-ЯЁA-Z])/
+    );
+    let candidate = cleaned;
+    if (afterMeta.length > 1) {
+      // take the longest tail segment that does not itself start with a leak marker
+      for (let i = afterMeta.length - 1; i >= 0; i -= 1) {
+        const part = afterMeta.slice(i).join(" ").trim();
+        if (part && !AI_LEAK_HEAD_RE.test(part.slice(0, 120)) && looksLikeRussian(part)) {
+          candidate = part;
+          break;
+        }
+      }
+    } else {
+      // Keep from the first capital Cyrillic letter (start of a Russian sentence).
+      const cyrStart = cleaned.search(/[А-ЯЁ]/);
+      if (cyrStart >= 0) {
+        candidate = cleaned.slice(cyrStart).trim();
+      }
+    }
+
+    // Still pure meta (e.g. entire text is «Пользователь хочет…» without news body).
+    if (!candidate || AI_LEAK_HEAD_RE.test(candidate.slice(0, 160))) {
       return "";
     }
-    cleaned = cleaned.slice(cyrStart).trim();
-    // Drop residual English planning if it still dominates the head.
+    cleaned = candidate;
     if (isPollutedAiText(cleaned) && !looksLikeRussian(cleaned)) {
       return "";
     }

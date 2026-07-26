@@ -25,6 +25,12 @@ describe('translator helpers', () => {
     expect(cleaned.toLowerCase()).not.toContain('the user wants');
   });
 
+  it('rejects pure Russian instruction-echo without news content', () => {
+    const polluted =
+      'Пользователь хочет, чтобы я сжал новостной материал в 2-3 информативных предложения на русском языке. Нужно выделить суть, причину и важный контекст.';
+    expect(sanitizeTranslationOutput(polluted)).toBe('');
+  });
+
   it('builds a multi-sentence summary instead of copying only the first sentence', () => {
     const text = [
       'Первое предложение короткое.',
