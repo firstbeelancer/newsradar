@@ -94,13 +94,19 @@ export async function requeueStuckTranslations(logger: Logger): Promise<number> 
         ilike(articles.description, "%based on the title information%"),
         ilike(articles.description, "%Пользователь хочет%"),
         ilike(articles.description, "%мне нужно сжать%"),
+        ilike(articles.description, "%The material is%"),
+        ilike(articles.description, "%compress this news%"),
+        ilike(articles.description, "%compress the news%"),
         ilike(articles.aiSummary, "%The user wants me to%"),
         ilike(articles.aiSummary, "%I need to summarize%"),
         ilike(articles.aiSummary, "%I need to translate%"),
         ilike(articles.aiSummary, "%Let me create%"),
         ilike(articles.aiSummary, "%based on the title information%"),
         ilike(articles.aiSummary, "%Пользователь хочет%"),
-        ilike(articles.aiSummary, "%мне нужно сжать%")
+        ilike(articles.aiSummary, "%мне нужно сжать%"),
+        ilike(articles.aiSummary, "%The material is%"),
+        ilike(articles.aiSummary, "%compress this news%"),
+        ilike(articles.aiSummary, "%compress the news%")
       )
     )
     .limit(MAX_BATCH);

@@ -187,7 +187,7 @@ async function translateViaGoogleGtx(
 
 /** Instruction-echo / chain-of-thought markers from free reasoning models (EN + RU). */
 const AI_LEAK_HEAD_RE =
-  /the user wants me to|i need to (?:translate|summarize|extract|compress|write|create)|let me (?:create|write|summarize|translate|extract|make)|here(?:'s| is) (?:the )?(?:translation|summary)|based on the title information|however,? the actual article content is not provided|i'll (?:summarize|translate|create|write)|as an ai|looking at the (?:title|headline|material)|пользователь хочет|пользователь просит|мне нужно (?:сжать|суммировать|перевести|выделить|создать)|нужно (?:сжать|суммировать|перевести|выделить суть)|я должен (?:сжать|суммировать|перевести)|верн[уи] только (?:готовый )?summary|без рассуждений/i;
+  /the user wants me to|i need to (?:translate|summarize|extract|compress|write|create)|let me (?:create|write|summarize|translate|extract|make|compress)|here(?:'s| is) (?:the )?(?:translation|summary)|based on the title information|however,? the actual article content is not provided|i'll (?:summarize|translate|create|write)|as an ai|looking at the (?:title|headline|material)|the material is (?:quite )?short|compress (?:this|the) (?:news )?material|пользователь хочет|пользователь просит|мне нужно (?:сжать|суммировать|перевести|выделить|создать)|нужно (?:сжать|суммировать|перевести|выделить суть)|я должен (?:сжать|суммировать|перевести)|верн[уи] только (?:готовый )?summary|без рассуждений/i;
 
 export function looksLikeRussian(text: string): boolean {
   const sample = text.slice(0, 400);
