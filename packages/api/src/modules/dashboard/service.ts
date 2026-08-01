@@ -62,6 +62,11 @@ export async function getDashboardData(params: { userId: string; workspaceId: st
     .from(articles)
     .where(eq(articles.workspaceId, params.workspaceId));
 
+  const sourceCountRows = await db
+    .select({ count: count(sources.id) })
+    .from(sources)
+    .where(eq(sources.workspaceId, params.workspaceId));
+
   const lastOperations = await db
     .select()
     .from(operationLogs)
@@ -95,6 +100,8 @@ export async function getDashboardData(params: { userId: string; workspaceId: st
     favorite_limit: favoriteLimit,
     totalArticles: Number(totalArticleRows[0]?.count ?? 0),
     total_articles: Number(totalArticleRows[0]?.count ?? 0),
+    sourceCount: Number(sourceCountRows[0]?.count ?? 0),
+    source_count: Number(sourceCountRows[0]?.count ?? 0),
     lastOperations: lastOperations.map((log) => ({
       id: log.id,
       agentId: log.agentId,
@@ -227,7 +234,13 @@ export async function getPipelineStatus(params: { userId: string; workspaceId: s
   const [needsTranslationRows] = await db
     .select({ count: count(articles.id) })
     .from(articles)
-    .where(and(eq(articles.workspaceId, params.workspaceId), eq(articles.needsTranslation, true)));
+    .where(
+      and(
+        eq(articles.workspaceId, params.workspaceId),
+        eq(articles.needsTranslation, true),
+        inArray(articles.status, ["new", "fetched", "translated"])
+      )
+    );
 
   const [fetchedRows] = await db
     .select({ count: count(articles.id) })
@@ -369,13 +382,26 @@ export async function retryStuckPipeline(params: { userId: string; workspaceId: 
   const translateQueue = getTranslateQueue();
   const scoreQueue = getScoreArticleQueue();
 
+  const clearedTerminalDuplicates = await db
+    .update(articles)
+    .set({ needsTranslation: false, updatedAt: new Date() })
+    .where(
+      and(
+        eq(articles.workspaceId, params.workspaceId),
+        eq(articles.status, "deduped"),
+        eq(articles.needsTranslation, true)
+      )
+    )
+    .returning({ id: articles.id });
+
   const needsTranslate = await db
     .select({ id: articles.id })
     .from(articles)
     .where(
       and(
         eq(articles.workspaceId, params.workspaceId),
-        eq(articles.needsTranslation, true)
+        eq(articles.needsTranslation, true),
+        inArray(articles.status, ["new", "fetched", "translated"])
       )
     )
     .limit(80);
@@ -467,6 +493,7 @@ export async function retryStuckPipeline(params: { userId: string; workspaceId: 
     ingestQueued,
     scoreQueued,
     totalQueued: translateQueued + ingestQueued + scoreQueued,
+    dedupedCleared: clearedTerminalDuplicates.length,
     candidates: {
       translate: needsTranslate.length,
       ingest: stuckTranslated.length,
@@ -476,6 +503,8 @@ export async function retryStuckPipeline(params: { userId: string; workspaceId: 
     message:
       translateQueued + ingestQueued + scoreQueued > 0
         ? `Перезапущено: перевод ${translateQueued}, саммари ${ingestQueued}, скоринг ${scoreQueued}`
-        : "Нечего перезапускать — backlog пуст",
+        : clearedTerminalDuplicates.length > 0
+          ? `Исправлено: снят ложный флаг перевода у дублей — ${clearedTerminalDuplicates.length}`
+          : "Нечего перезапускать — backlog пуст",
   };
 }

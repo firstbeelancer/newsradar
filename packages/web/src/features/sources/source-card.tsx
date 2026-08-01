@@ -1,18 +1,13 @@
 import { Card, CardContent } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@shared/ui/dropdown-menu';
-import { Rss, Send, Globe, MoreVertical, Pencil, Trash2, TestTube, Download } from 'lucide-react';
+import { Rss, Send, Globe, Pencil, Trash2, TestTube, Download, Bot } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
-import type { Source } from '@shared/api/client';
+import type { Source, SourceAgentRef } from '@shared/api/client';
 
 interface SourceCardProps {
   source: Source;
+  assignedAgents: SourceAgentRef[];
   onEdit: (source: Source) => void;
   onDelete: (source: Source) => void;
   onTest: (source: Source) => void;
@@ -26,7 +21,7 @@ const typeConfig = {
   web: { icon: Globe, label: 'Веб', className: 'bg-emerald-50 text-emerald-600' },
 };
 
-export function SourceCard({ source, onEdit, onDelete, onTest, onFetch, onToggleActive }: SourceCardProps) {
+export function SourceCard({ source, assignedAgents, onEdit, onDelete, onTest, onFetch, onToggleActive }: SourceCardProps) {
   const config = typeConfig[source.type] || typeConfig.rss;
   const Icon = config.icon;
 
@@ -50,6 +45,26 @@ export function SourceCard({ source, onEdit, onDelete, onTest, onFetch, onToggle
             </div>
             <p className="mt-0.5 truncate text-xs text-muted-foreground">{source.url}</p>
 
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <span className="mr-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+                <Bot className="h-3.5 w-3.5" />
+                Агент:
+              </span>
+              {assignedAgents.length > 0 ? (
+                assignedAgents.map((agent) => (
+                  <Badge key={agent.id} variant="outline" className="gap-1.5 text-[10px]">
+                    <span
+                      className="h-1.5 w-1.5 rounded-full"
+                      style={{ backgroundColor: agent.color || '#0ea5e9' }}
+                    />
+                    {agent.name}
+                  </Badge>
+                ))
+              ) : (
+                <Badge variant="warning" className="text-[10px]">Без агента</Badge>
+              )}
+            </div>
+
             <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
               <span className="flex items-center gap-1">
                 <Download className="h-3 w-3" />
@@ -71,7 +86,7 @@ export function SourceCard({ source, onEdit, onDelete, onTest, onFetch, onToggle
           </div>
         </div>
 
-        <div className="mt-3 flex items-center justify-between border-t border-border/50 pt-3">
+        <div className="mt-3 flex flex-col gap-2 border-t border-border/50 pt-3 sm:flex-row sm:items-center sm:justify-between">
           <Button
             variant={source.is_active ? 'outline' : 'default'}
             size="sm"
@@ -88,46 +103,52 @@ export function SourceCard({ source, onEdit, onDelete, onTest, onFetch, onToggle
             {source.is_active ? 'Выключить' : 'Включить'}
           </Button>
 
-          <div className="flex items-center gap-1">
+          <div className="grid grid-cols-4 gap-1 sm:flex sm:items-center">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onTest(source)}
+              title="Проверить источник"
+              className="h-7 gap-1.5 px-2 text-xs"
+            >
+              <TestTube className="h-3.5 w-3.5" />
+              <span className="hidden lg:inline">Тест</span>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onFetch(source)}
+              disabled={!source.is_active || assignedAgents.length === 0}
+              title={assignedAgents.length === 0 ? 'Сначала привяжи источник к агенту' : 'Собрать новости сейчас'}
+              className="h-7 gap-1.5 px-2 text-xs"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span className="hidden lg:inline">Собрать</span>
+            </Button>
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={() => onEdit(source)}
-              className="h-7 gap-1.5 text-xs"
+              title="Редактировать источник"
+              className="h-7 gap-1.5 px-2 text-xs"
             >
               <Pencil className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Редактировать</span>
+              <span className="hidden lg:inline">Изменить</span>
             </Button>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon-sm" className="sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onTest(source)}>
-                <TestTube className="mr-2 h-4 w-4" />
-                Тест
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onFetch(source)}>
-                <Download className="mr-2 h-4 w-4" />
-                Собрать
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onEdit(source)}>
-                <Pencil className="mr-2 h-4 w-4" />
-                Редактировать
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => onDelete(source)}
-                className="text-danger focus:text-danger"
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Удалить
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-            </DropdownMenu>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => onDelete(source)}
+              title="Удалить источник"
+              className="h-7 gap-1.5 px-2 text-xs text-danger hover:text-danger"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span className="hidden lg:inline">Удалить</span>
+            </Button>
           </div>
         </div>
       </CardContent>

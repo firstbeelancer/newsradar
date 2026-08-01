@@ -1,4 +1,5 @@
 node_modules/
+packages/*/dist/
 .env
 packages/*/package-lock.json
 package-lock.json

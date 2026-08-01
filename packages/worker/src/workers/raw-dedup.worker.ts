@@ -13,6 +13,7 @@ import { articles } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import { computeRawHash, findByRawHash } from "../lib/dedup.js";
 import { translateQueue } from "../connection/redis.js";
+import { buildRawDuplicateState } from "./pipeline-state.js";
 import type { Job } from "bullmq";
 import type { Logger } from "pino";
 
@@ -68,11 +69,7 @@ export async function processRawDedup(
 
     await db
       .update(articles)
-      .set({
-        status: "deduped",
-        rawHash,
-        updatedAt: new Date(),
-      })
+      .set(buildRawDuplicateState(rawHash))
       .where(eq(articles.id, articleId));
 
     return { status: "deduped", hash: rawHash };

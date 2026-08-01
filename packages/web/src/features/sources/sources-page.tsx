@@ -9,6 +9,7 @@ import { useToast } from '@shared/ui/toast';
 import { SourceCard } from './source-card';
 import { SourceForm } from './source-form';
 import { SourceTestButton } from './source-test-button';
+import { matchesSourceSearch } from './source-search';
 import {
   Dialog,
   DialogContent,
@@ -17,7 +18,7 @@ import {
   DialogFooter,
 } from '@shared/ui/dialog';
 import { Plus, Link2, Search } from 'lucide-react';
-import type { Source, CreateSourceDto, UpdateSourceDto } from '@shared/api/client';
+import { sourcesApi, type Source, type CreateSourceDto, type UpdateSourceDto } from '@shared/api/client';
 
 export function SourcesPage() {
   const { addToast } = useToast();
@@ -25,14 +26,11 @@ export function SourcesPage() {
     sources,
     isLoading,
     isSubmitting,
-    isTesting,
-    testResult,
     error,
     fetchSources,
     createSource,
     updateSource,
     deleteSource,
-    testSource,
     clearTestResult,
   } = useSourcesStore();
 
@@ -58,11 +56,7 @@ export function SourcesPage() {
     }
   }, [error, addToast]);
 
-  const filteredSources = sources.filter(
-    (s) =>
-      s.name.toLowerCase().includes(search.toLowerCase()) ||
-      s.url.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredSources = sources.filter((source) => matchesSourceSearch(source, search));
 
   const handleEdit = (source: Source) => {
     setEditingSource(source);
@@ -109,7 +103,6 @@ export function SourcesPage() {
 
   const handleFetch = async (source: Source) => {
     try {
-      const { sourcesApi } = await import('@shared/api/client');
       await sourcesApi.fetch(source.id);
       addToast({ title: 'Сбор запущен', description: `Источник "${source.name}"`, variant: 'success' });
     } catch (err) {
@@ -158,7 +151,7 @@ export function SourcesPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Источники</h1>
           <p className="text-muted-foreground mt-1">
-            {sources.length} источников
+            {search.trim() ? `Найдено ${filteredSources.length} из ${sources.length}` : `${sources.length} источников`}
           </p>
         </div>
         <Button onClick={() => { setEditingSource(null); setFormOpen(true); }}>
@@ -202,6 +195,11 @@ export function SourcesPage() {
             <SourceCard
               key={source.id}
               source={source}
+              assignedAgents={source.agents.length > 0
+                ? source.agents
+                : agents
+                    .filter((agent) => agent.id === source.agent_id)
+                    .map((agent) => ({ id: agent.id, name: agent.name, color: agent.color, icon: agent.icon }))}
               onEdit={handleEdit}
               onDelete={handleDeleteClick}
               onTest={handleTest}

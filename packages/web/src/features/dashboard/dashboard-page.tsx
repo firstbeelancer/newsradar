@@ -83,6 +83,7 @@ export function DashboardPage() {
   const [favoritesLoading, setFavoritesLoading] = useState(true);
   const [favoritesCount, setFavoritesCount] = useState(0);
   const [totalArticles, setTotalArticles] = useState(0);
+  const [sourceCount, setSourceCount] = useState(0);
   const [operationLogs, setOperationLogs] = useState<OperationLog[]>([]);
   const [operationLogsLoading, setOperationLogsLoading] = useState(true);
   const [operationLogsError, setOperationLogsError] = useState<string | null>(null);
@@ -129,8 +130,10 @@ export function DashboardPage() {
       const summary = await dashboardApi.get();
       setTotalArticles(summary.total_articles);
       setFavoritesCount(summary.favorite_count);
+      setSourceCount(summary.source_count);
     } catch {
       setTotalArticles(0);
+      setSourceCount(0);
     }
   };
 
@@ -139,7 +142,6 @@ export function DashboardPage() {
     try {
       const response = await articlesApi.list({ favorites_only: true }, undefined, 5);
       setFavorites(response.data);
-      setFavoritesCount(response.data.length);
     } catch {
       setFavorites([]);
     } finally {
@@ -225,7 +227,7 @@ export function DashboardPage() {
   const stats = {
     agents: agents.length,
     articles: totalArticles,
-    generations: 0,
+    sources: sourceCount,
     favorites: favoritesCount,
   };
 
@@ -274,58 +276,66 @@ export function DashboardPage() {
       </section>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Card className="nr-stat border-cyan-100/80">
-          <CardContent className="p-4">
-            <div className="space-y-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-50 text-sky-600 ring-1 ring-sky-100">
-                <Bot className="h-5 w-5" />
+        <Link to="/agents" className="group block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+          <Card className="nr-stat h-full border-cyan-100/80 transition-all group-hover:-translate-y-0.5 group-hover:border-cyan-200 group-hover:shadow-md">
+            <CardContent className="p-4">
+              <div className="space-y-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-50 text-sky-600 ring-1 ring-sky-100">
+                  <Bot className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-3xl font-black leading-none tracking-tight tabular-nums text-slate-950">{stats.agents}</p>
+                  <p className="mt-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Агента</p>
+                </div>
               </div>
-              <div>
-                <p className="text-3xl font-black leading-none tracking-tight tabular-nums text-slate-950">{stats.agents}</p>
-                <p className="mt-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Агента</p>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link to="/feed" className="group block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+          <Card className="nr-stat h-full border-cyan-100/80 transition-all group-hover:-translate-y-0.5 group-hover:border-cyan-200 group-hover:shadow-md">
+            <CardContent className="p-4">
+              <div className="space-y-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100">
+                  <Newspaper className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-3xl font-black leading-none tracking-tight tabular-nums text-slate-950">{stats.articles}</p>
+                  <p className="mt-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Новостей</p>
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="nr-stat border-cyan-100/80">
-          <CardContent className="p-4">
-            <div className="space-y-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100">
-                <Newspaper className="h-5 w-5" />
+            </CardContent>
+          </Card>
+        </Link>
+        <Link to="/sources" className="group block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+          <Card className="nr-stat h-full border-cyan-100/80 transition-all group-hover:-translate-y-0.5 group-hover:border-cyan-200 group-hover:shadow-md">
+            <CardContent className="p-4">
+              <div className="space-y-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 ring-1 ring-amber-100">
+                  <Rss className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-3xl font-black leading-none tracking-tight tabular-nums text-slate-950">{stats.sources}</p>
+                  <p className="mt-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Источников</p>
+                </div>
               </div>
-              <div>
-                <p className="text-3xl font-black leading-none tracking-tight tabular-nums text-slate-950">{stats.articles}</p>
-                <p className="mt-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Новостей</p>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link to="/feed" search={{ favorites: '1' }} className="group block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+          <Card className="nr-stat h-full border-cyan-100/80 transition-all group-hover:-translate-y-0.5 group-hover:border-cyan-200 group-hover:shadow-md">
+            <CardContent className="p-4">
+              <div className="space-y-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 ring-1 ring-rose-100">
+                  <Bookmark className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-3xl font-black leading-none tracking-tight tabular-nums text-slate-950">{stats.favorites}</p>
+                  <p className="mt-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">В избранном</p>
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="nr-stat border-cyan-100/80">
-          <CardContent className="p-4">
-            <div className="space-y-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 ring-1 ring-amber-100">
-                <Zap className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-3xl font-black leading-none tracking-tight tabular-nums text-slate-950">{stats.generations}</p>
-                <p className="mt-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Генераций</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="nr-stat border-cyan-100/80">
-          <CardContent className="p-4">
-            <div className="space-y-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 ring-1 ring-rose-100">
-                <Bookmark className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-3xl font-black leading-none tracking-tight tabular-nums text-slate-950">{stats.favorites}</p>
-                <p className="mt-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">В избранном</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">

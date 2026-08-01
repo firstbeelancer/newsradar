@@ -23,6 +23,7 @@ const createSchema = z.object({
   url: z.string().min(1),
   channelUsername: z.string().max(100).optional(),
   isActive: z.boolean().optional(),
+  agentId: z.string().uuid().optional(),
 });
 
 const updateSchema = z.object({
@@ -60,11 +61,12 @@ router.post("/", authMiddleware, async (req, res, next) => {
   try {
     const { workspaceId } = workspaceQuerySchema.parse(req.query);
     const input = createSchema.parse(req.body);
+    const { agentId, ...sourceInput } = input;
 
     const source = await createSource({
-      ...input,
+      ...sourceInput,
       workspaceId,
-    });
+    }, agentId);
     res.status(201).json({ success: true, data: source });
   } catch (err) {
     next(err);

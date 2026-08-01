@@ -8,6 +8,8 @@ import { Switch } from '@shared/ui/switch';
 import type { Source, CreateSourceDto, UpdateSourceDto } from '@shared/api/client';
 import type { Agent } from '@shared/api/client';
 
+const UNASSIGNED_AGENT = '__unassigned__';
+
 interface SourceFormProps {
   source: Source | null;
   agents: Agent[];
@@ -30,7 +32,7 @@ export function SourceForm({ source, agents, open, onOpenChange, onSubmit, isSub
       setName(source.name);
       setUrl(source.url);
       setType(source.type);
-      setAgentId(source.agent_id);
+      setAgentId(source.agent_id || source.agents[0]?.id || UNASSIGNED_AGENT);
       setIsActive(source.is_active);
     } else {
       setName('');
@@ -57,6 +59,7 @@ export function SourceForm({ source, agents, open, onOpenChange, onSubmit, isSub
 
     if (source) {
       await onSubmit({
+        agent_id: agentId === UNASSIGNED_AGENT ? null : agentId,
         name: name.trim(),
         url: url.trim(),
         type,
@@ -113,24 +116,26 @@ export function SourceForm({ source, agents, open, onOpenChange, onSubmit, isSub
             required
           />
 
-          {!source && (
-            <div className="space-y-1.5">
-              <Label>Агент</Label>
-              <Select value={agentId} onValueChange={setAgentId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Выберите агента" />
-                </SelectTrigger>
-                <SelectContent>
-                  {agents.map((agent) => (
-                    <SelectItem key={agent.id} value={agent.id}>
-                      {agent.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.agentId && <p className="text-xs text-danger">{errors.agentId}</p>}
-            </div>
-          )}
+          <div className="space-y-1.5">
+            <Label>Агент-владелец</Label>
+            <Select value={agentId} onValueChange={setAgentId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Выберите агента" />
+              </SelectTrigger>
+              <SelectContent>
+                {source && <SelectItem value={UNASSIGNED_AGENT}>Без агента</SelectItem>}
+                {agents.map((agent) => (
+                  <SelectItem key={agent.id} value={agent.id}>
+                    {agent.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Агент определяет, по каким ключевым словам и правилам будут оцениваться новости этого источника.
+            </p>
+            {errors.agentId && <p className="text-xs text-danger">{errors.agentId}</p>}
+          </div>
 
           <div className="flex items-center gap-3">
             <Switch checked={isActive} onCheckedChange={setIsActive} />

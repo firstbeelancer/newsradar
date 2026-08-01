@@ -188,6 +188,8 @@ interface BackendDashboardSummary {
   total_articles?: number;
   favoriteCount?: number;
   favorite_count?: number;
+  sourceCount?: number;
+  source_count?: number;
 }
 
 interface BackendTemplate {
@@ -693,6 +695,13 @@ export interface AgentStats {
 
 export type SourceType = 'rss' | 'telegram' | 'web';
 
+export interface SourceAgentRef {
+  id: string;
+  name: string;
+  color?: string | null;
+  icon?: string | null;
+}
+
 export interface Source {
   id: string;
   agent_id: string;
@@ -705,6 +714,7 @@ export interface Source {
   last_error?: string;
   created_at: string;
   updated_at: string;
+  agents: SourceAgentRef[];
 }
 
 interface BackendSource {
@@ -730,12 +740,28 @@ interface BackendSource {
   workspace_id?: string;
   channelUsername?: string | null;
   fetchSchedule?: string | null;
+  agents?: Array<{
+    id: string;
+    name: string;
+    color?: string | null;
+    icon?: string | null;
+  }>;
 }
 
 export function normalizeSource(raw: BackendSource): Source {
+  const sourceAgents = Array.isArray(raw.agents)
+    ? raw.agents.map((agent) => ({
+        id: agent.id,
+        name: agent.name,
+        color: agent.color ?? null,
+        icon: agent.icon ?? null,
+      }))
+    : [];
+  const fallbackAgentId = raw.agent_id ?? raw.agentId ?? sourceAgents[0]?.id ?? '';
+
   return {
     id: raw.id,
-    agent_id: raw.agent_id ?? raw.agentId ?? '',
+    agent_id: fallbackAgentId,
     name: raw.name,
     url: raw.url,
     type: raw.type,
@@ -745,6 +771,7 @@ export function normalizeSource(raw: BackendSource): Source {
     last_error: raw.last_error ?? raw.lastError ?? undefined,
     created_at: raw.created_at ?? raw.createdAt ?? new Date(0).toISOString(),
     updated_at: raw.updated_at ?? raw.updatedAt ?? new Date(0).toISOString(),
+    agents: sourceAgents,
   };
 }
 
@@ -760,6 +787,8 @@ export interface CreateSourceDto {
 }
 
 export interface UpdateSourceDto {
+  agent_id?: string | null;
+  agentId?: string | null;
   type?: SourceType;
   name?: string;
   url?: string;
@@ -772,6 +801,7 @@ interface BackendCreateSourceDto {
   type: SourceType;
   name: string;
   url: string;
+  agentId?: string;
   channelUsername?: string;
   isActive?: boolean;
 }
@@ -793,6 +823,8 @@ function toBackendCreateSourceDto(data: CreateSourceDto): BackendCreateSourceDto
   const isActive = data.isActive ?? data.is_active;
   if (typeof isActive === 'boolean') payload.isActive = isActive;
   if (data.channelUsername) payload.channelUsername = data.channelUsername;
+  const agentId = data.agent_id ?? data.agentId;
+  if (agentId) payload.agentId = agentId;
   return payload;
 }
 
@@ -1194,10 +1226,47 @@ export const chipFiltersApi = {
     ),
 };
 
+async function listAllSources(): Promise<Source[]> {
+  const collected: Source[] = [];
+  const seenCursors = new Set<string>();
+  let cursor: string | null = null;
+
+  do {
+    const query = new URLSearchParams({ limit: '100' });
+    if (cursor) query.set('cursor', cursor);
+
+    const page = await apiGet<BackendCursorResponse<BackendSource>>(`/sources?${query.toString()}`);
+    collected.push(...page.data.map(normalizeSource));
+
+    const nextCursor = page.next_cursor ?? page.nextCursor ?? null;
+    const hasMore = page.has_more ?? page.hasMore ?? false;
+    if (!hasMore || !nextCursor || seenCursors.has(nextCursor)) break;
+
+    seenCursors.add(nextCursor);
+    cursor = nextCursor;
+  } while (cursor);
+
+  return Array.from(new Map(collected.map((source) => [source.id, source])).values());
+}
+
 // Sources
 export const sourcesApi = {
-  list: () => apiGet<{ data: BackendSource[] }>('/sources?limit=100').then((res) => (res.data ?? []).map(normalizeSource)),
-  create: (data: CreateSourceDto) => apiPost<BackendSource, BackendCreateSourceDto>('/sources', toBackendCreateSourceDto(data)).then(normalizeSource),
+  list: listAllSources,
+  create: async (data: CreateSourceDto) => {
+    const raw = await apiPost<BackendSource, BackendCreateSourceDto>('/sources', toBackendCreateSourceDto(data));
+    const source = normalizeSource(raw);
+    const agentId = data.agent_id ?? data.agentId;
+    if (agentId) {
+      source.agent_id = agentId;
+      try {
+        const agent = normalizeAgent(await apiGet<BackendAgent>(`/agents/${agentId}`));
+        source.agents = [{ id: agent.id, name: agent.name, color: agent.color, icon: agent.icon }];
+      } catch {
+        // The source and relation are already created; the page can hydrate the label from its agents store.
+      }
+    }
+    return source;
+  },
   update: (id: string, data: UpdateSourceDto) => apiPut<BackendSource, BackendUpdateSourceDto>(`/sources/${id}`, toBackendUpdateSourceDto(data)).then(normalizeSource),
   delete: (id: string) => apiDelete<void>(`/sources/${id}`),
   test: (id: string) => apiPost<SourceTestResult>(`/sources/${id}/test`, {}),
@@ -1339,6 +1408,7 @@ export const dashboardApi = {
     apiGet<BackendDashboardSummary>('/dashboard').then((payload) => ({
       total_articles: Number(payload.total_articles ?? payload.totalArticles ?? 0),
       favorite_count: Number(payload.favorite_count ?? payload.favoriteCount ?? 0),
+      source_count: Number(payload.source_count ?? payload.sourceCount ?? 0),
     })),
   pipeline: () =>
     apiGet<{
@@ -1395,6 +1465,7 @@ export const dashboardApi = {
       ingestQueued?: number;
       scoreQueued?: number;
       totalQueued?: number;
+      dedupedCleared?: number;
       message?: string;
     }>('/dashboard/pipeline/retry', {}),
   collectAll: () =>

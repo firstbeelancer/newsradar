@@ -34,7 +34,7 @@ const initialState: SourcesState = {
   error: null,
 };
 
-export const useSourcesStore = create<SourcesState & SourcesActions>((set) => ({
+export const useSourcesStore = create<SourcesState & SourcesActions>((set, get) => ({
   ...initialState,
 
   fetchSources: async () => {
@@ -82,10 +82,71 @@ export const useSourcesStore = create<SourcesState & SourcesActions>((set) => ({
   updateSource: async (id, data) => {
     set({ isSubmitting: true, error: null });
     try {
+      const previous = get().sources.find((source) => source.id === id) ?? null;
       const updated = await sourcesApi.update(id, data);
+
+      const assignmentWasProvided = data.agent_id !== undefined || data.agentId !== undefined;
+      if (assignmentWasProvided) {
+        const desiredAgentId = data.agent_id ?? data.agentId ?? null;
+        const currentAgentIds = previous
+          ? Array.from(new Set([
+              ...previous.agents.map((agent) => agent.id),
+              ...(previous.agent_id ? [previous.agent_id] : []),
+            ]))
+          : [];
+
+        if (desiredAgentId && !currentAgentIds.includes(desiredAgentId)) {
+          await agentsApi.linkSource(desiredAgentId, id);
+        }
+        await Promise.all(
+          currentAgentIds
+            .filter((agentId) => agentId !== desiredAgentId)
+            .map((agentId) => agentsApi.unlinkSource(agentId, id))
+        );
+
+        let assignedAgents: Source['agents'] = [];
+        if (desiredAgentId) {
+          const knownAgent = previous?.agents.find((agent) => agent.id === desiredAgentId);
+          if (knownAgent) {
+            assignedAgents = [knownAgent];
+          } else {
+            try {
+              const agent = await agentsApi.get(desiredAgentId);
+              assignedAgents = [{ id: agent.id, name: agent.name, color: agent.color, icon: agent.icon }];
+            } catch {
+              assignedAgents = [];
+            }
+          }
+        }
+
+        const reassigned: Source = {
+          ...updated,
+          agent_id: desiredAgentId ?? '',
+          agents: assignedAgents,
+        };
+        set((state) => ({
+          sources: state.sources.map((source) => source.id === id ? reassigned : source),
+          currentSource: state.currentSource?.id === id ? reassigned : state.currentSource,
+          isSubmitting: false,
+        }));
+        return;
+      }
+
       set((state) => ({
-        sources: state.sources.map((s) => (s.id === id ? updated : s)),
-        currentSource: state.currentSource?.id === id ? updated : state.currentSource,
+        sources: state.sources.map((source) => source.id === id
+          ? {
+              ...updated,
+              agent_id: updated.agent_id || source.agent_id,
+              agents: updated.agents.length > 0 ? updated.agents : source.agents,
+            }
+          : source),
+        currentSource: state.currentSource?.id === id
+          ? {
+              ...updated,
+              agent_id: updated.agent_id || state.currentSource.agent_id,
+              agents: updated.agents.length > 0 ? updated.agents : state.currentSource.agents,
+            }
+          : state.currentSource,
         isSubmitting: false,
       }));
     } catch (err) {

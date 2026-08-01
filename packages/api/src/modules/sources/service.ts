@@ -1,17 +1,40 @@
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, inArray, lt, or, sql } from "drizzle-orm";
 import { db } from "../../db/index.js";
-import { sources, articles, agentSources } from "../../db/schema.js";
+import { sources, articles, agents, agentSources } from "../../db/schema.js";
 import { AppError } from "../../middleware/error-handler.js";
 import type { PaginatedResult, Cursor } from "../../lib/pagination.js";
 import { encodeCursor, decodeCursor } from "../../lib/pagination.js";
 import type { Source, NewSource } from "../../db/types.js";
 import { probeRssBody, probeTelegramBody, telegramPreviewUrl } from "./source-probe.js";
 
+export interface SourceAgentRef {
+  id: string;
+  name: string;
+  color: string | null;
+  icon: string | null;
+}
+
+export type SourceWithAgents = Source & { agents: SourceAgentRef[] };
+
 // ─── CRUD ───
 
-export async function createSource(data: NewSource) {
-  const [source] = await db.insert(sources).values(data).returning();
-  return source;
+export async function createSource(data: NewSource, agentId?: string) {
+  if (agentId) {
+    const agent = await db.query.agents.findFirst({
+      where: and(eq(agents.id, agentId), eq(agents.workspaceId, data.workspaceId)),
+    });
+    if (!agent) {
+      throw new AppError(404, "Agent not found", "AGENT_NOT_FOUND");
+    }
+  }
+
+  return db.transaction(async (tx) => {
+    const [source] = await tx.insert(sources).values(data).returning();
+    if (agentId) {
+      await tx.insert(agentSources).values({ agentId, sourceId: source.id });
+    }
+    return source;
+  });
 }
 
 export async function getSourceById(id: string, workspaceId: string) {
@@ -27,7 +50,7 @@ export async function getSourceById(id: string, workspaceId: string) {
 export async function listSources(
   workspaceId: string,
   params: { limit: number; cursor?: string | null; type?: string; isActive?: boolean }
-): Promise<PaginatedResult<Source>> {
+): Promise<PaginatedResult<SourceWithAgents>> {
   const conditions = [eq(sources.workspaceId, workspaceId)];
 
   if (params.type) {
@@ -41,22 +64,26 @@ export async function listSources(
     .select()
     .from(sources)
     .where(and(...conditions))
-    .orderBy(desc(sources.createdAt))
+    .orderBy(desc(sources.createdAt), desc(sources.id))
     .limit(params.limit + 1);
 
   if (params.cursor) {
     const decoded = decodeCursor(params.cursor);
-    if (decoded?.sortValue) {
+    if (decoded?.sortValue && decoded.id) {
+      const cursorDate = new Date(decoded.sortValue);
       query = db
         .select()
         .from(sources)
         .where(
           and(
             ...conditions,
-            sql`${sources.createdAt} < ${new Date(decoded.sortValue)}`
+            or(
+              lt(sources.createdAt, cursorDate),
+              and(eq(sources.createdAt, cursorDate), lt(sources.id, decoded.id))
+            )
           )
         )
-        .orderBy(desc(sources.createdAt))
+        .orderBy(desc(sources.createdAt), desc(sources.id))
         .limit(params.limit + 1);
     }
   }
@@ -74,7 +101,46 @@ export async function listSources(
         } as Cursor)
       : null;
 
-  return { data, nextCursor, hasMore };
+  const assignments = data.length > 0
+    ? await db
+        .select({
+          sourceId: agentSources.sourceId,
+          id: agents.id,
+          name: agents.name,
+          color: agents.color,
+          icon: agents.icon,
+        })
+        .from(agentSources)
+        .innerJoin(agents, eq(agentSources.agentId, agents.id))
+        .where(
+          and(
+            inArray(agentSources.sourceId, data.map((source) => source.id)),
+            eq(agents.workspaceId, workspaceId)
+          )
+        )
+        .orderBy(agents.position, agents.name)
+    : [];
+
+  const agentsBySource = new Map<string, SourceAgentRef[]>();
+  for (const assignment of assignments) {
+    const refs = agentsBySource.get(assignment.sourceId) ?? [];
+    refs.push({
+      id: assignment.id,
+      name: assignment.name,
+      color: assignment.color,
+      icon: assignment.icon,
+    });
+    agentsBySource.set(assignment.sourceId, refs);
+  }
+
+  return {
+    data: data.map((source) => ({
+      ...source,
+      agents: agentsBySource.get(source.id) ?? [],
+    })),
+    nextCursor,
+    hasMore,
+  };
 }
 
 export async function updateSource(

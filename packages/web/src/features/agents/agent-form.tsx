@@ -411,7 +411,10 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
                     <Plus className="h-4 w-4" />
                   </Button>
                 </div>
-                <p className="text-xs text-muted-foreground">Enter или кнопка + чтобы добавить. Теги используются для поиска и скоринга.</p>
+                <p className="text-xs text-muted-foreground">
+                  Агент не ищет весь интернет по этим словам: он забирает новости из привязанных источников,
+                  а затем использует ключевые слова для оценки релевантности и сортировки.
+                </p>
               </div>
 
               {/* Icon */}

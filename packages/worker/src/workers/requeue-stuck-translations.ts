@@ -12,6 +12,7 @@ import {
   scoreArticleQueue,
   translateQueue,
 } from "../connection/redis.js";
+import { TRANSLATION_RECOVERY_STATUSES } from "./pipeline-state.js";
 
 const MAX_BATCH = 40;
 const STUCK_AFTER_MS = 10 * 60 * 1000; // 10 minutes without update
@@ -38,13 +39,28 @@ export async function requeueStuckTranslations(logger: Logger): Promise<number> 
   const stamp = Date.now();
   let queued = 0;
 
+  // Older worker versions left terminal raw duplicates with needs_translation=true.
+  // They have nothing to translate, but they kept the status bar permanently stuck.
+  const terminalDuplicates = await db
+    .select({ id: articles.id })
+    .from(articles)
+    .where(and(eq(articles.status, "deduped"), eq(articles.needsTranslation, true)))
+    .limit(MAX_BATCH);
+
+  if (terminalDuplicates.length > 0) {
+    await db
+      .update(articles)
+      .set({ needsTranslation: false, updatedAt: new Date() })
+      .where(inArray(articles.id, terminalDuplicates.map((row) => row.id)));
+  }
+
   const stuck = await db
     .select({ id: articles.id })
     .from(articles)
     .where(
       and(
         eq(articles.needsTranslation, true),
-        inArray(articles.status, ["fetched", "new", "translated"]),
+        inArray(articles.status, [...TRANSLATION_RECOVERY_STATUSES]),
         lt(articles.updatedAt, threshold)
       )
     )
@@ -218,7 +234,8 @@ export async function requeueStuckTranslations(logger: Logger): Promise<number> 
     polluted.length > 0 ||
     stuck.length > 0 ||
     stuckTranslated.length > 0 ||
-    stuckAnalyzed.length > 0
+    stuckAnalyzed.length > 0 ||
+    terminalDuplicates.length > 0
   ) {
     logger.info(
       {
@@ -227,6 +244,7 @@ export async function requeueStuckTranslations(logger: Logger): Promise<number> 
         polluted: polluted.length,
         stuckTranslated: stuckTranslated.length,
         stuckAnalyzed: stuckAnalyzed.length,
+        clearedTerminalDuplicates: terminalDuplicates.length,
       },
       "Requeued stuck pipeline articles"
     );
