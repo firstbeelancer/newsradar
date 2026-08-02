@@ -121,7 +121,7 @@ async function summarizeToRussian(
         {
           role: "system",
           content:
-            "Ты профессиональный редактор новостной ленты. Сожми материал в 2-3 информативных предложения на русском. Не копируй первое предложение механически, выдели суть, причину и важный контекст. Верни ТОЛЬКО готовый summary на русском. Без рассуждений, без English commentary, без XML/think-тегов, без фраз вроде «The user wants».",
+            "Ты профессиональный редактор новостной ленты. Сожми материал в 2–3 информативных предложения на русском. Не копируй первое предложение механически: выдели суть, причину и важный контекст. Верни ТОЛЬКО готовое русское резюме — без рассуждений, английских комментариев, XML/think-тегов и служебных инструкций.",
         },
         {
           role: "user",
@@ -187,7 +187,7 @@ async function translateViaGoogleGtx(
 
 /** Instruction-echo / chain-of-thought markers from free reasoning models (EN + RU). */
 const AI_LEAK_HEAD_RE =
-  /the user wants me to|i need to (?:translate|summarize|extract|compress|write|create)|let me (?:create|write|summarize|translate|extract|make|compress)|here(?:'s| is) (?:the )?(?:translation|summary)|based on the title information|however,? the actual article content is not provided|i'll (?:summarize|translate|create|write)|as an ai|looking at the (?:title|headline|material)|the material is (?:quite )?short|compress (?:this|the) (?:news )?material|пользователь хочет|пользователь просит|мне нужно (?:сжать|суммировать|перевести|выделить|создать)|нужно (?:сжать|суммировать|перевести|выделить суть)|я должен (?:сжать|суммировать|перевести)|верн[уи] только (?:готовый )?summary|без рассуждений/i;
+  /the user wants(?: me to|[^.]{0,80}(?:summary|translation))|(?:i )?need to (?:translate|summarize|extract|compress|write|create)|let me (?:create|write|summarize|translate|extract|make|compress)|here(?:'s| is) (?:the )?(?:translation|summary)|based on the title information|however,? the actual article content is not provided|please (?:provide|send|share) (?:the )?(?:full )?(?:text|article|material)|i'll (?:summarize|translate|create|write)|as an ai|looking at the (?:title|headline|material)|the material is (?:quite )?short|compress (?:this|the) (?:news )?material|пользователь хочет|пользователь просит|мне нужно (?:сжать|суммировать|перевести|выделить|создать)|нужно (?:сжать|суммировать|перевести|выделить суть)|я должен (?:сжать|суммировать|перевести)|верн[уи] только (?:готовый )?summary|без рассуждений|укажите полный текст|пожалуйста,? предоставьте (?:полный )?текст|на основании заголовка/i;
 
 export function looksLikeRussian(text: string): boolean {
   const sample = text.slice(0, 400);
@@ -202,6 +202,41 @@ export function isPollutedAiText(text: string | null | undefined): boolean {
   const sample = text.slice(0, 700);
   if (/<\/?think\b/i.test(sample)) return true;
   return AI_LEAK_HEAD_RE.test(sample);
+}
+
+/**
+ * A non-Russian source must never be persisted as a ready headline without
+ * any Cyrillic. Some translation providers intentionally keep short product
+ * names unchanged, so retain that name but make the UI state unambiguously RU.
+ */
+export function ensureRussianHeadline(translatedTitle: string, sourceTitle: string): string {
+  const translated = stripEditorialTitlePrefix(cleanArticleText(translatedTitle));
+  if (translated && looksLikeRussian(translated) && !isPollutedAiText(translated)) {
+    return translated;
+  }
+
+  const source = stripEditorialTitlePrefix(cleanArticleText(sourceTitle));
+  if (source && looksLikeRussian(source) && !isPollutedAiText(source)) {
+    return source;
+  }
+
+  const retainedName = translated && !isPollutedAiText(translated) ? translated : source;
+  return retainedName ? `Новость: ${retainedName}` : "Новость без заголовка";
+}
+
+/** Reject a provider fallback that returned the foreign body unchanged. */
+export function ensureRussianBody(translatedBody: string, sourceBody: string): string {
+  const translated = cleanArticleText(translatedBody);
+  if (translated && looksLikeRussian(translated) && !isPollutedAiText(translated)) {
+    return translated;
+  }
+
+  const source = cleanArticleText(sourceBody);
+  if (source && detectLanguage(source) === "ru" && !isPollutedAiText(source)) {
+    return source;
+  }
+
+  throw new Error("Translation failed: article body is not Russian after provider fallback");
 }
 
 /**
@@ -330,13 +365,14 @@ export async function translateArticle(
   const normalizedTitle = stripEditorialTitlePrefix(cleanArticleText(title));
   const normalizedDescription = cleanArticleText(description ?? "");
   const normalizedContent = cleanArticleText(content ?? "");
-  const detectedLang = detectLanguage(`${normalizedTitle}\n${normalizedDescription || normalizedContent}`);
   const sourceBody =
     normalizedContent.length > normalizedDescription.length + 80
       ? normalizedContent
       : normalizedDescription || normalizedContent;
+  const titleLang = detectLanguage(normalizedTitle);
+  const bodyLang = sourceBody ? detectLanguage(sourceBody) : "ru";
 
-  if (detectedLang === "ru") {
+  if (titleLang === "ru" && bodyLang === "ru") {
     const aiSummary = await summarizeToRussian(sourceBody, normalizedTitle, workspaceId);
     const fallbackPreview = buildTitleOnlyPreview(normalizedTitle);
     const safeSummary =
@@ -355,31 +391,43 @@ export async function translateArticle(
   }
 
   const [translatedTitle, translatedBody] = await Promise.all([
-    translateToRussian(normalizedTitle, detectedLang, workspaceId),
+    titleLang === "ru"
+      ? Promise.resolve(normalizedTitle)
+      : translateToRussian(normalizedTitle, titleLang, workspaceId),
     sourceBody
-      ? translateToRussian(sourceBody, detectedLang, workspaceId)
+      ? bodyLang === "ru"
+        ? Promise.resolve(sourceBody)
+        : translateToRussian(sourceBody, bodyLang, workspaceId)
       : Promise.resolve(""),
   ]);
+  const safeTranslatedTitle = ensureRussianHeadline(translatedTitle, normalizedTitle);
+  const safeTranslatedBody = sourceBody
+    ? bodyLang === "ru"
+      ? sourceBody
+      : ensureRussianBody(translatedBody, sourceBody)
+    : "";
   const translatedSummary = await summarizeToRussian(
-    translatedBody || sourceBody,
-    translatedTitle || normalizedTitle,
+    safeTranslatedBody,
+    safeTranslatedTitle,
     workspaceId
   );
-  const fallbackPreview = buildTitleOnlyPreview(translatedTitle || normalizedTitle);
+  const fallbackPreview = buildTitleOnlyPreview(safeTranslatedTitle);
   const extractive = buildExtractiveSummary(
-    translatedBody || sourceBody,
-    translatedTitle || normalizedTitle
+    safeTranslatedBody,
+    safeTranslatedTitle
   );
   const safeSummary =
     (translatedSummary && !isPollutedAiText(translatedSummary) ? translatedSummary : "") ||
     (extractive && !isPollutedAiText(extractive) ? extractive : "") ||
-    (translatedBody && !isPollutedAiText(translatedBody) ? translatedBody.slice(0, 700) : "") ||
+    (safeTranslatedBody && !isPollutedAiText(safeTranslatedBody)
+      ? safeTranslatedBody.slice(0, 700)
+      : "") ||
     fallbackPreview;
 
   return {
-    title: translatedTitle || normalizedTitle,
+    title: safeTranslatedTitle,
     description: safeSummary,
-    content: translatedBody || normalizedContent,
+    content: safeTranslatedBody || normalizedContent,
     aiSummary: safeSummary,
     language: "ru",
   };

@@ -35,6 +35,9 @@ function buildArticleConditions(filters: ArticleFilters): SQL[] {
   }
   if (filters.status) {
     conditions.push(eq(articles.status, filters.status));
+  } else {
+    // Raw duplicates are terminal pipeline artifacts, not user-facing news.
+    conditions.push(ne(articles.status, "deduped"));
   }
   if (filters.isFavorite !== undefined) {
     conditions.push(eq(articles.isFavorite, filters.isFavorite));
@@ -257,6 +260,7 @@ export async function searchArticles(
 
   const conditions = [
     eq(articles.workspaceId, workspaceId),
+    ne(articles.status, "deduped"),
     sql`to_tsvector('russian', ${articles.title} || ' ' || COALESCE(${articles.description}, '')) @@ to_tsquery('russian', ${tsQuery})`,
   ];
   if (params.agentId) {

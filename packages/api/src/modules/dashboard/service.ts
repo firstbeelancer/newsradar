@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import { agents, articles, operationLogs, workspaces, agentSources, sources } from "../../db/schema.js";
 import { AppError } from "../../middleware/error-handler.js";
@@ -60,7 +60,7 @@ export async function getDashboardData(params: { userId: string; workspaceId: st
   const totalArticleRows = await db
     .select({ count: count(articles.id) })
     .from(articles)
-    .where(eq(articles.workspaceId, params.workspaceId));
+    .where(and(eq(articles.workspaceId, params.workspaceId), ne(articles.status, "deduped")));
 
   const sourceCountRows = await db
     .select({ count: count(sources.id) })

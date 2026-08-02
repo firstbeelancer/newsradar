@@ -4,7 +4,7 @@
  * - status=translated without progress → scoring (summary already done)
  * - status=analyzed without score → scoring
  */
-import { and, eq, ilike, inArray, lt, or, sql } from "drizzle-orm";
+import { and, eq, ilike, inArray, lt, ne, or, sql } from "drizzle-orm";
 import type { Logger } from "pino";
 import { db } from "../db/index.js";
 import { articles } from "../db/schema.js";
@@ -96,32 +96,48 @@ export async function requeueStuckTranslations(logger: Logger): Promise<number> 
     .select({ id: articles.id })
     .from(articles)
     .where(
-      or(
-        ilike(articles.title, "<think%"),
-        ilike(articles.title, "%The user wants me to%"),
-        ilike(articles.title, "%I need to translate%"),
-        ilike(articles.title, "%I need to summarize%"),
-        sql`${articles.title} LIKE '%</think>%'`,
-        ilike(articles.description, "%The user wants me to%"),
-        ilike(articles.description, "%I need to summarize%"),
-        ilike(articles.description, "%I need to translate%"),
-        ilike(articles.description, "%Let me create%"),
-        ilike(articles.description, "%based on the title information%"),
-        ilike(articles.description, "%Пользователь хочет%"),
-        ilike(articles.description, "%мне нужно сжать%"),
-        ilike(articles.description, "%The material is%"),
-        ilike(articles.description, "%compress this news%"),
-        ilike(articles.description, "%compress the news%"),
-        ilike(articles.aiSummary, "%The user wants me to%"),
-        ilike(articles.aiSummary, "%I need to summarize%"),
-        ilike(articles.aiSummary, "%I need to translate%"),
-        ilike(articles.aiSummary, "%Let me create%"),
-        ilike(articles.aiSummary, "%based on the title information%"),
-        ilike(articles.aiSummary, "%Пользователь хочет%"),
-        ilike(articles.aiSummary, "%мне нужно сжать%"),
-        ilike(articles.aiSummary, "%The material is%"),
-        ilike(articles.aiSummary, "%compress this news%"),
-        ilike(articles.aiSummary, "%compress the news%")
+      and(
+        ne(articles.status, "deduped"),
+        inArray(articles.status, ["translated", "analyzed", "scored", "published"]),
+        or(
+          ilike(articles.title, "<think%"),
+          ilike(articles.title, "%The user wants%"),
+          ilike(articles.title, "%Need to translate%"),
+          ilike(articles.title, "%Need to summarize%"),
+          sql`${articles.title} LIKE '%</think>%'`,
+          ilike(articles.description, "%The user wants%"),
+          ilike(articles.description, "%Need to summarize%"),
+          ilike(articles.description, "%Need to translate%"),
+          ilike(articles.description, "%Let me create%"),
+          ilike(articles.description, "%based on the title information%"),
+          ilike(articles.description, "%Please provide the full text%"),
+          ilike(articles.description, "%Пользователь хочет%"),
+          ilike(articles.description, "%мне нужно сжать%"),
+          ilike(articles.description, "%Укажите полный текст%"),
+          ilike(articles.description, "%Пожалуйста, предоставьте полный текст%"),
+          ilike(articles.description, "%На основании заголовка%"),
+          ilike(articles.description, "%The material is%"),
+          ilike(articles.description, "%compress this news%"),
+          ilike(articles.description, "%compress the news%"),
+          ilike(articles.aiSummary, "%The user wants%"),
+          ilike(articles.aiSummary, "%Need to summarize%"),
+          ilike(articles.aiSummary, "%Need to translate%"),
+          ilike(articles.aiSummary, "%Let me create%"),
+          ilike(articles.aiSummary, "%based on the title information%"),
+          ilike(articles.aiSummary, "%Please provide the full text%"),
+          ilike(articles.aiSummary, "%Пользователь хочет%"),
+          ilike(articles.aiSummary, "%мне нужно сжать%"),
+          ilike(articles.aiSummary, "%Укажите полный текст%"),
+          ilike(articles.aiSummary, "%Пожалуйста, предоставьте полный текст%"),
+          ilike(articles.aiSummary, "%На основании заголовка%"),
+          ilike(articles.aiSummary, "%The material is%"),
+          ilike(articles.aiSummary, "%compress this news%"),
+          ilike(articles.aiSummary, "%compress the news%"),
+          and(
+            sql`COALESCE(${articles.detectedLang}, '') <> 'ru'`,
+            sql`${articles.title} !~ '[А-Яа-яЁё]'`
+          )
+        )
       )
     )
     .limit(MAX_BATCH);

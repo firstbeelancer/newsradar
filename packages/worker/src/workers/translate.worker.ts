@@ -63,11 +63,22 @@ export async function processTranslate(
   // Detect language from content
   const sourceTitle = force ? article.originalTitle ?? article.title : article.title;
   const sourceDescription = force ? article.originalDescription ?? article.description : article.description;
-  const sourceContent = article.content ?? (force ? await fetchArticleText(article.link) : "");
-  const detectedLang = detectLanguage(sourceTitle);
+  const sourceContent = force && article.language === "ru"
+    ? article.originalDescription ?? ""
+    : article.content ?? (force ? await fetchArticleText(article.link) : "");
+  const titleLang = detectLanguage(sourceTitle);
+  const sourceBody = sourceDescription ?? sourceContent;
+  const bodyLang = sourceBody ? detectLanguage(sourceBody) : "ru";
+  const detectedLang = titleLang === "ru"
+    ? bodyLang
+    : titleLang === "unknown" && bodyLang !== "ru"
+      ? bodyLang
+      : titleLang;
 
-  // If already Russian or detection says Russian, skip translation
-  if (!force && (detectedLang === "ru" || article.language === "ru")) {
+  // Skip only when both visible fields are already Russian. Stored language
+  // metadata is not trusted here because older pipeline versions marked some
+  // untranslated rows as language=ru.
+  if (!force && titleLang === "ru" && bodyLang === "ru") {
     await db
       .update(articles)
       .set({
