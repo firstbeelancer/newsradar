@@ -21,6 +21,7 @@ import { rawDedupQueue } from "../connection/redis.js";
 import type { Job } from "bullmq";
 import type { Logger } from "pino";
 import { appendCollectionResult } from "./collection-results.js";
+import { decideSourceQuarantine } from "./source-health.js";
 
 export interface FetchSourceJob {
   sourceId: string;
@@ -376,6 +377,9 @@ export async function processFetchSource(
         lastFetchAt: new Date(),
         fetchStatus: "success",
         lastError: null,
+        // errorCount stays cumulative — scoreSourceTrust reads it as an
+        // all-time error rate. Only the consecutive streak resets.
+        consecutiveErrorCount: 0,
         updatedAt: new Date(),
       })
       .where(eq(sources.id, sourceId));
@@ -415,15 +419,32 @@ export async function processFetchSource(
     const errorMessage = err instanceof Error ? err.message : String(err);
     logger.error({ sourceId, err: errorMessage }, "Source fetch failed");
 
+    const terminalFailure = isFinalAttempt(job);
+    const { streak, quarantine: shouldQuarantine } = decideSourceQuarantine({
+      previousStreak: source?.consecutiveErrorCount ?? 0,
+      isFinalAttempt: terminalFailure,
+    });
+
     await db
       .update(sources)
       .set({
         fetchStatus: "error",
-        lastError: errorMessage,
+        lastError: shouldQuarantine
+          ? `Источник отключён автоматически после ${streak} неудачных сборов подряд. Последняя ошибка: ${errorMessage}`
+          : errorMessage,
         errorCount: sql`${sources.errorCount} + 1`,
+        ...(terminalFailure ? { consecutiveErrorCount: streak as number } : {}),
+        ...(shouldQuarantine ? { isActive: false, quarantinedAt: new Date() } : {}),
         updatedAt: new Date(),
       })
       .where(eq(sources.id, sourceId));
+
+    if (shouldQuarantine) {
+      logger.warn(
+        { sourceId, sourceName: source?.name, streak, err: errorMessage },
+        "Source quarantined after repeated failures — deactivated until re-enabled"
+      );
+    }
 
     // Update operation log with the terminal source error only.
     if (operationId && isFinalAttempt(job)) {

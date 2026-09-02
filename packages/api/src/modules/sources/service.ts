@@ -150,9 +150,17 @@ export async function updateSource(
 ) {
   await getSourceById(id, workspaceId);
 
+  // Switching a source back on is the user overruling the auto-quarantine, so
+  // clear the failure streak. Without this it would be deactivated again after
+  // a single failed run instead of getting a fresh MAX_CONSECUTIVE_SOURCE_ERRORS.
+  const revival =
+    data.isActive === true
+      ? { consecutiveErrorCount: 0, quarantinedAt: null, lastError: null, fetchStatus: "never" as const }
+      : {};
+
   const [updated] = await db
     .update(sources)
-    .set({ ...data, updatedAt: new Date() })
+    .set({ ...data, ...revival, updatedAt: new Date() })
     .where(and(eq(sources.id, id), eq(sources.workspaceId, workspaceId)))
     .returning();
 

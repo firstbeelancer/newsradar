@@ -715,6 +715,8 @@ export interface Source {
   fetch_count: number;
   last_fetch_at?: string;
   last_error?: string;
+  /** Set when the worker deactivated the source after repeated failures. */
+  quarantined_at?: string;
   created_at: string;
   updated_at: string;
   agents: SourceAgentRef[];
@@ -735,6 +737,8 @@ interface BackendSource {
   last_fetch_at?: string | null;
   lastError?: string | null;
   last_error?: string | null;
+  quarantinedAt?: string | null;
+  quarantined_at?: string | null;
   createdAt?: string;
   created_at?: string;
   updatedAt?: string;
@@ -772,6 +776,7 @@ export function normalizeSource(raw: BackendSource): Source {
     fetch_count: raw.fetch_count ?? raw.fetchCount ?? 0,
     last_fetch_at: raw.last_fetch_at ?? raw.lastFetchAt ?? undefined,
     last_error: raw.last_error ?? raw.lastError ?? undefined,
+    quarantined_at: raw.quarantined_at ?? raw.quarantinedAt ?? undefined,
     created_at: raw.created_at ?? raw.createdAt ?? new Date(0).toISOString(),
     updated_at: raw.updated_at ?? raw.updatedAt ?? new Date(0).toISOString(),
     agents: sourceAgents,

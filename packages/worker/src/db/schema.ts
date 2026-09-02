@@ -149,6 +149,8 @@ export const sources = pgTable(
     lastFetchAt: timestamp("last_fetch_at", { withTimezone: true }),
     lastError: text("last_error"),
     errorCount: integer("error_count").default(0).notNull(),
+    consecutiveErrorCount: integer("consecutive_error_count").default(0).notNull(),
+    quarantinedAt: timestamp("quarantined_at", { withTimezone: true }),
     fetchStatus: varchar("fetch_status", { length: 16 }).default("never").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

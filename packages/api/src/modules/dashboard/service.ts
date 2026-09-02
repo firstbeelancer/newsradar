@@ -4,6 +4,10 @@ import { agents, articles, operationLogs, workspaces, agentSources, sources } fr
 import { AppError } from "../../middleware/error-handler.js";
 import { deduplicateCollectionSources, type CollectionSourceRef } from "./collection-sources.js";
 import {
+  COLLECTION_FINALIZE_DELAY_MS,
+  resolveFetchQueue,
+} from "../../lib/collection-dispatch.js";
+import {
   getAllQueues,
   getScoreArticleQueue,
   getTranslateQueue,
@@ -154,10 +158,11 @@ export async function collectAllAgents(params: { userId: string; workspaceId: st
 
   // Queue fetch-source jobs for each agent's active sources
   let totalQueued = 0;
+  const failedToQueue: string[] = [];
+
   if (activeAgents.length > 0) {
     try {
-      const { getFetchSourceQueue } = await import("../../lib/queues.js");
-      const fetchQueue = getFetchSourceQueue();
+      const fetchQueue = await resolveFetchQueue();
       const collectionSources: CollectionSourceRef[] = [];
 
       for (const agent of activeAgents) {
@@ -170,27 +175,40 @@ export async function collectAllAgents(params: { userId: string; workspaceId: st
         collectionSources.push(...linkedSources);
       }
 
+      // One try/catch per source: a single failing queue.add used to abort the
+      // loop and silently drop every source after it.
       for (const source of deduplicateCollectionSources(collectionSources)) {
-        await fetchQueue.add("fetch-source", {
-          sourceId: source.id,
-          operationId: log.id,
-        }, {
-          attempts: 3,
-          backoff: { type: "exponential", delay: 5000 },
-        });
-        totalQueued++;
+        try {
+          await fetchQueue.add("fetch-source", {
+            sourceId: source.id,
+            operationId: log.id,
+          }, {
+            attempts: 3,
+            backoff: { type: "exponential", delay: 5000 },
+          });
+          totalQueued++;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          failedToQueue.push(`${source.name}: ${message}`);
+          console.error(`[dashboard] Failed to queue source ${source.id}:`, message);
+        }
       }
 
-      // Add delayed finalization job
+      // Add delayed finalization job. expectedCount is what actually reached the
+      // queue — counting sources we failed to dispatch would stall finalization.
       if (totalQueued > 0) {
         await fetchQueue.add("finalize-collection", {
           operationId: log.id,
           expectedCount: totalQueued,
         }, {
-          delay: 120_000, // 2 minutes — enough for all sources
+          delay: COLLECTION_FINALIZE_DELAY_MS,
           attempts: 1,
           removeOnComplete: true,
         });
+      }
+
+      if (totalQueued === 0 && failedToQueue.length > 0) {
+        throw new Error(failedToQueue[0]);
       }
     } catch (err) {
       const queueError = err instanceof Error ? err.message : String(err);
@@ -214,12 +232,15 @@ export async function collectAllAgents(params: { userId: string; workspaceId: st
     op_id: log.id,
     status: totalQueued > 0 ? "running" : log.status,
     message: totalQueued > 0
-      ? `Сбор запущен: ${totalQueued} задач в очереди для ${activeAgents.length} агентов`
+      ? failedToQueue.length > 0
+        ? `Сбор запущен: ${totalQueued} задач в очереди (${failedToQueue.length} источников не удалось поставить)`
+        : `Сбор запущен: ${totalQueued} задач в очереди для ${activeAgents.length} агентов`
       : log.message,
     agentCount: activeAgents.length,
     agent_count: activeAgents.length,
     queuedCount: totalQueued,
     queued_count: totalQueued,
+    failedToQueue,
   };
 }
 

@@ -5,6 +5,10 @@ import { AppError } from "../../middleware/error-handler.js";
 import type { PaginatedResult, Cursor } from "../../lib/pagination.js";
 import { encodeCursor, decodeCursor } from "../../lib/pagination.js";
 import type { Agent, NewAgent } from "../../db/types.js";
+import {
+  COLLECTION_FINALIZE_DELAY_MS,
+  resolveFetchQueue,
+} from "../../lib/collection-dispatch.js";
 
 // ─── Default scoring weights ───
 // 5 AI criteria weights (percentages, must sum to ~100)
@@ -573,36 +577,16 @@ export async function triggerCollection(agentId: string, workspaceId: string, us
   let queuedCount = 0;
   let queueError: string | null = null;
 
+  const failedToQueue: string[] = [];
+
   if (activeSources.length > 0) {
+    let fetchQueue: Awaited<ReturnType<typeof resolveFetchQueue>>;
     try {
-      const { getFetchSourceQueue } = await import("../../lib/queues.js");
-      const fetchQueue = getFetchSourceQueue();
-
-      for (const source of activeSources) {
-        await fetchQueue.add("fetch-source", {
-          sourceId: source.id,
-          operationId: log.id,
-        }, {
-          attempts: 3,
-          backoff: { type: "exponential", delay: 5000 },
-        });
-        queuedCount++;
-      }
-
-      // Add a delayed finalization job to mark operation as complete
-      await fetchQueue.add("finalize-collection", {
-        operationId: log.id,
-        expectedCount: queuedCount,
-      }, {
-        delay: 60_000, // 60 seconds after last fetch job
-        attempts: 1,
-        removeOnComplete: true,
-      });
+      fetchQueue = await resolveFetchQueue();
     } catch (err) {
       queueError = err instanceof Error ? err.message : String(err);
-      console.error("[agents] Failed to queue collection jobs:", queueError);
+      console.error("[agents] Failed to reach the queue:", queueError);
 
-      // Update operation log with error
       await db
         .update(operationLogs)
         .set({
@@ -613,6 +597,69 @@ export async function triggerCollection(agentId: string, workspaceId: string, us
         .where(eq(operationLogs.id, log.id));
 
       throw new AppError(500, `Ошибка очереди сбора: ${queueError}`, "QUEUE_ERROR");
+    }
+
+    // One try/catch per source. With the loop wrapped as a whole, a single
+    // failing queue.add silently dropped every remaining source — the collection
+    // then ran short without anything saying so.
+    for (const source of activeSources) {
+      try {
+        await fetchQueue.add("fetch-source", {
+          sourceId: source.id,
+          operationId: log.id,
+        }, {
+          attempts: 3,
+          backoff: { type: "exponential", delay: 5000 },
+        });
+        queuedCount++;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        failedToQueue.push(`${source.name}: ${message}`);
+        console.error(`[agents] Failed to queue source ${source.id}:`, message);
+      }
+    }
+
+    if (queuedCount === 0) {
+      queueError = failedToQueue[0] ?? "не удалось поставить ни одной задачи";
+      await db
+        .update(operationLogs)
+        .set({
+          status: "failed",
+          message: `Ошибка очереди: ${queueError}`,
+          finishedAt: new Date(),
+        })
+        .where(eq(operationLogs.id, log.id));
+
+      throw new AppError(500, `Ошибка очереди сбора: ${queueError}`, "QUEUE_ERROR");
+    }
+
+    // expectedCount must be what actually reached the queue, otherwise
+    // finalization waits forever for sources that were never dispatched.
+    try {
+      await fetchQueue.add("finalize-collection", {
+        operationId: log.id,
+        expectedCount: queuedCount,
+      }, {
+        delay: COLLECTION_FINALIZE_DELAY_MS,
+        attempts: 1,
+        removeOnComplete: true,
+      });
+    } catch (err) {
+      // The heartbeat still reconciles stale operations, so a missing
+      // finalization job is worth logging but must not fail the collection.
+      console.error(
+        "[agents] Failed to queue collection finalization:",
+        err instanceof Error ? err.message : String(err)
+      );
+    }
+
+    if (failedToQueue.length > 0) {
+      await db
+        .update(operationLogs)
+        .set({
+          message: `Сбор запущен: ${queuedCount} из ${activeSources.length} источников (${failedToQueue.length} не удалось поставить в очередь)`,
+        })
+        .where(eq(operationLogs.id, log.id));
     }
   }
 
@@ -626,5 +673,6 @@ export async function triggerCollection(agentId: string, workspaceId: string, us
     sourceCount: linkedSources.length,
     activeSourceCount: activeSources.length,
     queuedCount,
+    failedToQueue,
   };
 }

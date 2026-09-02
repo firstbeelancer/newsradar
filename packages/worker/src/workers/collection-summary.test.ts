@@ -48,3 +48,32 @@ describe("summarizeCollectionResults", () => {
     expect(isCollectionReadyToFinalize(results, 2)).toBe(true);
   });
 });
+
+describe("поздние результаты после финализации", () => {
+  // Финализатор перестаёт ждать после лимита повторов, поэтому очень медленный
+  // источник может отчитаться, когда лог уже терминальный. Пересчёт должен
+  // менять статус, а не оставлять заниженную сводку.
+  it("частичный успех становится провалом, когда доезжает последняя ошибка", () => {
+    const early = summarizeCollectionResults([
+      { sourceId: "a", sourceName: "A", status: "success", new: 3 },
+    ]);
+    expect(early.status).toBe("success");
+
+    const late = summarizeCollectionResults([
+      { sourceId: "a", sourceName: "A", status: "success", new: 3 },
+      { sourceId: "b", sourceName: "B", status: "error", error: "timeout" },
+    ]);
+    expect(late.status).toBe("partial");
+    expect(late.errorCount).toBe(1);
+    expect(late.successCount).toBe(1);
+  });
+
+  it("сводка идемпотентна: повторный пересчёт тех же строк ничего не меняет", () => {
+    const rows = [
+      { sourceId: "a", sourceName: "A", status: "success", new: 2 },
+      { sourceId: "b", sourceName: "B", status: "error", error: "404" },
+    ];
+
+    expect(summarizeCollectionResults(rows)).toEqual(summarizeCollectionResults(rows));
+  });
+});

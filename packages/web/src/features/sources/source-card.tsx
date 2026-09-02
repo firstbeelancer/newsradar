@@ -1,7 +1,7 @@
 import { Card, CardContent } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
-import { Rss, Send, Globe, Pencil, Trash2, TestTube, Download, Bot } from 'lucide-react';
+import { Rss, Send, Globe, Pencil, Trash2, TestTube, Download, Bot, PauseCircle } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import type { Source, SourceAgentRef } from '@shared/api/client';
 
@@ -80,8 +80,21 @@ export function SourceCard({ source, assignedAgents, onEdit, onDelete, onTest, o
               )}
             </div>
 
-            {source.last_error && (
-              <p className="mt-1 text-xs text-danger">{source.last_error}</p>
+            {source.quarantined_at ? (
+              <div className="mt-2 rounded-lg border border-warning/25 bg-warning-light p-2">
+                <p className="flex items-center gap-1.5 text-[11px] font-semibold text-warning">
+                  <PauseCircle className="h-3.5 w-3.5 shrink-0" />
+                  Отключён автоматически после серии неудачных сборов
+                </p>
+                {source.last_error && (
+                  <p className="mt-1 text-[11px] leading-snug text-warning/85">{source.last_error}</p>
+                )}
+                <p className="mt-1 text-[11px] text-warning/70">
+                  Почините URL и включите обратно — счётчик ошибок сбросится.
+                </p>
+              </div>
+            ) : (
+              source.last_error && <p className="mt-1 text-xs text-danger">{source.last_error}</p>
             )}
           </div>
         </div>
@@ -93,7 +106,7 @@ export function SourceCard({ source, assignedAgents, onEdit, onDelete, onTest, o
             onClick={() => onToggleActive(source)}
             className={cn(
               'h-7 text-xs gap-1.5',
-              !source.is_active && 'bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-600 hover:to-emerald-600 shadow-sm'
+              !source.is_active && 'bg-success text-white hover:bg-[#0c7350] shadow-[var(--shadow-xs)]'
             )}
           >
             <div className={cn(
