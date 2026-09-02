@@ -215,9 +215,9 @@ function SourceToggleList({ agentId, onSourceDeleted }: { agentId: string; onSou
                   <p className="text-xs font-medium truncate leading-tight">{source.name}</p>
                   {probe && (
                     probe.success ? (
-                      <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-600" />
+                      <CheckCircle2 className="h-3 w-3 shrink-0 text-success" />
                     ) : (
-                      <XCircle className="h-3 w-3 shrink-0 text-rose-600" />
+                      <XCircle className="h-3 w-3 shrink-0 text-danger" />
                     )
                   )}
                 </div>

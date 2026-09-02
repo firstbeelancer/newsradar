@@ -123,7 +123,7 @@ export function AgentsListPage() {
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight">Агенты</h1>
+          <h1 className="nr-page-title">Агенты</h1>
           <p className="text-muted-foreground mt-1">
             {agents.length} {agents.length === 1 ? 'агент' : agents.length < 5 ? 'агента' : 'агентов'}
           </p>

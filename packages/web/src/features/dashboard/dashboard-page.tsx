@@ -232,19 +232,22 @@ export function DashboardPage() {
   };
 
   return (
-    <div className="min-w-0 space-y-6 overflow-x-hidden">
-      <section className="nr-hero rounded-3xl p-5 sm:p-6">
-        <div className="relative z-10 flex min-w-0 flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div className="min-w-0 space-y-3">
-            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-200/70 bg-white/70 px-3 py-1 text-[11px] font-semibold text-cyan-800 shadow-sm">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+    <div className="min-w-0 space-y-7 overflow-x-hidden">
+      <section className="nr-hero nr-enter-1 rounded-3xl p-6 sm:p-8">
+        <div className="relative z-10 flex min-w-0 flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0 space-y-4">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-white/75 backdrop-blur-sm">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-70" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              </span>
               Рабочее пространство готово
             </div>
             <div>
-              <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
-                Привет, {user?.name?.split(' ')[0] || 'пользователь'}!
+              <h1 className="font-display text-[26px] font-bold leading-[1.08] tracking-[-0.035em] text-white sm:text-[34px]">
+                Привет, {user?.name?.split(' ')[0] || 'пользователь'}
               </h1>
-              <p className="mt-1.5 max-w-xl text-sm text-slate-600">
+              <p className="mt-2.5 max-w-md text-[13.5px] leading-relaxed text-white/60">
                 Сводка дня: сбор, агенты и избранное — в одном спокойном экране.
               </p>
             </div>
@@ -252,18 +255,30 @@ export function DashboardPage() {
               type="button"
               onClick={handleManualRefresh}
               title="Обновить данные"
-              className="inline-flex items-center gap-1.5 rounded-full border border-cyan-100 bg-white/80 px-3 py-1 text-[11px] font-semibold text-slate-500 transition hover:border-cyan-300 hover:text-accent"
+              className="group inline-flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-1 text-[11px] font-semibold text-white/55 transition-colors hover:border-white/35 hover:text-white/90"
             >
-              <RefreshCw className="h-3 w-3" />
+              <RefreshCw className="h-3 w-3 transition-transform duration-500 group-hover:rotate-180" />
               {formatRefreshLabel(lastRefreshedAt)}
             </button>
           </div>
           <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
-            <Button variant="danger" size="sm" onClick={handleDeleteAllArticles} loading={deleteAllLoading} className="min-w-0 justify-center px-2 sm:px-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleDeleteAllArticles}
+              loading={deleteAllLoading}
+              className="min-w-0 justify-center border border-white/12 px-2 text-white/70 hover:bg-white/10 hover:text-white sm:px-3"
+            >
               <Trash2 className="h-4 w-4" />
               <span>Удалить</span>
             </Button>
-            <Button variant="outline" size="sm" onClick={handleRescore} loading={rescoreLoading} className="min-w-0 justify-center border-white/70 bg-white/70 px-2 sm:px-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleRescore}
+              loading={rescoreLoading}
+              className="min-w-0 justify-center border border-white/12 px-2 text-white/70 hover:bg-white/10 hover:text-white sm:px-3"
+            >
               <RotateCcw className="h-4 w-4" />
               <span>Рескор</span>
             </Button>
@@ -275,62 +290,62 @@ export function DashboardPage() {
         </div>
       </section>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Link to="/agents" className="group block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-          <Card className="nr-stat h-full border-cyan-100/80 transition-all group-hover:-translate-y-0.5 group-hover:border-cyan-200 group-hover:shadow-md">
+      <div className="nr-enter-2 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Link to="/agents" className="group block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/45 focus-visible:ring-offset-2">
+          <Card className="nr-stat h-full">
             <CardContent className="p-4">
               <div className="space-y-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-50 text-sky-600 ring-1 ring-sky-100">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-light text-accent ring-1 ring-accent/12">
                   <Bot className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="text-3xl font-black leading-none tracking-tight tabular-nums text-slate-950">{stats.agents}</p>
-                  <p className="mt-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Агента</p>
+                  <p className="font-display text-[28px] font-bold leading-none tracking-[-0.04em] tabular-nums text-ink-900">{stats.agents}</p>
+                  <p className="nr-eyebrow mt-2">Агента</p>
                 </div>
               </div>
             </CardContent>
           </Card>
         </Link>
-        <Link to="/feed" className="group block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-          <Card className="nr-stat h-full border-cyan-100/80 transition-all group-hover:-translate-y-0.5 group-hover:border-cyan-200 group-hover:shadow-md">
+        <Link to="/feed" className="group block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/45 focus-visible:ring-offset-2">
+          <Card className="nr-stat h-full">
             <CardContent className="p-4">
               <div className="space-y-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-success-light text-success ring-1 ring-success/12">
                   <Newspaper className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="text-3xl font-black leading-none tracking-tight tabular-nums text-slate-950">{stats.articles}</p>
-                  <p className="mt-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Новостей</p>
+                  <p className="font-display text-[28px] font-bold leading-none tracking-[-0.04em] tabular-nums text-ink-900">{stats.articles}</p>
+                  <p className="nr-eyebrow mt-2">Новостей</p>
                 </div>
               </div>
             </CardContent>
           </Card>
         </Link>
-        <Link to="/sources" className="group block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-          <Card className="nr-stat h-full border-cyan-100/80 transition-all group-hover:-translate-y-0.5 group-hover:border-cyan-200 group-hover:shadow-md">
+        <Link to="/sources" className="group block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/45 focus-visible:ring-offset-2">
+          <Card className="nr-stat h-full">
             <CardContent className="p-4">
               <div className="space-y-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 ring-1 ring-amber-100">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brass-light text-brass ring-1 ring-brass/15">
                   <Rss className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="text-3xl font-black leading-none tracking-tight tabular-nums text-slate-950">{stats.sources}</p>
-                  <p className="mt-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Источников</p>
+                  <p className="font-display text-[28px] font-bold leading-none tracking-[-0.04em] tabular-nums text-ink-900">{stats.sources}</p>
+                  <p className="nr-eyebrow mt-2">Источников</p>
                 </div>
               </div>
             </CardContent>
           </Card>
         </Link>
-        <Link to="/feed" search={{ favorites: '1' }} className="group block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-          <Card className="nr-stat h-full border-cyan-100/80 transition-all group-hover:-translate-y-0.5 group-hover:border-cyan-200 group-hover:shadow-md">
+        <Link to="/feed" search={{ favorites: '1' }} className="group block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/45 focus-visible:ring-offset-2">
+          <Card className="nr-stat h-full">
             <CardContent className="p-4">
               <div className="space-y-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 ring-1 ring-rose-100">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-danger-light text-danger ring-1 ring-danger/12">
                   <Bookmark className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="text-3xl font-black leading-none tracking-tight tabular-nums text-slate-950">{stats.favorites}</p>
-                  <p className="mt-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">В избранном</p>
+                  <p className="font-display text-[28px] font-bold leading-none tracking-[-0.04em] tabular-nums text-ink-900">{stats.favorites}</p>
+                  <p className="nr-eyebrow mt-2">В избранном</p>
                 </div>
               </div>
             </CardContent>
@@ -338,13 +353,13 @@ export function DashboardPage() {
         </Link>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="min-w-0 space-y-6 lg:col-span-2">
+      <div className="nr-enter-3 grid gap-5 lg:grid-cols-3">
+        <div className="min-w-0 space-y-5 lg:col-span-2">
           <Card className="overflow-hidden">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <CardTitle className="text-base sm:text-lg">Агенты сбора</CardTitle>
+                  <CardTitle>Агенты сбора</CardTitle>
                   <CardDescription>Активные агенты мониторинга</CardDescription>
                 </div>
                 <Button variant="ghost" size="sm" onClick={() => navigate({ to: '/agents' })} className="shrink-0">
@@ -358,8 +373,8 @@ export function DashboardPage() {
                 Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} className="h-16" />)
               ) : agents.length === 0 ? (
                 <div className="flex flex-col items-center py-8">
-                  <Bot className="mb-3 h-8 w-8 text-muted-foreground" />
-                  <p className="mb-4 text-sm text-muted-foreground">Нет агентов</p>
+                  <Bot className="mb-3 h-8 w-8 text-ink-300" />
+                  <p className="mb-4 text-[13px] text-ink-400">Нет агентов</p>
                   <Button size="sm" onClick={() => navigate({ to: '/agents' })}>
                     <Plus className="h-4 w-4" />
                     Создать агента
@@ -374,18 +389,18 @@ export function DashboardPage() {
                       key={agent.id}
                       to="/agents/$id"
                       params={{ id: agent.id }}
-                      className="group flex items-center justify-between gap-3 rounded-2xl border border-cyan-100/80 bg-gradient-to-r from-white to-slate-50/70 p-3.5 transition-all hover:-translate-y-0.5 hover:border-cyan-200 hover:shadow-md hover:shadow-cyan-100/70"
+                      className="group flex items-center justify-between gap-3 rounded-xl border border-hairline bg-white p-3.5 transition-all duration-200 hover:-translate-y-px hover:border-border hover:shadow-[var(--shadow-sm)]"
                     >
                       <div className="flex min-w-0 items-center gap-3">
                         <div
-                          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ring-1 ring-black/5"
+                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ring-black/5"
                           style={{ backgroundColor: agent.color ? `${agent.color}18` : undefined, color: agent.color || undefined }}
                         >
                           <AgentIcon className="h-5 w-5" />
                         </div>
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-slate-900 group-hover:text-accent">{agent.name}</p>
-                          <p className="text-xs font-medium text-muted-foreground">{agent.article_count ?? 0} новостей</p>
+                          <p className="truncate text-[13.5px] font-semibold text-ink-900 transition-colors group-hover:text-accent">{agent.name}</p>
+                          <p className="mt-0.5 text-[11px] font-medium tabular-nums text-ink-400">{agent.article_count ?? 0} новостей</p>
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-3">
@@ -402,18 +417,18 @@ export function DashboardPage() {
 
           <Card className="overflow-hidden">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base sm:text-lg">Последние операции</CardTitle>
+              <CardTitle>Последние операции</CardTitle>
               <CardDescription>Нажми на partial/failed, чтобы увидеть ошибку источника</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2.5">
               {operationLogsLoading ? (
                 Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} className="h-14 rounded-2xl" />)
               ) : operationLogsError ? (
-                <p className="rounded-2xl border border-danger/30 bg-danger-light p-3 text-sm text-danger">
+                <p className="rounded-xl border border-danger/20 bg-danger-light p-3 text-[13px] text-danger">
                   {operationLogsError}
                 </p>
               ) : operationLogs.length === 0 ? (
-                <p className="rounded-2xl border border-dashed border-cyan-200 bg-cyan-50/40 p-4 text-sm text-muted-foreground">Журнал пока пуст</p>
+                <p className="rounded-xl border border-dashed border-border bg-muted/50 p-4 text-[13px] text-ink-400">Журнал пока пуст</p>
               ) : (
                 operationLogs.map((log) => <OperationLogRow key={log.id} log={log} />)
               )}
@@ -422,14 +437,14 @@ export function DashboardPage() {
         </div>
 
         <div className="min-w-0 space-y-6">
-          <Card className="overflow-hidden border-cyan-100/80">
+          <Card className="overflow-hidden">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <CardTitle className="text-base sm:text-lg">Избранное</CardTitle>
+                  <CardTitle>Избранное</CardTitle>
                   <CardDescription>Сохранённые материалы</CardDescription>
                 </div>
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-50 text-rose-500">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brass-light text-brass ring-1 ring-brass/15">
                   <Bookmark className="h-4 w-4" />
                 </div>
               </div>
@@ -438,21 +453,21 @@ export function DashboardPage() {
               {favoritesLoading ? (
                 Array.from({ length: 2 }).map((_, index) => <Skeleton key={index} className="h-16 rounded-2xl" />)
               ) : favorites.length === 0 ? (
-                <p className="rounded-2xl border border-dashed border-rose-100 bg-rose-50/40 py-8 text-center text-sm text-muted-foreground">Нет избранных материалов</p>
+                <p className="rounded-xl border border-dashed border-border bg-muted/50 py-8 text-center text-[13px] text-ink-400">Нет избранных материалов</p>
               ) : (
                 favorites.map((item) => (
                   <Link
                     key={item.id}
                     to="/feed/article/$id"
                     params={{ id: item.id }}
-                    className="group block cursor-pointer rounded-2xl border border-cyan-100/80 bg-white/80 p-3.5 transition-all hover:-translate-y-0.5 hover:border-cyan-200 hover:shadow-md hover:shadow-cyan-100/60"
+                    className="group block cursor-pointer rounded-xl border border-hairline bg-white p-3.5 transition-all duration-200 hover:-translate-y-px hover:border-border hover:shadow-[var(--shadow-sm)]"
                   >
-                    <p className="line-clamp-2 text-sm font-semibold leading-snug text-slate-900 transition-colors group-hover:text-accent">
+                    <p className="line-clamp-2 text-[13px] font-semibold leading-snug text-ink-900 transition-colors group-hover:text-accent">
                       {item.title}
                     </p>
                     <div className="mt-2.5 flex items-center justify-between gap-2">
                       <span className="nr-chip">{item.source_name}</span>
-                      <span className="shrink-0 text-[10px] font-medium text-muted-foreground">
+                      <span className="shrink-0 text-[10px] font-medium tabular-nums text-ink-400">
                         {formatDateTime(item.published_at)}
                       </span>
                     </div>

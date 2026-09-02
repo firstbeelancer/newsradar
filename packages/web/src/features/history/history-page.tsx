@@ -324,7 +324,7 @@ export function HistoryPage() {
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">История</h1>
+          <h1 className="nr-page-title">История</h1>
           <p className="mt-1 text-sm text-muted-foreground">Посты: {posts.length} · DeepSearch: {deepSearchResults.length} · Переводы: {fullTranslations.length}</p>
         </div>
       </div>
@@ -630,7 +630,7 @@ function HistoryCard(props: {
     <Card
       className={cn(
         'transition-all hover:border-accent/40 hover:shadow-md',
-        props.selected && 'border-accent/60 bg-cyan-50/50 shadow-md shadow-cyan-100'
+        props.selected && 'border-accent/50 bg-accent-light/50 shadow-[var(--shadow-sm)]'
       )}
     >
       <CardContent className="p-0">
@@ -680,7 +680,7 @@ function BulkToolbar(props: {
   onDelete: () => void;
 }) {
   return (
-    <div className="sticky top-3 z-10 flex flex-col gap-2 rounded-2xl border border-cyan-100 bg-white/88 p-3 shadow-sm shadow-blue-950/5 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
+    <div className="sticky top-3 z-10 flex flex-col gap-2 rounded-2xl border border-hairline bg-white/92 p-3 shadow-[var(--shadow-sm)] backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <Checkbox checked={props.allVisibleSelected} onCheckedChange={props.onToggleAll} disabled={props.totalCount === 0 || props.loading} />
         <button type="button" onClick={props.onToggleAll} disabled={props.totalCount === 0 || props.loading} className="font-medium text-foreground disabled:opacity-50">

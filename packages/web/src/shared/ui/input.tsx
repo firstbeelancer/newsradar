@@ -12,7 +12,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
     return (
       <div className="w-full space-y-1.5">
         {label && (
-          <label className="text-sm font-medium text-foreground">
+          <label className="text-[13px] font-semibold text-ink-700">
             {label}
             {props.required && <span className="text-danger ml-0.5">*</span>}
           </label>
@@ -20,15 +20,15 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         <input
           type={type}
           className={cn(
-            'flex h-10 w-full rounded-xl border bg-white/70 backdrop-blur-sm px-3 py-2 text-sm text-foreground transition-all',
-            'placeholder:text-muted-foreground',
-            'focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-0 nr-input-glow',
+            'flex h-10 w-full rounded-xl border bg-white px-3 py-2 text-sm text-foreground transition-all',
+            'placeholder:text-ink-300',
+            'focus:outline-none nr-input-glow',
             'disabled:cursor-not-allowed disabled:opacity-50',
             'file:border-0 file:bg-transparent file:text-sm file:font-medium',
-            'hover:border-cyan-200/60 hover:shadow-sm',
+            'hover:border-border',
             error
-              ? 'border-danger focus:ring-danger'
-              : 'border-border/60',
+              ? 'border-danger focus:shadow-[0_0_0_3px_rgba(201,60,60,0.14)]'
+              : 'border-hairline',
             className
           )}
           ref={ref}

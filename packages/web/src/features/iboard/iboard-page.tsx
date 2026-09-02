@@ -161,7 +161,7 @@ export function IBoardPage() {
                     <span className="text-muted-foreground w-20 shrink-0 text-xs">{new Date(day.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</span>
                     <div className="flex-1 h-5 bg-muted rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full transition-all"
+                        className="h-full rounded-full bg-gradient-to-r from-accent to-brass transition-all"
                         style={{ width: `${Math.min(100, Math.max(2, (day.count / Math.max(...activity7d.map(d => d.count), 1)) * 100))}%` }}
                       />
                     </div>

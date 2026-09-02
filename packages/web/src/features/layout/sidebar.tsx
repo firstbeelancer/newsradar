@@ -45,27 +45,28 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="fixed left-0 top-0 z-40 flex h-[100dvh] w-64 flex-col border-r border-cyan-100/80 bg-white/80 shadow-[12px_0_40px_rgba(15,51,122,0.06)] backdrop-blur-2xl">
+    <aside className="fixed left-0 top-0 z-40 flex h-[100dvh] w-64 flex-col border-r border-hairline bg-white/86 backdrop-blur-2xl">
       <div className="flex items-center justify-between px-5 py-5">
         <div className="flex items-center gap-3">
-          <div className="relative flex h-11 w-11 items-center justify-center rounded-2xl nr-glow-hover">
-            <span className="absolute inset-0 rounded-2xl bg-gradient-to-br from-cyan-300/30 to-blue-500/20 blur-md" />
+          <div className="relative flex h-10 w-10 items-center justify-center rounded-xl nr-glow-hover">
             <img src={NEWSRADAR_ICON_SRC} alt="Newsradar" className="relative h-full w-full object-contain nr-icon-orb" />
           </div>
-          <div>
-            <span className="block bg-gradient-to-r from-slate-950 to-slate-700 bg-clip-text text-lg font-black tracking-tight text-transparent">
+          <div className="leading-none">
+            <span className="block font-display text-[17px] font-bold tracking-[-0.035em] text-ink-900">
               Newsradar
             </span>
-            <span className="block text-[11px] font-semibold tracking-wide text-cyan-700/90">AI news studio</span>
+            <span className="mt-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-400">
+              AI news studio
+            </span>
           </div>
         </div>
         <NotificationBell />
       </div>
 
-      <Separator className="bg-cyan-100/80" />
+      <Separator className="bg-hairline" />
 
       <nav className="flex-1 overflow-y-auto px-3 py-4">
-        <ul className="space-y-1.5">
+        <ul className="space-y-0.5">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = isActiveRoute(item);
@@ -76,13 +77,22 @@ export function Sidebar() {
                   to={item.to}
                   search={item.search}
                   className={cn(
-                    'group relative flex items-center gap-3 overflow-hidden rounded-2xl px-3 py-2.5 text-sm font-semibold transition-all',
+                    'group relative flex items-center gap-3 overflow-hidden rounded-xl px-3 py-2.5 text-[13.5px] font-semibold transition-all duration-200',
                     isActive
-                      ? 'bg-gradient-to-r from-blue-600 via-blue-500 to-cyan-400 text-white shadow-lg shadow-cyan-200/80'
-                      : 'text-slate-500 hover:-translate-y-0.5 hover:bg-white/90 hover:text-slate-950 hover:shadow-md hover:shadow-cyan-100/80'
+                      ? 'bg-ink-900 text-white shadow-[var(--shadow-sm)]'
+                      : 'text-ink-500 hover:bg-muted hover:text-ink-900'
                   )}
                 >
-                  <Icon className={cn('h-[18px] w-[18px] transition-transform group-hover:scale-110', isActive && 'drop-shadow')} />
+                  {/* Brass rule marks the active route — quieter and more precise than a full gradient fill. */}
+                  {isActive && (
+                    <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-brass" />
+                  )}
+                  <Icon
+                    className={cn(
+                      'h-[17px] w-[17px] transition-colors',
+                      isActive ? 'text-white' : 'text-ink-400 group-hover:text-ink-700'
+                    )}
+                  />
                   {item.label}
                 </Link>
               </li>
@@ -91,21 +101,21 @@ export function Sidebar() {
         </ul>
       </nav>
 
-      <Separator className="bg-cyan-100/80" />
+      <Separator className="bg-hairline" />
 
       <div className="p-3">
-        <div className="flex items-center gap-3 rounded-2xl border border-cyan-100/70 bg-white/70 px-3 py-2.5 shadow-inner shadow-cyan-50">
-          <Avatar className="h-9 w-9 ring-2 ring-cyan-100">
+        <div className="flex items-center gap-3 rounded-xl border border-hairline bg-muted/60 px-3 py-2.5">
+          <Avatar className="h-9 w-9 ring-1 ring-hairline">
             {user?.avatar ? <img src={user.avatar} alt={user?.name || ''} /> : null}
             <AvatarFallback className="bg-accent-light text-accent text-xs font-bold">
               {user?.name ? getInitials(user.name) : '?'}
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <p className="truncate text-sm font-semibold text-slate-950">{user?.name || 'Пользователь'}</p>
-            <p className="truncate text-xs text-muted-foreground">{user?.email || ''}</p>
+            <p className="truncate text-[13px] font-semibold text-ink-900">{user?.name || 'Пользователь'}</p>
+            <p className="truncate text-[11px] text-ink-400">{user?.email || ''}</p>
           </div>
-          <button onClick={logout} className="rounded-xl p-1.5 text-muted-foreground transition-colors hover:bg-danger-light hover:text-danger" title="Выйти">
+          <button onClick={logout} className="rounded-lg p-1.5 text-ink-400 transition-colors hover:bg-danger-light hover:text-danger" title="Выйти">
             <LogOut className="h-4 w-4" />
           </button>
         </div>

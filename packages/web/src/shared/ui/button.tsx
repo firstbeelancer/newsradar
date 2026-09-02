@@ -5,16 +5,21 @@ import { cn } from '@shared/lib/utils';
 import { Loader2 } from 'lucide-react';
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 rounded-xl text-sm font-semibold whitespace-nowrap transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 cursor-pointer select-none active:scale-[0.97]',
+  'inline-flex items-center justify-center gap-2 rounded-xl text-sm font-semibold whitespace-nowrap transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/45 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-45 cursor-pointer select-none active:scale-[0.98]',
   {
     variants: {
       variant: {
-        default: 'bg-gradient-to-r from-blue-600 to-cyan-500 text-white hover:from-blue-700 hover:to-cyan-600 shadow-md shadow-blue-500/20 nr-btn-glow',
-        primary: 'bg-gradient-to-r from-blue-600 to-cyan-500 text-white hover:from-blue-700 hover:to-cyan-600 shadow-md shadow-blue-500/20 nr-btn-glow',
-        danger: 'bg-gradient-to-r from-red-600 to-rose-500 text-white hover:from-red-700 hover:to-rose-600 shadow-md shadow-red-500/20',
-        ghost: 'hover:bg-white/70 hover:shadow-sm text-foreground backdrop-blur-sm',
-        outline: 'border border-border/80 bg-white/50 backdrop-blur-sm hover:bg-white/80 hover:shadow-md hover:border-cyan-200/60 text-foreground',
-        secondary: 'bg-white/70 backdrop-blur-sm text-foreground hover:bg-white/90 hover:shadow-sm',
+        // Solid azure with an inner highlight reads as a machined control;
+        // the old blue-to-cyan gradient read as a generic SaaS button.
+        default: 'nr-brand-button nr-btn-glow',
+        primary: 'nr-brand-button nr-btn-glow',
+        danger:
+          'bg-danger text-white hover:bg-[#b23434] shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_4px_14px_rgba(201,60,60,0.28)] border border-white/10',
+        ghost: 'text-ink-700 hover:bg-white hover:shadow-[var(--shadow-xs)]',
+        outline:
+          'border border-hairline bg-white/80 backdrop-blur-sm text-foreground hover:border-border hover:bg-white hover:shadow-[var(--shadow-sm)]',
+        secondary:
+          'bg-white text-foreground border border-hairline hover:border-border hover:shadow-[var(--shadow-sm)]',
         link: 'text-accent underline-offset-4 hover:underline',
       },
       size: {

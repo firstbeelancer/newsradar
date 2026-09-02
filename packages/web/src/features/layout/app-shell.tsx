@@ -6,21 +6,19 @@ interface AppShellProps {
   children: React.ReactNode;
 }
 
+/**
+ * Atmosphere (gradient mesh + paper grain) lives in index.css so it sits behind
+ * every route, rather than three blurred colour blobs stacked in the shell.
+ */
 export function AppShell({ children }: AppShellProps) {
   return (
-    <div className="relative min-h-[100dvh] overflow-x-hidden bg-background">
-      <div className="pointer-events-none fixed inset-0 -z-10">
-        <div className="absolute left-[18%] top-[-8%] h-[28rem] w-[28rem] rounded-full bg-cyan-300/20 blur-3xl" />
-        <div className="absolute right-[-6%] top-[8%] h-[26rem] w-[26rem] rounded-full bg-blue-500/15 blur-3xl" />
-        <div className="absolute bottom-[-10%] left-[30%] h-[22rem] w-[22rem] rounded-full bg-indigo-400/10 blur-3xl" />
-      </div>
-
+    <div className="relative min-h-[100dvh] overflow-x-hidden">
       <div className="hidden md:block">
         <Sidebar />
       </div>
 
-      <main className="relative min-h-[100dvh] overflow-x-hidden pb-24 md:ml-64 md:pb-16">
-        <div className="mx-auto max-w-6xl p-3 sm:p-4 md:p-6 lg:p-8">
+      <main className="relative min-h-[100dvh] overflow-x-hidden pb-28 md:ml-64 md:pb-20">
+        <div className="mx-auto max-w-6xl px-3 py-4 sm:px-5 sm:py-6 md:px-8 lg:px-10 lg:py-9">
           {children}
         </div>
       </main>

@@ -362,10 +362,10 @@ export function FeedPage() {
               </Button>
             )}
             <div>
-              <h1 className="text-2xl font-black tracking-tight text-slate-950">
+              <h1 className="nr-page-title">
                 {agentName ? agentName : 'Лента новостей'}
               </h1>
-              <p className="mt-1 text-sm font-medium text-slate-500">
+              <p className="mt-1.5 text-[12.5px] font-medium tabular-nums text-ink-400">
                 {articles.length} новостей в текущей выборке
               </p>
             </div>
@@ -387,12 +387,12 @@ export function FeedPage() {
 
         {/* Search */}
         <div className="relative">
-          <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-600/70" />
+          <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-300" />
           <Input
             placeholder="Поиск по новостям..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="rounded-2xl border-cyan-100 bg-white/80 pl-10 shadow-sm"
+            className="rounded-xl pl-10"
           />
         </div>
         </div>
@@ -436,7 +436,7 @@ export function FeedPage() {
         </div>
 
       {selectedCount > 0 && (
-        <div className="sticky top-2 z-20 rounded-xl border border-accent/25 bg-white/95 p-3 shadow-lg shadow-cyan-100/50 backdrop-blur">
+        <div className="nr-dropdown-glow sticky top-2 z-20 rounded-xl border border-accent/25 bg-white/95 p-3 backdrop-blur">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <p className="text-sm font-semibold">Выбрано новостей: {selectedCount}</p>

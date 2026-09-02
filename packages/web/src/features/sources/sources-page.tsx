@@ -149,7 +149,7 @@ export function SourcesPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Источники</h1>
+          <h1 className="nr-page-title">Источники</h1>
           <p className="text-muted-foreground mt-1">
             {search.trim() ? `Найдено ${filteredSources.length} из ${sources.length}` : `${sources.length} источников`}
           </p>

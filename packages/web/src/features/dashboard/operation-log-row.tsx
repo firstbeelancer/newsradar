@@ -78,9 +78,9 @@ export function OperationLogRow({ log }: { log: OperationLog }) {
   return (
     <div
       className={cn(
-        'rounded-2xl border border-cyan-100/80 bg-white/80 transition-all',
-        open && 'border-cyan-200 bg-gradient-to-b from-cyan-50/70 to-white shadow-sm shadow-cyan-100/60',
-        expandable && 'cursor-pointer hover:-translate-y-0.5 hover:border-cyan-200 hover:shadow-md hover:shadow-cyan-100/50'
+        'rounded-xl border border-hairline bg-white transition-all duration-200',
+        open && 'border-accent/25 bg-accent-light/40 shadow-[var(--shadow-xs)]',
+        expandable && 'cursor-pointer hover:-translate-y-px hover:border-border hover:shadow-[var(--shadow-sm)]'
       )}
     >
       <button
@@ -95,7 +95,7 @@ export function OperationLogRow({ log }: { log: OperationLog }) {
             <StatusIcon status={log.status} />
           </div>
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-slate-900">{log.message || log.operation_type}</p>
+            <p className="truncate text-[13px] font-semibold text-ink-900">{log.message || log.operation_type}</p>
             <p className="text-xs font-medium text-muted-foreground">
               {new Date(log.created_at).toLocaleString('ru-RU', {
                 day: '2-digit',

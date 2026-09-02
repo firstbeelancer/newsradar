@@ -4,22 +4,22 @@ import { Loader2, Play, Search, Sparkles, BarChart3, X, Square, Languages, Brain
 import { cn } from '@shared/lib/utils';
 
 const OPERATION_LABELS: Record<string, { label: string; icon: React.ElementType; color: string }> = {
-  collection: { label: 'Поиск', icon: Play, color: 'text-blue-500' },
-  collect_all: { label: 'Поиск', icon: Play, color: 'text-blue-500' },
-  fetch_source: { label: 'Поиск', icon: Play, color: 'text-blue-500' },
-  collect_agent: { label: 'Поиск', icon: Play, color: 'text-blue-500' },
-  scoring: { label: 'Скоринг', icon: BarChart3, color: 'text-amber-500' },
-  deepsearch: { label: 'Дипсерч', icon: Search, color: 'text-purple-500' },
-  generation: { label: 'Генерация', icon: Sparkles, color: 'text-emerald-500' },
-  generate_post: { label: 'Генерация', icon: Sparkles, color: 'text-emerald-500' },
-  generate_digest: { label: 'Дайджест', icon: Sparkles, color: 'text-emerald-500' },
-  articles_delete_all: { label: 'Очистка', icon: X, color: 'text-rose-500' },
-  articles_delete_agent: { label: 'Очистка', icon: X, color: 'text-rose-500' },
-  translation: { label: 'Перевод', icon: Languages, color: 'text-cyan-600' },
+  collection: { label: 'Поиск', icon: Play, color: 'text-accent' },
+  collect_all: { label: 'Поиск', icon: Play, color: 'text-accent' },
+  fetch_source: { label: 'Поиск', icon: Play, color: 'text-accent' },
+  collect_agent: { label: 'Поиск', icon: Play, color: 'text-accent' },
+  scoring: { label: 'Скоринг', icon: BarChart3, color: 'text-brass' },
+  deepsearch: { label: 'Дипсерч', icon: Search, color: 'text-ink-500' },
+  generation: { label: 'Генерация', icon: Sparkles, color: 'text-success' },
+  generate_post: { label: 'Генерация', icon: Sparkles, color: 'text-success' },
+  generate_digest: { label: 'Дайджест', icon: Sparkles, color: 'text-success' },
+  articles_delete_all: { label: 'Очистка', icon: X, color: 'text-danger' },
+  articles_delete_agent: { label: 'Очистка', icon: X, color: 'text-danger' },
+  translation: { label: 'Перевод', icon: Languages, color: 'text-accent' },
 };
 
 function getOperationInfo(type: string) {
-  return OPERATION_LABELS[type] || { label: type, icon: Loader2, color: 'text-gray-500' };
+  return OPERATION_LABELS[type] || { label: type, icon: Loader2, color: 'text-ink-400' };
 }
 
 function emptyPipeline(): PipelineStatus {
@@ -134,7 +134,7 @@ export function StatusBar() {
       label: 'Перевод',
       count: pipeline.translating,
       icon: Languages,
-      color: 'text-cyan-600',
+      color: 'text-accent',
     });
   } else if (pipeline.translating_stuck > 0) {
     stuckChips.push({
@@ -142,7 +142,7 @@ export function StatusBar() {
       label: 'Перевод',
       count: pipeline.translating_stuck,
       icon: AlertTriangle,
-      color: 'text-amber-600',
+      color: 'text-warning',
       stuck: true,
     });
   }
@@ -153,7 +153,7 @@ export function StatusBar() {
       label: 'Саммари',
       count: pipeline.awaiting_analysis,
       icon: Brain,
-      color: 'text-violet-600',
+      color: 'text-accent',
     });
   } else if (pipeline.analysis_stuck > 0) {
     stuckChips.push({
@@ -161,7 +161,7 @@ export function StatusBar() {
       label: 'Саммари',
       count: pipeline.analysis_stuck,
       icon: AlertTriangle,
-      color: 'text-amber-600',
+      color: 'text-warning',
       stuck: true,
     });
   }
@@ -172,7 +172,7 @@ export function StatusBar() {
       label: 'Скоринг',
       count: pipeline.awaiting_scoring,
       icon: BarChart3,
-      color: 'text-amber-500',
+      color: 'text-brass',
     });
   } else if (pipeline.scoring_stuck > 0) {
     stuckChips.push({
@@ -180,7 +180,7 @@ export function StatusBar() {
       label: 'Скоринг',
       count: pipeline.scoring_stuck,
       icon: AlertTriangle,
-      color: 'text-amber-600',
+      color: 'text-warning',
       stuck: true,
     });
   }
@@ -208,18 +208,16 @@ export function StatusBar() {
     <div className="fixed bottom-[68px] left-0 right-0 z-30 md:bottom-0 md:left-64">
       <div
         className={cn(
-          'mx-2 mb-2 rounded-2xl border bg-white/92 shadow-[0_12px_40px_rgba(15,51,122,0.12)] backdrop-blur-2xl transition-all md:mx-4',
-          hasLive ? 'border-cyan-200/70' : 'border-amber-200/80',
+          'nr-dropdown-glow mx-2 mb-2 rounded-2xl border bg-white/94 backdrop-blur-2xl transition-all md:mx-4',
+          hasLive ? 'border-accent/20' : 'border-warning/30',
           expanded ? 'p-3.5' : 'px-3.5 py-2.5'
         )}
       >
         <div className="flex cursor-pointer items-center gap-3" onClick={() => setExpanded(!expanded)}>
           <div
             className={cn(
-              'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-white shadow-md',
-              hasLive
-                ? 'bg-gradient-to-br from-cyan-500 to-blue-600 shadow-cyan-200/70'
-                : 'bg-gradient-to-br from-amber-400 to-orange-500 shadow-amber-200/70'
+              'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white',
+              hasLive ? 'bg-accent shadow-[var(--shadow-accent)]' : 'bg-warning'
             )}
           >
             {hasLive ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertTriangle className="h-4 w-4" />}
@@ -231,14 +229,14 @@ export function StatusBar() {
                 className={cn(
                   'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ring-1',
                   kind === 'live'
-                    ? 'bg-slate-50 text-slate-700 ring-slate-100'
-                    : 'bg-amber-50 text-amber-800 ring-amber-100'
+                    ? 'bg-muted text-ink-700 ring-hairline'
+                    : 'bg-warning-light text-warning ring-warning/20'
                 )}
               >
                 {label}
               </span>
             ))}
-            <span className="text-xs font-medium text-muted-foreground">
+            <span className="text-[11.5px] font-medium text-ink-400">
               — {hasLive ? 'выполняется' : 'очередь зависла (worker догонит)'}
             </span>
           </div>
@@ -249,7 +247,7 @@ export function StatusBar() {
                 void handleCancelAll();
               }}
               disabled={cancellingAll}
-              className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-lg bg-red-500/90 px-2.5 py-1 text-xs font-semibold text-white transition-colors hover:bg-red-600 disabled:opacity-50"
+              className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-lg bg-danger px-2.5 py-1 text-[11.5px] font-semibold text-white transition-colors hover:bg-[#b23434] disabled:opacity-50"
               title="Остановить все операции"
             >
               <Square className="h-3 w-3" />
@@ -264,7 +262,7 @@ export function StatusBar() {
               }}
               disabled={retrying}
               className={cn(
-                'inline-flex shrink-0 items-center gap-1 rounded-lg bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white transition-colors hover:bg-amber-600 disabled:opacity-50',
+                'inline-flex shrink-0 items-center gap-1 rounded-lg bg-warning px-2.5 py-1 text-[11.5px] font-semibold text-white transition-colors hover:bg-[#9a6a0f] disabled:opacity-50',
                 activeOps.length === 0 && 'ml-auto'
               )}
               title="Перепоставить зависания в очередь worker"
@@ -276,7 +274,7 @@ export function StatusBar() {
         </div>
 
         {retryMsg && (
-          <p className="mt-1.5 text-[11px] font-medium text-amber-800">{retryMsg}</p>
+          <p className="mt-1.5 text-[11px] font-medium text-warning">{retryMsg}</p>
         )}
 
         {expanded && (
@@ -295,7 +293,7 @@ export function StatusBar() {
                   <span
                     className={cn(
                       'shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
-                      chip.stuck ? 'bg-amber-50 text-amber-700' : 'bg-cyan-50 text-cyan-700'
+                      chip.stuck ? 'bg-warning-light text-warning' : 'bg-accent-light text-accent'
                     )}
                   >
                     {chip.stuck ? 'Зависло' : 'В работе'}
@@ -317,7 +315,7 @@ export function StatusBar() {
                       void handleCancel(operation.id);
                     }}
                     disabled={cancellingId === operation.id}
-                    className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                    className="shrink-0 rounded-md p-1 text-ink-400 hover:bg-danger-light hover:text-danger disabled:opacity-50"
                     title="Остановить"
                   >
                     {cancellingId === operation.id ? (

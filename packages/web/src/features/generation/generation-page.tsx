@@ -22,7 +22,7 @@ export function GenerationPage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Генерация</h1>
+          <h1 className="nr-page-title">Генерация</h1>
           <p className="text-muted-foreground mt-1">
             Создание постов и дайджестов на основе собранных новостей
           </p>

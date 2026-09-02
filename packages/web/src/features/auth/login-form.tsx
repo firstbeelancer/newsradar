@@ -46,29 +46,28 @@ export function LoginForm() {
 
   return (
     <div className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden px-4 py-8">
-      <div className="pointer-events-none absolute -left-32 top-10 h-72 w-72 rounded-full bg-cyan-300/25 blur-3xl" />
-      <div className="pointer-events-none absolute -right-40 bottom-10 h-96 w-96 rounded-full bg-blue-600/20 blur-3xl" />
-      <div className="w-full max-w-sm space-y-6">
-        <div className="flex flex-col items-center gap-3">
-          <div className="relative flex h-24 w-24 items-center justify-center rounded-[1.7rem] nr-glow-hover">
-            <span className="absolute inset-1 rounded-[1.55rem] bg-cyan-300/20 blur-xl" />
+      <div className="nr-enter-1 w-full max-w-[23rem] space-y-7">
+        <div className="flex flex-col items-center gap-4">
+          <div className="relative flex h-[4.5rem] w-[4.5rem] items-center justify-center nr-glow-hover">
             <img src={NEWSRADAR_ICON_SRC} alt="Newsradar" className="relative h-full w-full object-contain nr-icon-orb" />
           </div>
           <div className="text-center">
-            <h1 className="text-3xl font-black tracking-tight text-slate-950">Newsradar</h1>
-            <p className="text-sm font-medium text-slate-500">Вход в систему</p>
+            <h1 className="font-display text-[27px] font-bold tracking-[-0.04em] text-ink-900">Newsradar</h1>
+            <p className="mt-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-ink-400">
+              AI news studio
+            </p>
           </div>
         </div>
 
-        <Card className="nr-neomorph rounded-3xl">
+        <Card className="rounded-2xl shadow-[var(--shadow-lg)]">
           <CardHeader className="pb-4">
-            <CardTitle className="text-base text-slate-950">Вход</CardTitle>
+            <CardTitle>Вход</CardTitle>
             <CardDescription>Введите ваш email и пароль</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <form onSubmit={handleSubmit} className="space-y-4">
               {error && (
-                <div role="alert" className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50/95 p-3 text-sm font-medium text-red-700 shadow-sm">
+                <div role="alert" className="flex items-start gap-2 rounded-xl border border-danger/20 bg-danger-light p-3 text-[13px] font-medium text-danger">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>{error}</span>
                 </div>
@@ -107,14 +106,14 @@ export function LoginForm() {
                 <button
                   type="button"
                   aria-label={showPassword ? 'Скрыть пароль' : 'Показать пароль'}
-                  className="absolute right-2 top-[31px] rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-cyan-50 hover:text-blue-700"
+                  className="absolute right-2 top-[31px] rounded-lg p-1.5 text-ink-400 transition-colors hover:bg-muted hover:text-accent"
                   onClick={() => setShowPassword((value) => !value)}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
 
-              <Button type="submit" variant="primary" className="nr-brand-button w-full rounded-xl" loading={isLoading}>
+              <Button type="submit" variant="primary" size="lg" className="w-full" loading={isLoading}>
                 <LogIn className="h-4 w-4" />
                 Войти
               </Button>
@@ -122,20 +121,20 @@ export function LoginForm() {
 
             <div className="flex items-center gap-3">
               <Separator className="flex-1" />
-              <span className="text-xs text-slate-500">или</span>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-300">или</span>
               <Separator className="flex-1" />
             </div>
 
             <div className="grid gap-2">
               <a
                 href="/api/v1/auth/google"
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-cyan-100 bg-white/80 px-4 text-sm font-medium text-slate-900 shadow-sm transition-all hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-white hover:shadow-cyan-100"
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-hairline bg-white px-4 text-[13.5px] font-semibold text-ink-700 transition-all hover:border-border hover:shadow-[var(--shadow-sm)]"
               >
                 Войти через Google
               </a>
               <a
                 href="/api/v1/auth/yandex"
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-cyan-100 bg-white/80 px-4 text-sm font-medium text-slate-900 shadow-sm transition-all hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-white hover:shadow-cyan-100"
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-hairline bg-white px-4 text-[13.5px] font-semibold text-ink-700 transition-all hover:border-border hover:shadow-[var(--shadow-sm)]"
               >
                 Войти через Яндекс
               </a>
@@ -145,7 +144,7 @@ export function LoginForm() {
 
         <Link
           to="/register"
-          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-cyan-200 bg-white/80 px-4 text-sm font-semibold text-slate-900 shadow-sm transition-all hover:-translate-y-0.5 hover:border-cyan-400 hover:bg-white hover:shadow-lg hover:shadow-cyan-100"
+          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-hairline bg-white/70 px-4 text-[13.5px] font-semibold text-ink-700 backdrop-blur-sm transition-all hover:border-border hover:bg-white hover:shadow-[var(--shadow-sm)]"
         >
           <UserPlus className="h-4 w-4" />
           Создать аккаунт

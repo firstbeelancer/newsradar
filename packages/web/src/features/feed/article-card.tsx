@@ -20,9 +20,11 @@ interface ArticleCardProps {
 }
 
 const scoreColor = (score: number): string => {
-  if (score >= 75) return 'bg-success-light text-success';
-  if (score >= 50) return 'bg-warning-light text-warning';
-  return 'bg-muted text-muted-foreground';
+  // Brass is reserved for the genuinely strong hits so the eye can find them
+  // instantly in a long feed; everything else stays quiet.
+  if (score >= 75) return 'nr-score-high';
+  if (score >= 50) return 'bg-accent-light text-accent ring-1 ring-inset ring-accent/12';
+  return 'bg-muted text-ink-400 ring-1 ring-inset ring-hairline';
 };
 
 function formatScore(score: number): number {
@@ -83,9 +85,9 @@ export function ArticleCard({
   return (
     <Card
       className={cn(
-        'nr-article overflow-hidden border-l-[5px] border-cyan-100/80',
-        selectable && isSelected && 'ring-2 ring-accent shadow-md shadow-cyan-100',
-        isStale && 'opacity-85'
+        'nr-article overflow-hidden border-l-[3px] border-l-hairline',
+        selectable && isSelected && 'ring-2 ring-accent/40 border-l-accent',
+        isStale && 'opacity-75'
       )}
       style={agentStyle}
       onClick={() => selectable && onSelect?.(article.id)}
@@ -106,25 +108,25 @@ export function ArticleCard({
               <Link
                 to="/feed/article/$id"
                 params={{ id: article.id }}
-                className="flex-1 text-[15px] font-semibold leading-snug text-slate-900 transition-colors hover:text-accent line-clamp-2"
+                className="flex-1 text-[15px] font-semibold leading-[1.35] tracking-[-0.011em] text-ink-900 transition-colors hover:text-accent line-clamp-2"
                 onClick={(event) => selectable && event.preventDefault()}
               >
                 {displayTitle}
               </Link>
-              <Badge className={cn('shrink-0 rounded-full px-2 text-[10px] font-bold tabular-nums', scoreColor(article.score))}>
+              <Badge className={cn('shrink-0 rounded-md border-transparent px-1.5 py-0.5 text-[11px] font-bold tabular-nums', scoreColor(article.score))}>
                 {scorePercent}
               </Badge>
             </div>
 
             {preview ? (
-              <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-slate-500">{truncate(preview, 180)}</p>
+              <p className="mt-2 line-clamp-2 text-[12.5px] leading-relaxed text-ink-500">{truncate(preview, 180)}</p>
             ) : (
-              <p className="mt-2 text-xs italic text-muted-foreground/80">Краткое превью пока не сформировано.</p>
+              <p className="mt-2 text-[12.5px] italic text-ink-300">Краткое превью пока не сформировано.</p>
             )}
 
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+            <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-400">
               <span className="nr-chip">{article.source_name}</span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-0.5 font-medium text-slate-500">
+              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-medium tabular-nums text-ink-400">
                 <Calendar className="h-3 w-3" />
                 {formatDateTime(article.published_at)}
               </span>
@@ -132,7 +134,7 @@ export function ArticleCard({
                 <Badge
                   variant="outline"
                   title="Новость старше 3 дней — чип-фильтр «Устаревшее» мог понизить скор"
-                  className="gap-1 border-red-200 bg-red-50 text-red-600 text-[10px]"
+                  className="gap-1 border-danger/20 bg-danger-light text-[10px] text-danger"
                 >
                   <Clock className="h-3 w-3" />
                   Устаревшее
@@ -142,7 +144,7 @@ export function ArticleCard({
                 <Badge
                   variant="outline"
                   title={`Перевод не удался: ${article.translation_error}. Нажмите кнопку перевода, чтобы повторить.`}
-                  className="gap-1 border-amber-200 bg-amber-50 text-amber-700 text-[10px]"
+                  className="gap-1 border-warning/25 bg-warning-light text-[10px] text-warning"
                 >
                   <TriangleAlert className="h-3 w-3" />
                   Перевод не удался
@@ -155,7 +157,7 @@ export function ArticleCard({
                       ? 'Агент ещё переводит материал на русский'
                       : 'Агент ещё обрабатывает материал (саммари / оценка)'
                   }
-                  className="gap-1 border-cyan-200 bg-cyan-50 text-cyan-700 text-[10px]"
+                  className="gap-1 border-accent/15 bg-accent-light text-[10px] text-accent"
                 >
                   {needsTranslation || article.status === 'fetched' ? (
                     <Languages className="h-3 w-3" />
@@ -189,7 +191,7 @@ export function ArticleCard({
                 onGeneratePost?.(article);
               }}
               title="Отправить в генерацию поста"
-              className="w-full gap-1 rounded-xl border-accent/25 bg-gradient-to-r from-blue-50 to-cyan-50 text-accent hover:from-blue-100 hover:to-cyan-100"
+              className="w-full gap-1 rounded-lg border-accent/20 bg-accent-light text-accent hover:border-accent/35 hover:bg-accent-light"
             >
               <Sparkles className="h-3.5 w-3.5" />
               <span className="text-xs">Генерация</span>

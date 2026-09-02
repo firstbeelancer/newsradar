@@ -43,23 +43,21 @@ export function RegisterForm() {
 
   return (
     <div className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden px-4 py-8">
-      <div className="pointer-events-none absolute -left-32 top-10 h-72 w-72 rounded-full bg-cyan-300/25 blur-3xl" />
-      <div className="pointer-events-none absolute -right-40 bottom-10 h-96 w-96 rounded-full bg-blue-600/20 blur-3xl" />
+            <div className="pointer-events-none absolute -right-40 bottom-10 h-96 w-96 rounded-full bg-blue-600/20 blur-3xl" />
       <div className="w-full max-w-sm space-y-6">
         <div className="flex flex-col items-center gap-3">
           <div className="relative flex h-24 w-24 items-center justify-center rounded-[1.7rem] nr-glow-hover">
-            <span className="absolute inset-1 rounded-[1.55rem] bg-cyan-300/20 blur-xl" />
-            <img src={NEWSRADAR_ICON_SRC} alt="Newsradar" className="relative h-full w-full object-contain nr-icon-orb" />
+                        <img src={NEWSRADAR_ICON_SRC} alt="Newsradar" className="relative h-full w-full object-contain nr-icon-orb" />
           </div>
           <div className="text-center">
-            <h1 className="text-3xl font-black tracking-tight text-slate-950">Newsradar</h1>
+            <h1 className="font-display text-[27px] font-bold tracking-[-0.04em] text-ink-900">Newsradar</h1>
             <p className="text-sm font-medium text-slate-500">Создание аккаунта</p>
           </div>
         </div>
 
         <Card className="nr-neomorph rounded-3xl">
           <CardHeader className="pb-4">
-            <CardTitle className="text-base text-slate-950">Регистрация</CardTitle>
+            <CardTitle>Регистрация</CardTitle>
             <CardDescription>Заполните форму для создания аккаунта</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -74,7 +72,7 @@ export function RegisterForm() {
               <Input id="email" type="email" label="Email" placeholder="your@email.com" value={email} onChange={(e) => { setEmail(e.target.value); if (validationErrors.email) setValidationErrors((p) => ({ ...p, email: '' })); }} error={validationErrors.email} autoComplete="email" />
               <div className="relative">
                 <Input id="password" type={showPassword ? 'text' : 'password'} label="Пароль" placeholder="••••••" value={password} onChange={(e) => { setPassword(e.target.value); if (validationErrors.password) setValidationErrors((p) => ({ ...p, password: '' })); }} error={validationErrors.password} autoComplete="new-password" helper="Минимум 6 символов" className="pr-10" />
-                <button type="button" aria-label={showPassword ? 'Скрыть пароль' : 'Показать пароль'} className="absolute right-2 top-[31px] rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-cyan-50 hover:text-blue-700" onClick={() => setShowPassword((value) => !value)}>
+                <button type="button" aria-label={showPassword ? 'Скрыть пароль' : 'Показать пароль'} className="absolute right-2 top-[31px] rounded-lg p-1.5 text-ink-400 transition-colors hover:bg-muted hover:text-accent" onClick={() => setShowPassword((value) => !value)}>
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
@@ -87,13 +85,13 @@ export function RegisterForm() {
             <div className="flex items-center gap-3"><Separator className="flex-1" /><span className="text-xs text-slate-500">или</span><Separator className="flex-1" /></div>
 
             <div className="grid gap-2">
-              <a href="/api/v1/auth/google" className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-cyan-100 bg-white/80 px-4 text-sm font-medium text-slate-900 shadow-sm transition-all hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-white hover:shadow-cyan-100">Зарегистрироваться через Google</a>
-              <a href="/api/v1/auth/yandex" className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-cyan-100 bg-white/80 px-4 text-sm font-medium text-slate-900 shadow-sm transition-all hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-white hover:shadow-cyan-100">Зарегистрироваться через Яндекс</a>
+              <a href="/api/v1/auth/google" className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-hairline bg-white px-4 text-[13.5px] font-semibold text-ink-700 transition-all hover:border-border hover:shadow-[var(--shadow-sm)]">Зарегистрироваться через Google</a>
+              <a href="/api/v1/auth/yandex" className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-hairline bg-white px-4 text-[13.5px] font-semibold text-ink-700 transition-all hover:border-border hover:shadow-[var(--shadow-sm)]">Зарегистрироваться через Яндекс</a>
             </div>
           </CardContent>
         </Card>
 
-        <Link to="/login" className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-cyan-200 bg-white/80 px-4 text-sm font-semibold text-slate-900 shadow-sm transition-all hover:-translate-y-0.5 hover:border-cyan-400 hover:bg-white hover:shadow-lg hover:shadow-cyan-100">
+        <Link to="/login" className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-hairline bg-white/70 px-4 text-[13.5px] font-semibold text-ink-700 backdrop-blur-sm transition-all hover:border-border hover:bg-white hover:shadow-[var(--shadow-sm)]">
           <LogIn className="h-4 w-4" />
           Уже есть аккаунт? Войти
         </Link>
