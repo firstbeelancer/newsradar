@@ -13,18 +13,22 @@
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// Resolve from this file, not process.cwd() — the runner's cwd is the repo root.
+const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 describe('Production SPA fallback', () => {
   it('nginx serves index.html for direct app routes', () => {
-    const config = readFileSync(resolve(process.cwd(), 'nginx.conf'), 'utf8');
+    const config = readFileSync(resolve(PACKAGE_ROOT, 'nginx.conf'), 'utf8');
 
     expect(config).toContain('error_page 404 /index.html;');
     expect(config).toContain('try_files $uri $uri/ /index.html;');
   });
 
   it('router contains direct mobile-critical app routes', () => {
-    const router = readFileSync(resolve(process.cwd(), 'src/app/router.tsx'), 'utf8');
+    const router = readFileSync(resolve(PACKAGE_ROOT, 'src/app/router.tsx'), 'utf8');
 
     expect(router).toContain("path: '/history'");
     expect(router).toContain("path: '/notifications'");

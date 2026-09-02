@@ -10,7 +10,12 @@
 import { db } from "../db/index.js";
 import { articles } from "../db/schema.js";
 import { eq } from "drizzle-orm";
-import { detectLanguage, translateArticle } from "../lib/translator.js";
+import {
+  buildTitleOnlyPreview,
+  detectLanguage,
+  ensureRussianHeadline,
+  translateArticle,
+} from "../lib/translator.js";
 import { fetchArticleText } from "../lib/article-extractor.js";
 import { setAiTelemetryError } from "../lib/ai-client.js";
 import { ingestAnalysisQueue } from "../connection/redis.js";
@@ -21,6 +26,17 @@ export interface TranslateJob {
   articleId: string;
   force?: boolean;
 }
+
+/**
+ * After this many failed attempts the article stops being re-queued.
+ *
+ * Without a ceiling, a permanently untranslatable article (dead provider,
+ * paywalled body, unsupported language) was reset to needs_translation=true on
+ * every failure and picked up again by the heartbeat requeue a minute later —
+ * forever. It never reached the feed, and the status bar showed a translation
+ * backlog that could never drain.
+ */
+export const MAX_TRANSLATION_ATTEMPTS = 5;
 
 /**
  * Process a translate job.
@@ -50,6 +66,7 @@ export async function processTranslate(
       originalTitle: articles.originalTitle,
       originalDescription: articles.originalDescription,
       language: articles.language,
+      translationAttempts: articles.translationAttempts,
     })
     .from(articles)
     .where(eq(articles.id, articleId))
@@ -128,6 +145,8 @@ export async function processTranslate(
         detectedLang: detectedLang,
         needsTranslation: false,
         status: "translated",
+        translationAttempts: 0,
+        translationError: translated.degraded ? translated.degradedReason ?? null : null,
         updatedAt: new Date(),
       })
       .where(eq(articles.id, articleId));
@@ -138,13 +157,69 @@ export async function processTranslate(
       { jobId: `ingest-analysis-${articleId}` }
     );
 
-    logger.info({ articleId, from: detectedLang }, "Article translated successfully");
+    if (translated.degraded) {
+      logger.warn(
+        { articleId, from: detectedLang, reason: translated.degradedReason },
+        "Article translated with degraded fallback"
+      );
+    } else {
+      logger.info({ articleId, from: detectedLang }, "Article translated successfully");
+    }
 
     return { translated: true, originalLanguage: detectedLang };
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
+    const attempts = (article.translationAttempts ?? 0) + 1;
     setAiTelemetryError(`Translation pipeline failure: ${errorMessage}`);
-    logger.error({ articleId, err: errorMessage }, "Translation failed — keeping article pending and retrying");
+
+    if (attempts >= MAX_TRANSLATION_ATTEMPTS) {
+      // Give up. The article leaves the translation backlog with a Russian
+      // headline built from whatever survived, so the feed stops showing an
+      // eternal "Перевод…" badge and the status bar can actually drain.
+      // The original text is preserved, so a manual re-translate still works.
+      const salvagedTitle = ensureRussianHeadline("", originalTitle ?? article.title);
+      const salvagedSummary = buildTitleOnlyPreview(salvagedTitle);
+
+      await db
+        .update(articles)
+        .set({
+          title: salvagedTitle,
+          description: salvagedSummary,
+          aiSummary: salvagedSummary,
+          content: null,
+          originalTitle: originalTitle,
+          originalDescription: originalDescription,
+          language: "ru",
+          detectedLang: detectedLang,
+          needsTranslation: false,
+          status: "translated",
+          translationAttempts: attempts,
+          translationError: errorMessage.slice(0, 1_000),
+          updatedAt: new Date(),
+        })
+        .where(eq(articles.id, articleId));
+
+      // Still push it through scoring so it is ranked like any other article.
+      await ingestAnalysisQueue.add(
+        `ingest-analysis-${articleId}`,
+        { articleId },
+        { jobId: `ingest-analysis-${articleId}` }
+      );
+
+      logger.error(
+        { articleId, err: errorMessage, attempts },
+        "Translation permanently failed — releasing article with fallback headline"
+      );
+
+      // Resolved, not thrown: the article is in a terminal state now, and a
+      // BullMQ failure here would only add noise to the queue health view.
+      return { translated: false, originalLanguage: detectedLang };
+    }
+
+    logger.error(
+      { articleId, err: errorMessage, attempts },
+      "Translation failed — keeping article pending and retrying"
+    );
 
     // Keep article in pre-translation state so the feed can show "Перевод…"
     // and BullMQ can retry. Do NOT mark status=translated on failure —
@@ -158,6 +233,8 @@ export async function processTranslate(
         detectedLang: detectedLang,
         needsTranslation: true,
         status: "fetched",
+        translationAttempts: attempts,
+        translationError: errorMessage.slice(0, 1_000),
         updatedAt: new Date(),
       })
       .where(eq(articles.id, articleId));

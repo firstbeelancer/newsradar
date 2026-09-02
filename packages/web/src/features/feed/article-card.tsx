@@ -4,7 +4,7 @@ import { Card, CardContent } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
 import { Checkbox } from '@shared/ui/checkbox';
-import { Bookmark, ExternalLink, Calendar, Search, Sparkles, Clock, Languages, Loader2 } from 'lucide-react';
+import { Bookmark, ExternalLink, Calendar, Search, Sparkles, Clock, Languages, Loader2, TriangleAlert } from 'lucide-react';
 import { cn, truncate, formatDateTime, cleanArticleText, stripEditorialTitlePrefix } from '@shared/lib/utils';
 import type { Article } from '@shared/api/client';
 
@@ -69,6 +69,9 @@ export function ArticleCard({
   const agentStyle = getArticleAgentStyle(article.agent_color);
   const isStale = isArticleStale(article.published_at);
   const needsTranslation = Boolean(article.needs_translation);
+  // A finished-but-failed translation must not keep showing a spinner: the
+  // worker has already given up, so nothing is going to change on its own.
+  const translationFailed = !needsTranslation && Boolean(article.translation_error);
   const processingLabel = needsTranslation || article.status === 'fetched' || article.status === 'new'
     ? 'Перевод…'
     : article.status === 'translated'
@@ -135,7 +138,16 @@ export function ArticleCard({
                   Устаревшее
                 </Badge>
               )}
-              {processingLabel && (
+              {translationFailed ? (
+                <Badge
+                  variant="outline"
+                  title={`Перевод не удался: ${article.translation_error}. Нажмите кнопку перевода, чтобы повторить.`}
+                  className="gap-1 border-amber-200 bg-amber-50 text-amber-700 text-[10px]"
+                >
+                  <TriangleAlert className="h-3 w-3" />
+                  Перевод не удался
+                </Badge>
+              ) : processingLabel ? (
                 <Badge
                   variant="outline"
                   title={
@@ -152,7 +164,7 @@ export function ArticleCard({
                   )}
                   {processingLabel}
                 </Badge>
-              )}
+              ) : null}
               {article.agent_name && (
                 <Badge
                   variant="outline"

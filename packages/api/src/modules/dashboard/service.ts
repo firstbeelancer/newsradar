@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import { agents, articles, operationLogs, workspaces, agentSources, sources } from "../../db/schema.js";
 import { AppError } from "../../middleware/error-handler.js";
@@ -394,6 +394,28 @@ export async function retryStuckPipeline(params: { userId: string; workspaceId: 
     )
     .returning({ id: articles.id });
 
+  // A manual retry is an explicit user decision, so it also revives articles the
+  // worker had given up on after MAX_TRANSLATION_ATTEMPTS. Resetting the counter
+  // here is what makes the "Перезапустить" button a real escape hatch rather than
+  // a no-op once the automatic budget is spent.
+  const failedTranslations = await db
+    .update(articles)
+    .set({
+      needsTranslation: true,
+      status: "fetched",
+      translationAttempts: 0,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(articles.workspaceId, params.workspaceId),
+        eq(articles.needsTranslation, false),
+        isNotNull(articles.translationError),
+        gte(articles.translationAttempts, 1)
+      )
+    )
+    .returning({ id: articles.id });
+
   const needsTranslate = await db
     .select({ id: articles.id })
     .from(articles)
@@ -405,6 +427,20 @@ export async function retryStuckPipeline(params: { userId: string; workspaceId: 
       )
     )
     .limit(80);
+
+  // Clear the counter for the rest of the backlog too, so the automatic
+  // heartbeat requeue picks them up again after this manual kick.
+  if (needsTranslate.length > 0) {
+    await db
+      .update(articles)
+      .set({ translationAttempts: 0, updatedAt: new Date() })
+      .where(
+        inArray(
+          articles.id,
+          needsTranslate.map((row) => row.id)
+        )
+      );
+  }
 
   const stuckTranslated = await db
     .select({ id: articles.id })
@@ -494,6 +530,7 @@ export async function retryStuckPipeline(params: { userId: string; workspaceId: 
     scoreQueued,
     totalQueued: translateQueued + ingestQueued + scoreQueued,
     dedupedCleared: clearedTerminalDuplicates.length,
+    failedTranslationsRevived: failedTranslations.length,
     candidates: {
       translate: needsTranslate.length,
       ingest: stuckTranslated.length,

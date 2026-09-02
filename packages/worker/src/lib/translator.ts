@@ -146,7 +146,43 @@ async function summarizeToRussian(
   return buildExtractiveSummary(cleaned, title);
 }
 
-async function translateViaGoogleGtx(
+/** GTX rejects very long `q` values, so long bodies are sent sentence-aligned. */
+const GTX_CHUNK_CHARS = 1_400;
+
+export function splitForTranslation(text: string, maxChars = GTX_CHUNK_CHARS): string[] {
+  const trimmed = text.trim();
+  if (trimmed.length <= maxChars) return trimmed ? [trimmed] : [];
+
+  const chunks: string[] = [];
+  let current = "";
+
+  for (const sentence of splitSentences(trimmed)) {
+    // A single sentence longer than the limit is hard-split — rare, but must not
+    // silently drop the tail the way the old `slice(0, 1_500)` did.
+    if (sentence.length > maxChars) {
+      if (current) {
+        chunks.push(current);
+        current = "";
+      }
+      for (let i = 0; i < sentence.length; i += maxChars) {
+        chunks.push(sentence.slice(i, i + maxChars));
+      }
+      continue;
+    }
+
+    if (current.length + sentence.length + 1 > maxChars) {
+      chunks.push(current);
+      current = sentence;
+    } else {
+      current = current ? `${current} ${sentence}` : sentence;
+    }
+  }
+
+  if (current) chunks.push(current);
+  return chunks;
+}
+
+async function translateChunkViaGoogleGtx(
   text: string,
   sourceLang: string
 ): Promise<string> {
@@ -155,7 +191,7 @@ async function translateViaGoogleGtx(
   url.searchParams.set("sl", sourceLang === "unknown" ? "auto" : sourceLang);
   url.searchParams.set("tl", "ru");
   url.searchParams.set("dt", "t");
-  url.searchParams.set("q", text.slice(0, 1_500));
+  url.searchParams.set("q", text);
 
   const response = await fetch(url, {
     headers: {
@@ -185,16 +221,40 @@ async function translateViaGoogleGtx(
   return translated;
 }
 
+/**
+ * Translate through the Google GTX endpoint, chunking long bodies.
+ * Previously everything beyond 1500 characters was silently discarded, which
+ * both truncated articles and made the "is the result Russian?" check flaky.
+ */
+async function translateViaGoogleGtx(
+  text: string,
+  sourceLang: string
+): Promise<string> {
+  const chunks = splitForTranslation(text);
+  if (chunks.length === 0) return "";
+
+  const translatedChunks: string[] = [];
+  for (const chunk of chunks) {
+    translatedChunks.push(await translateChunkViaGoogleGtx(chunk, sourceLang));
+  }
+
+  return translatedChunks.join(" ").trim();
+}
+
 /** Instruction-echo / chain-of-thought markers from free reasoning models (EN + RU). */
 const AI_LEAK_HEAD_RE =
   /the user wants(?: me to|[^.]{0,80}(?:summary|translation))|(?:i )?need to (?:translate|summarize|extract|compress|write|create)|let me (?:create|write|summarize|translate|extract|make|compress)|here(?:'s| is) (?:the )?(?:translation|summary)|based on the title information|however,? the actual article content is not provided|please (?:provide|send|share) (?:the )?(?:full )?(?:text|article|material)|i'll (?:summarize|translate|create|write)|as an ai|looking at the (?:title|headline|material)|the material is (?:quite )?short|compress (?:this|the) (?:news )?material|пользователь хочет|пользователь просит|мне нужно (?:сжать|суммировать|перевести|выделить|создать)|нужно (?:сжать|суммировать|перевести|выделить суть)|я должен (?:сжать|суммировать|перевести)|верн[уи] только (?:готовый )?summary|без рассуждений|укажите полный текст|пожалуйста,? предоставьте (?:полный )?текст|на основании заголовка/i;
 
 export function looksLikeRussian(text: string): boolean {
   const sample = text.slice(0, 400);
-  const total = sample.replace(/\s/g, "").length;
-  if (total === 0) return false;
+  // Share of Cyrillic among *letters* only. Digits, punctuation, URLs and code
+  // fragments used to dilute this ratio, so valid Russian bodies (a release note
+  // full of version numbers, a title with a latin product name) were rejected and
+  // thrown back into an endless re-translation loop.
+  const letters = (sample.match(/\p{L}/gu) ?? []).length;
+  if (letters === 0) return false;
   const cyr = (sample.match(/[\u0400-\u04FF]/g) ?? []).length;
-  return cyr / total > 0.25;
+  return cyr / letters > 0.25;
 }
 
 export function isPollutedAiText(text: string | null | undefined): boolean {
@@ -237,6 +297,25 @@ export function ensureRussianBody(translatedBody: string, sourceBody: string): s
   }
 
   throw new Error("Translation failed: article body is not Russian after provider fallback");
+}
+
+/**
+ * Non-throwing counterpart of {@link ensureRussianBody}.
+ *
+ * A body we cannot render in Russian must not kill the whole article: the
+ * headline may well have translated fine, and an article stuck in the
+ * translation backlog never reaches the feed and keeps the status bar spinning
+ * forever. Callers get an explicit `ok` flag instead of an exception.
+ */
+export function resolveRussianBody(
+  translatedBody: string,
+  sourceBody: string
+): { body: string; ok: boolean } {
+  try {
+    return { body: ensureRussianBody(translatedBody, sourceBody), ok: true };
+  } catch {
+    return { body: "", ok: false };
+  }
 }
 
 /**
@@ -349,6 +428,10 @@ export async function translateToRussian(
 
 /**
  * Translate article fields (title and description) to Russian.
+ *
+ * Title and body are translated independently: a body that cannot be rendered in
+ * Russian degrades to a title-based preview instead of failing the article, so a
+ * single bad body no longer parks the row in the translation backlog forever.
  */
 export async function translateArticle(
   title: string,
@@ -361,6 +444,9 @@ export async function translateArticle(
   content: string;
   aiSummary: string;
   language: string;
+  /** True when part of the article could not be translated and a fallback was used. */
+  degraded: boolean;
+  degradedReason?: string;
 }> {
   const normalizedTitle = stripEditorialTitlePrefix(cleanArticleText(title));
   const normalizedDescription = cleanArticleText(description ?? "");
@@ -387,10 +473,13 @@ export async function translateArticle(
       content: normalizedContent,
       aiSummary: safeSummary,
       language: "ru",
+      degraded: false,
     };
   }
 
-  const [translatedTitle, translatedBody] = await Promise.all([
+  const degradedReasons: string[] = [];
+
+  const [titleOutcome, bodyOutcome] = await Promise.allSettled([
     titleLang === "ru"
       ? Promise.resolve(normalizedTitle)
       : translateToRussian(normalizedTitle, titleLang, workspaceId),
@@ -400,17 +489,47 @@ export async function translateArticle(
         : translateToRussian(sourceBody, bodyLang, workspaceId)
       : Promise.resolve(""),
   ]);
+
+  const translatedTitle =
+    titleOutcome.status === "fulfilled" ? titleOutcome.value : "";
+  if (titleOutcome.status === "rejected") {
+    degradedReasons.push(
+      `title: ${titleOutcome.reason instanceof Error ? titleOutcome.reason.message : String(titleOutcome.reason)}`
+    );
+  }
+
+  const translatedBody =
+    bodyOutcome.status === "fulfilled" ? bodyOutcome.value : "";
+  if (bodyOutcome.status === "rejected") {
+    degradedReasons.push(
+      `body: ${bodyOutcome.reason instanceof Error ? bodyOutcome.reason.message : String(bodyOutcome.reason)}`
+    );
+  }
+
+  // A headline is the one thing the feed cannot do without. If even the fallback
+  // provider could not produce Russian, ensureRussianHeadline still yields a
+  // readable "Новость: <name>" rather than leaking the foreign original.
   const safeTranslatedTitle = ensureRussianHeadline(translatedTitle, normalizedTitle);
-  const safeTranslatedBody = sourceBody
-    ? bodyLang === "ru"
-      ? sourceBody
-      : ensureRussianBody(translatedBody, sourceBody)
+  if (!translatedTitle && titleLang !== "ru") {
+    degradedReasons.push("title fallback applied");
+  }
+
+  let safeTranslatedBody = "";
+  if (sourceBody) {
+    if (bodyLang === "ru") {
+      safeTranslatedBody = sourceBody;
+    } else {
+      const resolved = resolveRussianBody(translatedBody, sourceBody);
+      safeTranslatedBody = resolved.body;
+      if (!resolved.ok) {
+        degradedReasons.push("body could not be rendered in Russian");
+      }
+    }
+  }
+
+  const translatedSummary = safeTranslatedBody
+    ? await summarizeToRussian(safeTranslatedBody, safeTranslatedTitle, workspaceId)
     : "";
-  const translatedSummary = await summarizeToRussian(
-    safeTranslatedBody,
-    safeTranslatedTitle,
-    workspaceId
-  );
   const fallbackPreview = buildTitleOnlyPreview(safeTranslatedTitle);
   const extractive = buildExtractiveSummary(
     safeTranslatedBody,
@@ -427,8 +546,12 @@ export async function translateArticle(
   return {
     title: safeTranslatedTitle,
     description: safeSummary,
-    content: safeTranslatedBody || normalizedContent,
+    // Never fall back to `normalizedContent` here: that is the untranslated
+    // foreign body and it used to leak into the feed as the article content.
+    content: safeTranslatedBody,
     aiSummary: safeSummary,
     language: "ru",
+    degraded: degradedReasons.length > 0,
+    degradedReason: degradedReasons.length > 0 ? degradedReasons.join("; ") : undefined,
   };
 }

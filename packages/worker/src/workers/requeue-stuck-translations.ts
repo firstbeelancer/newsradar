@@ -13,6 +13,7 @@ import {
   translateQueue,
 } from "../connection/redis.js";
 import { TRANSLATION_RECOVERY_STATUSES } from "./pipeline-state.js";
+import { MAX_TRANSLATION_ATTEMPTS } from "./translate.worker.js";
 
 const MAX_BATCH = 40;
 const STUCK_AFTER_MS = 10 * 60 * 1000; // 10 minutes without update
@@ -61,7 +62,11 @@ export async function requeueStuckTranslations(logger: Logger): Promise<number> 
       and(
         eq(articles.needsTranslation, true),
         inArray(articles.status, [...TRANSLATION_RECOVERY_STATUSES]),
-        lt(articles.updatedAt, threshold)
+        lt(articles.updatedAt, threshold),
+        // Articles that burned through their attempts are terminal. Re-queuing
+        // them every minute is what kept the translation backlog permanently
+        // "stuck" in the status bar.
+        lt(articles.translationAttempts, MAX_TRANSLATION_ATTEMPTS)
       )
     )
     .limit(MAX_BATCH);
@@ -99,6 +104,7 @@ export async function requeueStuckTranslations(logger: Logger): Promise<number> 
       and(
         ne(articles.status, "deduped"),
         inArray(articles.status, ["translated", "analyzed", "scored", "published"]),
+        lt(articles.translationAttempts, MAX_TRANSLATION_ATTEMPTS),
         or(
           ilike(articles.title, "<think%"),
           ilike(articles.title, "%The user wants%"),

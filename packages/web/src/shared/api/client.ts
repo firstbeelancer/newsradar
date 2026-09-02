@@ -100,6 +100,8 @@ interface BackendArticle {
   needs_translation?: boolean | null;
   detectedLang?: string | null;
   detected_lang?: string | null;
+  translationError?: string | null;
+  translation_error?: string | null;
   sourceId?: string;
   source_id?: string;
   sourceName?: string | null;
@@ -293,6 +295,7 @@ export function normalizeArticle(raw: BackendArticle): Article {
     language: raw.language ?? undefined,
     needs_translation: raw.needs_translation ?? raw.needsTranslation ?? false,
     detected_lang: raw.detected_lang ?? raw.detectedLang ?? undefined,
+    translation_error: raw.translation_error ?? raw.translationError ?? undefined,
     metadata: raw.metadata,
   };
 }
@@ -870,6 +873,8 @@ export interface Article {
   language?: string;
   needs_translation?: boolean;
   detected_lang?: string;
+  /** Set when the worker gave up translating this article. */
+  translation_error?: string;
   metadata?: Record<string, unknown>;
 }
 

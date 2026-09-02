@@ -215,6 +215,8 @@ export const articles = pgTable(
     originalDescription: text("original_description"),
     detectedLang: varchar("detected_lang", { length: 10 }),
     needsTranslation: boolean("needs_translation").default(false).notNull(),
+    translationAttempts: integer("translation_attempts").default(0).notNull(),
+    translationError: text("translation_error"),
     //
     link: text("link").notNull(),
     guid: text("guid"),
