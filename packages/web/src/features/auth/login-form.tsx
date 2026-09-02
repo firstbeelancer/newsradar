@@ -52,7 +52,7 @@ export function LoginForm() {
             <img src={NEWSRADAR_ICON_SRC} alt="Newsradar" className="relative h-full w-full object-contain nr-icon-orb" />
           </div>
           <div className="text-center">
-            <h1 className="font-display text-[27px] font-bold tracking-[-0.04em] text-ink-900">Newsradar</h1>
+            <h1 className="nr-iris-text font-display text-[28px] font-extrabold tracking-[-0.04em]">Newsradar</h1>
             <p className="mt-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-ink-400">
               AI news studio
             </p>

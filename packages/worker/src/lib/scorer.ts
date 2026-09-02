@@ -24,6 +24,7 @@ import { eq, and } from "drizzle-orm";
 import { complete } from "./ai-client.js";
 import { cleanArticleText } from "./text-cleaner.js";
 import { normalizeChipModifier } from "./chip-modifiers.js";
+import { buildKeywordRegex } from "./russian-stem.js";
 export { extractKeywords, normalizeKeywords } from "./keywords.js";
 import { extractKeywords, normalizeKeywords } from "./keywords.js";
 import type { Logger } from "pino";
@@ -230,14 +231,6 @@ export interface KeywordMatchStats {
   matchedKeywords: string[];
 }
 
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function keywordRegex(keyword: string): RegExp {
-  return new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegex(keyword)}(?![\\p{L}\\p{N}])`, "gu");
-}
-
 /**
  * Calculate AI composite score from 5 criteria using agent weights.
  * Returns 0–100.
@@ -288,7 +281,7 @@ export function analyzeKeywordMatch(
   const matchedKeywords: string[] = [];
 
   for (const lowerKeyword of normalizedKeywords) {
-    const regex = keywordRegex(lowerKeyword);
+    const regex = buildKeywordRegex(lowerKeyword);
     const matches = text.match(regex);
     if (matches && matches.length > 0) {
       matchedCount++;

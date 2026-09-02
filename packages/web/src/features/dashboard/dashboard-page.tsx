@@ -234,6 +234,15 @@ export function DashboardPage() {
   return (
     <div className="min-w-0 space-y-7 overflow-x-hidden">
       <section className="nr-hero nr-enter-1 rounded-3xl p-6 sm:p-8">
+        {/* Radar sweep — the product pings, so the hero does too. */}
+        <div className="nr-sonar hidden lg:block" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </div>
+        <span className="nr-hero-film" aria-hidden="true" />
+        <span className="nr-hero-scrim" aria-hidden="true" />
+        <span className="nr-hero-edge" aria-hidden="true" />
         <div className="relative z-10 flex min-w-0 flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0 space-y-4">
             <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-white/75 backdrop-blur-sm">
@@ -325,7 +334,7 @@ export function DashboardPage() {
           <Card className="nr-stat h-full">
             <CardContent className="p-4">
               <div className="space-y-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brass-light text-brass ring-1 ring-brass/15">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-signal-light text-signal ring-1 ring-signal/20">
                   <Rss className="h-5 w-5" />
                 </div>
                 <div>
@@ -444,7 +453,7 @@ export function DashboardPage() {
                   <CardTitle>Избранное</CardTitle>
                   <CardDescription>Сохранённые материалы</CardDescription>
                 </div>
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brass-light text-brass ring-1 ring-brass/15">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-signal-light text-signal ring-1 ring-signal/20">
                   <Bookmark className="h-4 w-4" />
                 </div>
               </div>

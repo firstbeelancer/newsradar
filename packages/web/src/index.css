@@ -3,13 +3,14 @@
 /* ==========================================================================
    Newsradar design foundation
    --------------------------------------------------------------------------
-   Direction: a precision instrument, not a dashboard. Deep ink navy, one
-   confident azure, brass reserved for signal (high scores, Pro). Depth comes
-   from hairlines, layered shadows and a faint paper grain — not from glow.
+   Direction: a sonar instrument. Deep blue ground, one confident azure, and a
+   thin oil-slick iridescence used only where something is worth noticing — a
+   strong score, the active route, a live sweep. Depth still comes from
+   hairlines and layered shadows; the iridescence is a highlight, not a texture.
 
-   Type: Golos Text (Cyrillic-native UI face) with Unbounded for display
-   moments. Both carry a full Cyrillic set, which system stacks and Inter
-   handle far less gracefully in Russian.
+   Type: Golos Text (Cyrillic-native UI face) with Manrope for display moments.
+   Both carry a full Cyrillic set, which system stacks and Inter handle far less
+   gracefully in Russian.
    ========================================================================== */
 
 @theme {
@@ -18,8 +19,8 @@
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-light: var(--accent-light);
-  --color-brass: var(--brass);
-  --color-brass-light: var(--brass-light);
+  --color-signal: var(--signal);
+  --color-signal-light: var(--signal-light);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-border: var(--border);
@@ -39,38 +40,54 @@
   --color-danger-light: var(--danger-light);
 
   --font-sans: 'Golos Text', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-display: 'Unbounded', 'Golos Text', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Manrope', 'Golos Text', ui-sans-serif, system-ui, sans-serif;
 }
 
 @layer base {
   :root {
     /* ─── Ground ─── */
-    --background: #f4f6fb;
-    --foreground: #0a1628;
+    --background: #eef4fd;
+    --foreground: #071a33;
 
-    /* ─── Ink scale ─── */
-    --ink-900: #0a1628;
-    --ink-700: #1f2f47;
-    --ink-500: #4a5c78;
-    --ink-400: #6b7d98;
-    --ink-300: #94a3b8;
+    /* ─── Ink scale — blue-cast, not neutral grey ─── */
+    --ink-900: #071a33;
+    --ink-700: #17335c;
+    --ink-500: #41618f;
+    --ink-400: #6484b3;
+    --ink-300: #93accd;
 
     /* ─── Signal ─── */
-    --accent: #1b4dff;
-    --accent-hover: #0b33cc;
-    --accent-light: #e6ecff;
-    --accent-deep: #0a2270;
+    --accent: #0d5cf5;
+    --accent-hover: #0442cc;
+    --accent-light: #e2edff;
+    --accent-deep: #062a80;
 
-    /* Brass — reserved for genuine signal: top scores, Pro, favourites. */
-    --brass: #a97c2f;
-    --brass-light: #fbf3e3;
+    /* Cyan — the sonar return. Reserved for genuine signal:
+       top scores, the active route, live activity. */
+    --signal: #0891b2;
+    --signal-light: #dff6fd;
 
-    --muted: #eef2f9;
-    --muted-foreground: #64748b;
+    /* Oil-slick ramp. Used at low opacity as a sheen, never as a fill. */
+    --iris-1: #22d3ee;
+    --iris-2: #3b82f6;
+    --iris-3: #a855f7;
+    --iris-4: #ec4899;
+    --iris-5: #14b8a6;
+    --iris: linear-gradient(
+      100deg,
+      var(--iris-1) 0%,
+      var(--iris-2) 26%,
+      var(--iris-3) 50%,
+      var(--iris-4) 72%,
+      var(--iris-5) 100%
+    );
+
+    --muted: #e8f0fb;
+    --muted-foreground: #5c7aa6;
 
     /* Two-step border scale: hairline for structure, border for emphasis. */
-    --hairline: #e4eaf3;
-    --border: #d3dced;
+    --hairline: #dbe6f6;
+    --border: #c3d5ef;
 
     --card: #ffffff;
     --card-foreground: #0a1628;
@@ -85,19 +102,19 @@
     --radius: 1rem;
 
     /* ─── Elevation: tight, layered, low-opacity. Never a single soft blur. ─── */
-    --shadow-xs: 0 1px 2px rgba(10, 22, 40, 0.05);
+    --shadow-xs: 0 1px 2px rgba(7, 26, 51, 0.05);
     --shadow-sm:
-      0 1px 2px rgba(10, 22, 40, 0.05),
-      0 2px 6px rgba(10, 22, 40, 0.04);
+      0 1px 2px rgba(7, 26, 51, 0.05),
+      0 2px 6px rgba(7, 26, 51, 0.04);
     --shadow-md:
-      0 1px 2px rgba(10, 22, 40, 0.05),
-      0 4px 12px rgba(10, 22, 40, 0.06),
-      0 12px 28px rgba(10, 22, 40, 0.05);
+      0 1px 2px rgba(7, 26, 51, 0.05),
+      0 4px 12px rgba(7, 26, 51, 0.06),
+      0 12px 28px rgba(7, 26, 51, 0.05);
     --shadow-lg:
-      0 1px 2px rgba(10, 22, 40, 0.06),
-      0 8px 24px rgba(10, 22, 40, 0.08),
-      0 24px 56px rgba(10, 22, 40, 0.08);
-    --shadow-accent: 0 6px 20px rgba(27, 77, 255, 0.24);
+      0 1px 2px rgba(7, 26, 51, 0.06),
+      0 8px 24px rgba(7, 26, 51, 0.08),
+      0 24px 56px rgba(7, 26, 51, 0.08);
+    --shadow-accent: 0 6px 20px rgba(13, 92, 245, 0.28);
 
     --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   }
@@ -117,10 +134,10 @@
     overflow-x: hidden;
     letter-spacing: -0.006em;
     background:
-      radial-gradient(72rem 38rem at 12% -10%, rgba(27, 77, 255, 0.11), transparent 60%),
-      radial-gradient(58rem 32rem at 98% 2%, rgba(169, 124, 47, 0.09), transparent 56%),
-      radial-gradient(50rem 30rem at 60% 108%, rgba(27, 77, 255, 0.06), transparent 60%),
-      linear-gradient(180deg, #f6f9fe 0%, #eef3fb 48%, #f4f7fc 100%);
+      radial-gradient(70rem 38rem at 10% -12%, rgba(34, 211, 238, 0.16), transparent 58%),
+      radial-gradient(60rem 34rem at 96% 0%, rgba(13, 92, 245, 0.14), transparent 56%),
+      radial-gradient(46rem 30rem at 72% 104%, rgba(168, 85, 247, 0.07), transparent 60%),
+      linear-gradient(180deg, #f2f8ff 0%, #e9f1fd 46%, #eff5fe 100%);
     background-attachment: fixed;
   }
 
@@ -276,15 +293,16 @@
     box-shadow: var(--shadow-md);
   }
 
-  /* Hero — an engraved plate rather than a glowing panel. */
+  /* Hero — a deep-water plate with an oil-slick sheen and a slow sonar sweep. */
   .nr-hero {
     position: relative;
     overflow: hidden;
     background:
-      linear-gradient(135deg, #0d1c33 0%, #12294d 46%, #0b2a63 100%);
-    border: 1px solid rgba(255, 255, 255, 0.09);
+      radial-gradient(120% 140% at 8% 0%, rgba(34, 211, 238, 0.16), transparent 56%),
+      linear-gradient(135deg, #04142e 0%, #0a2a5e 44%, #0b3a86 100%);
+    border: 1px solid rgba(148, 214, 255, 0.16);
     box-shadow: var(--shadow-lg);
-    color: #f2f6ff;
+    color: #f2f8ff;
   }
 
   /* Fine engraved rule pattern — the "expensive" detail on the hero plate. */
@@ -297,34 +315,181 @@
     background-image:
       repeating-linear-gradient(
         115deg,
-        rgba(255, 255, 255, 0.045) 0px,
-        rgba(255, 255, 255, 0.045) 1px,
+        rgba(148, 224, 255, 0.07) 0px,
+        rgba(148, 224, 255, 0.07) 1px,
         transparent 1px,
         transparent 7px
       );
     mask-image: radial-gradient(120% 130% at 100% 0%, #000 10%, transparent 70%);
   }
 
+  /* The oil slick.
+     Petrol on water is thin-film interference: repeating hue bands that shift
+     with the viewing angle. A conic gradient cycling the full hue ramp twice,
+     blurred and set to `color-dodge` over the dark plate, reproduces that far
+     better than a single linear wash — and two counter-drifting layers give the
+     bands somewhere to swirl. */
   .nr-hero::after {
     content: '';
     position: absolute;
-    right: -8rem;
-    top: -10rem;
-    width: 26rem;
-    height: 26rem;
-    border-radius: 999px;
+    inset: -55% -25%;
     pointer-events: none;
-    background: radial-gradient(circle, rgba(83, 140, 255, 0.34), transparent 68%);
+    opacity: 0.42;
+    mix-blend-mode: color-dodge;
+    background: conic-gradient(
+      from 210deg at 38% 42%,
+      #0a2a5e 0deg,
+      #22d3ee 42deg,
+      #3b82f6 88deg,
+      #a855f7 132deg,
+      #ec4899 168deg,
+      #14b8a6 210deg,
+      #22d3ee 258deg,
+      #6366f1 304deg,
+      #0a2a5e 360deg
+    );
+    filter: blur(46px) saturate(210%);
+    animation: nr-slick 26s ease-in-out infinite;
+  }
+
+  @keyframes nr-slick {
+    0%,
+    100% {
+      transform: rotate(0deg) scale(1.05);
+    }
+    50% {
+      transform: rotate(24deg) scale(1.22);
+    }
+  }
+
+  /* Second film layer, drifting the other way, keeps the bands moving against
+     each other instead of sliding as one sheet. */
+  .nr-hero .nr-hero-film {
+    position: absolute;
+    inset: -45% -20%;
+    z-index: 1;
+    pointer-events: none;
+    opacity: 0.3;
+    mix-blend-mode: screen;
+    background: conic-gradient(
+      from 20deg at 66% 58%,
+      transparent 0deg,
+      #22d3ee 60deg,
+      transparent 120deg,
+      #a855f7 190deg,
+      transparent 250deg,
+      #14b8a6 310deg,
+      transparent 360deg
+    );
+    filter: blur(58px) saturate(200%);
+    animation: nr-slick-rev 34s ease-in-out infinite;
+  }
+
+  @keyframes nr-slick-rev {
+    0%,
+    100% {
+      transform: rotate(0deg) scale(1.1);
+    }
+    50% {
+      transform: rotate(-30deg) scale(1.28);
+    }
+  }
+
+  /* Scrim. The slick animates, so text contrast would otherwise drift with it.
+     This keeps the left column reliably dark while leaving the film visible on
+     the right, where the sonar lives and no copy sits. */
+  .nr-hero .nr-hero-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    background: linear-gradient(
+      100deg,
+      rgba(4, 20, 46, 0.9) 0%,
+      rgba(4, 20, 46, 0.72) 34%,
+      rgba(4, 20, 46, 0.24) 62%,
+      transparent 88%
+    );
   }
 
   .nr-hero > * {
     position: relative;
-    z-index: 1;
+    z-index: 3;
   }
 
-  /* Brass rule along the bottom edge of the plate. */
+  /* Iridescent rule along the bottom edge of the plate. */
   .nr-hero {
-    border-bottom: 1px solid rgba(169, 124, 47, 0.42);
+    border-bottom: none;
+  }
+
+  .nr-hero-edge {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    z-index: 4;
+    background: var(--iris);
+    background-size: 200% 100%;
+    opacity: 0.9;
+    animation: nr-slick-edge 14s linear infinite;
+  }
+
+  @keyframes nr-slick-edge {
+    from {
+      background-position: 0% 50%;
+    }
+    to {
+      background-position: 200% 50%;
+    }
+  }
+
+  /* Sonar sweep — the product is a radar, so the hero pings.
+     Three rings expanding on a long stagger, barely-there opacity. */
+  /* Sonar sweep — the product is a radar, so the hero pings.
+     Anchored off the right edge so the rings read as an expanding sweep coming
+     from outside the plate, not as a circle parked behind the buttons. */
+  .nr-sonar {
+    position: absolute;
+    right: -6rem;
+    top: 50%;
+    width: 34rem;
+    height: 34rem;
+    z-index: 1;
+    transform: translateY(-50%);
+    pointer-events: none;
+    mask-image: radial-gradient(circle at center, #000 40%, transparent 72%);
+  }
+
+  .nr-sonar span {
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    border: 1px solid rgba(103, 232, 249, 0.55);
+    box-shadow: 0 0 22px rgba(34, 211, 238, 0.18) inset;
+    opacity: 0;
+    animation: nr-ping 7s cubic-bezier(0, 0.35, 0.35, 1) infinite;
+  }
+
+  .nr-sonar span:nth-child(2) {
+    animation-delay: 2.33s;
+  }
+  .nr-sonar span:nth-child(3) {
+    animation-delay: 4.66s;
+  }
+
+  @keyframes nr-ping {
+    0% {
+      transform: scale(0.12);
+      opacity: 0;
+    }
+    10% {
+      opacity: 0.6;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 0;
+    }
   }
 
   /* ─── Cards ─── */
@@ -341,7 +506,7 @@
     border-color: var(--border);
   }
 
-  /* Stat tile — a brass hairline slides in on hover. */
+  /* Stat tile — an iridescent hairline slides in on hover. */
   .nr-stat {
     position: relative;
     overflow: hidden;
@@ -357,7 +522,7 @@
     right: 0;
     top: 0;
     height: 2px;
-    background: linear-gradient(90deg, var(--accent), var(--brass));
+    background: var(--iris);
     transform: scaleX(0);
     transform-origin: left;
     transition: transform 380ms var(--ease-out);
@@ -411,7 +576,7 @@
   }
   .nr-btn-glow:active {
     transform: translateY(0);
-    box-shadow: inset 0 1px 3px rgba(10, 22, 40, 0.22);
+    box-shadow: inset 0 1px 3px rgba(7, 26, 51, 0.22);
   }
 
   .nr-input-glow:focus {
@@ -448,7 +613,7 @@
   }
 
   .nr-icon-orb {
-    filter: drop-shadow(0 4px 12px rgba(10, 22, 40, 0.22));
+    filter: drop-shadow(0 4px 12px rgba(7, 26, 51, 0.22));
   }
 
   /* ─── Chips ─── */
@@ -467,11 +632,54 @@
     color: var(--ink-500);
   }
 
-  /* Score pill for the top band — brass, because it is the rare signal. */
+  /* Score pill for the top band — an oil-slick edge, because it is the rare signal. */
   .nr-score-high {
-    background: linear-gradient(180deg, #fdf7ea 0%, var(--brass-light) 100%);
-    color: #7d5a1c;
-    box-shadow: inset 0 0 0 1px rgba(169, 124, 47, 0.26);
+    position: relative;
+    background: linear-gradient(180deg, #ffffff 0%, var(--signal-light) 100%);
+    color: #075e73;
+  }
+
+  .nr-score-high::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: var(--iris);
+    /* Gradient border: paint the ring, punch out the middle. */
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* Iridescent marker for the active nav route. */
+  .nr-iris-mark {
+    background: var(--iris);
+    background-size: 100% 300%;
+    animation: nr-slick-mark 9s ease-in-out infinite;
+  }
+
+  @keyframes nr-slick-mark {
+    0%,
+    100% {
+      background-position: 50% 0%;
+    }
+    50% {
+      background-position: 50% 100%;
+    }
+  }
+
+  /* Iridescent text — used once, on the wordmark. */
+  .nr-iris-text {
+    background: linear-gradient(100deg, #0b3a86 0%, #0d5cf5 30%, #22d3ee 52%, #a855f7 74%, #0b3a86 100%);
+    background-size: 220% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: nr-slick-edge 16s linear infinite;
   }
 
   /* Page title — one consistent treatment across every route. */
@@ -547,6 +755,17 @@
     .nr-glow-hover,
     .nr-btn-glow {
       transition: none;
+    }
+    .nr-hero::after,
+    .nr-hero .nr-hero-film,
+    .nr-hero-edge,
+    .nr-sonar span,
+    .nr-iris-mark,
+    .nr-iris-text {
+      animation: none;
+    }
+    .nr-sonar {
+      display: none;
     }
   }
 }

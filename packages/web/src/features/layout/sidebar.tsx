@@ -52,10 +52,10 @@ export function Sidebar() {
             <img src={NEWSRADAR_ICON_SRC} alt="Newsradar" className="relative h-full w-full object-contain nr-icon-orb" />
           </div>
           <div className="leading-none">
-            <span className="block font-display text-[17px] font-bold tracking-[-0.035em] text-ink-900">
+            <span className="nr-iris-text block font-display text-[19px] font-extrabold tracking-[-0.04em]">
               Newsradar
             </span>
-            <span className="mt-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-400">
+            <span className="mt-1 block text-[9.5px] font-bold uppercase tracking-[0.16em] text-ink-400">
               AI news studio
             </span>
           </div>
@@ -85,7 +85,7 @@ export function Sidebar() {
                 >
                   {/* Brass rule marks the active route — quieter and more precise than a full gradient fill. */}
                   {isActive && (
-                    <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-brass" />
+                    <span className="nr-iris-mark absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full" />
                   )}
                   <Icon
                     className={cn(

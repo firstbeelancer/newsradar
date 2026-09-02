@@ -8,7 +8,7 @@ const OPERATION_LABELS: Record<string, { label: string; icon: React.ElementType;
   collect_all: { label: 'Поиск', icon: Play, color: 'text-accent' },
   fetch_source: { label: 'Поиск', icon: Play, color: 'text-accent' },
   collect_agent: { label: 'Поиск', icon: Play, color: 'text-accent' },
-  scoring: { label: 'Скоринг', icon: BarChart3, color: 'text-brass' },
+  scoring: { label: 'Скоринг', icon: BarChart3, color: 'text-signal' },
   deepsearch: { label: 'Дипсерч', icon: Search, color: 'text-ink-500' },
   generation: { label: 'Генерация', icon: Sparkles, color: 'text-success' },
   generate_post: { label: 'Генерация', icon: Sparkles, color: 'text-success' },
@@ -172,7 +172,7 @@ export function StatusBar() {
       label: 'Скоринг',
       count: pipeline.awaiting_scoring,
       icon: BarChart3,
-      color: 'text-brass',
+      color: 'text-signal',
     });
   } else if (pipeline.scoring_stuck > 0) {
     stuckChips.push({

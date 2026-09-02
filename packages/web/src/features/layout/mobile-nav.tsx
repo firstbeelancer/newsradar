@@ -59,9 +59,9 @@ export function MobileNav() {
                 isActive ? 'text-accent' : 'text-ink-400 active:text-ink-700'
               )}
             >
-              {/* A brass tick above the active tab, instead of a heavy filled pill. */}
+              {/* An iridescent tick above the active tab, instead of a heavy filled pill. */}
               {isActive && (
-                <span className="absolute -top-px h-[3px] w-7 rounded-b-full bg-brass" />
+                <span className="nr-iris-mark absolute -top-px h-[3px] w-7 rounded-b-full" />
               )}
               <Icon className={cn('h-[21px] w-[21px]', isActive && 'stroke-[2.4]')} />
               <span className={cn('text-[10px] leading-none', isActive ? 'font-bold' : 'font-semibold')}>
@@ -78,7 +78,7 @@ export function MobileNav() {
           )}
           onClick={() => setMoreOpen(!moreOpen)}
         >
-          {moreOpen && <span className="absolute -top-px h-[3px] w-7 rounded-b-full bg-brass" />}
+          {moreOpen && <span className="nr-iris-mark absolute -top-px h-[3px] w-7 rounded-b-full" />}
           <MoreHorizontal className={cn('h-[21px] w-[21px]', moreOpen && 'stroke-[2.4]')} />
           <span className={cn('text-[10px] leading-none', moreOpen ? 'font-bold' : 'font-semibold')}>Ещё</span>
         </button>
