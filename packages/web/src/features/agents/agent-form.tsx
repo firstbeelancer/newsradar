@@ -9,7 +9,7 @@ import type { Agent, CreateAgentDto, UpdateAgentDto, ChipFilter } from '@shared/
 import { chipFiltersApi } from '@shared/api/client';
 import { Shield, Brain, Megaphone, Heart, Paintbrush, Plus, X, GripVertical, Hammer, Wrench, Bot, Globe, Zap, Star, Eye, Search, BookOpen, Rss, MessageCircle, Target, Lightbulb, Compass, Newspaper, Settings2, Sliders, Filter, MessageSquare, type LucideIcon } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
-import { buildAgentTags } from './agent-tags';
+import { buildAgentFormPayload, buildAgentTags } from './agent-tags';
 
 const SUBJECT_AREAS = [
   { id: 'cybersec', label: 'Информационная безопасность', icon: Shield, color: '#ef4444' },
@@ -196,22 +196,20 @@ export function AgentForm({ agent, open, onOpenChange, onSubmit, isSubmitting }:
     if (!validate()) return;
 
     const finalSubjectArea = customSubjectArea.trim() || subjectArea || undefined;
-    const finalTags = buildAgentTags(tags, tagInput);
 
-    const data: CreateAgentDto = {
-      name: name.trim(),
-      description: description.trim(),
+    const data: CreateAgentDto = buildAgentFormPayload({
+      name,
+      description,
       icon,
       color,
       subjectArea: finalSubjectArea,
-      config: {
-        targetAudience: targetAudience.trim() || undefined,
-        tone: tone.trim() || undefined,
-        systemPrompt: systemPrompt.trim() || undefined,
-        tags: finalTags.length > 0 ? finalTags : undefined,
-        scoringWeights: weights,
-      },
-    };
+      targetAudience,
+      tone,
+      systemPrompt,
+      tags,
+      tagInput,
+      scoringWeights: weights,
+    });
 
     // Submit agent data — for new agents, onSubmit should return the created agent
     const result = await onSubmit(agent ? { ...data } : data);

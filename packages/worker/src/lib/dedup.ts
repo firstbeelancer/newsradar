@@ -28,14 +28,24 @@ export function computeGuidHash(guid: string): string {
 
 /**
  * Check if an article with the given raw hash already exists.
+ *
+ * Dedup is scoped to a single agent when `agentId` is given. A source may be
+ * attached to several agents, and each agent is an independent thematic feed
+ * that scores the same article against its own tags and weight matrix — so the
+ * same URL landing in two agents is not a duplicate, it is the point.
  */
 export async function findByRawHash(
-  rawHash: string
+  rawHash: string,
+  agentId?: string
 ): Promise<{ id: string } | undefined> {
   const result = await db
     .select({ id: articles.id })
     .from(articles)
-    .where(eq(articles.rawHash, rawHash))
+    .where(
+      agentId
+        ? and(eq(articles.rawHash, rawHash), eq(articles.agentId, agentId))
+        : eq(articles.rawHash, rawHash)
+    )
     .limit(1);
 
   return result[0];
@@ -43,16 +53,22 @@ export async function findByRawHash(
 
 /**
  * Check if an article with the given GUID hash already exists.
+ * Scoped per agent for the same reason as {@link findByRawHash}.
  */
 export async function findByGuidHash(
-  guidHash: string
+  guidHash: string,
+  agentId?: string
 ): Promise<{ id: string } | undefined> {
   // Store guid hash in rawHash column with a prefix for lookup
   const prefixedHash = `guid:${guidHash}`;
   const result = await db
     .select({ id: articles.id })
     .from(articles)
-    .where(eq(articles.rawHash, prefixedHash))
+    .where(
+      agentId
+        ? and(eq(articles.rawHash, prefixedHash), eq(articles.agentId, agentId))
+        : eq(articles.rawHash, prefixedHash)
+    )
     .limit(1);
 
   return result[0];
@@ -60,17 +76,20 @@ export async function findByGuidHash(
 
 /**
  * Perform raw dedup check. Returns true if article is a duplicate.
+ *
+ * @param agentId — restrict the check to one agent's feed (see findByRawHash).
  */
 export async function checkRawDedup(
   url: string,
   title: string,
-  guid?: string | null
+  guid?: string | null,
+  agentId?: string
 ): Promise<{ isDuplicate: boolean; hash: string; existingId?: string }> {
   // Prefer GUID-based dedup if available
   if (guid && guid.trim().length > 0) {
     const guidHash = computeGuidHash(guid);
     const prefixedHash = `guid:${guidHash}`;
-    const existing = await findByGuidHash(guidHash);
+    const existing = await findByGuidHash(guidHash, agentId);
     if (existing) {
       return { isDuplicate: true, hash: prefixedHash, existingId: existing.id };
     }
@@ -79,7 +98,7 @@ export async function checkRawDedup(
 
   // Fallback to URL+title hash
   const rawHash = computeRawHash(url, title);
-  const existing = await findByRawHash(rawHash);
+  const existing = await findByRawHash(rawHash, agentId);
   if (existing) {
     return { isDuplicate: true, hash: rawHash, existingId: existing.id };
   }

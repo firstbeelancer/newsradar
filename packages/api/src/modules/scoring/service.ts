@@ -134,7 +134,8 @@ export async function reorderScoringCriteria(agentId: string, orderedIds: string
 // ─── Recalculate scores for a specific agent ───
 
 export async function recalculateAgentScores(agentId: string, workspaceId: string) {
-  // Get agent's scoring criteria
+  // Get agent's scoring criteria (hybrid formula weights: ai / keyword /
+  // freshness / source_trust)
   const criteria = await db
     .select()
     .from(scoringCriteria)
@@ -146,6 +147,22 @@ export async function recalculateAgentScores(agentId: string, workspaceId: strin
   for (const c of criteria) {
     weights[c.criterionType] = Number(c.weight);
   }
+
+  // The worker scores from agents.config, not from this job payload, so report
+  // what will actually be applied. Previously this endpoint echoed the
+  // scoring_criteria rows (usually empty) and claimed "usedFallbackWeights",
+  // which made it look like the agent's weight matrix was being ignored.
+  const [agentRow] = await db
+    .select({ config: agents.config, name: agents.name, description: agents.description })
+    .from(agents)
+    .where(and(eq(agents.id, agentId), eq(agents.workspaceId, workspaceId)))
+    .limit(1);
+
+  const agentConfig = (agentRow?.config as Record<string, unknown> | null) ?? {};
+  const aiWeights = (agentConfig.scoringWeights as Record<string, number> | undefined) ?? null;
+  const agentTags = Array.isArray(agentConfig.tags)
+    ? (agentConfig.tags as unknown[]).filter((tag): tag is string => typeof tag === "string")
+    : [];
 
   // Get articles to score
   const articlesToScore = await db
@@ -187,9 +204,16 @@ export async function recalculateAgentScores(agentId: string, workspaceId: strin
   return {
     agentId,
     criteriaCount: criteria.length,
-    usedFallbackWeights: criteria.length === 0,
+    // True only when the agent has no configured AI weight matrix at all — that
+    // is the case where the worker falls back to DEFAULT_AI_WEIGHTS.
+    usedFallbackWeights: aiWeights === null,
     articlesQueued: queuedCount,
+    /** Hybrid formula weights from scoring_criteria. */
     weights,
+    /** The 5-criteria AI weight matrix the worker will actually apply. */
+    aiWeights,
+    /** Tags the worker will use as scoring keywords. */
+    tags: agentTags,
     triggeredAt: new Date().toISOString(),
   };
 }

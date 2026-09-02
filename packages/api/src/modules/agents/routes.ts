@@ -40,7 +40,27 @@ const chipFilterSchema = z.object({
   label: z.string().min(1).max(100),
   description: z.string().optional(),
   pattern: z.string().optional(),
-  operator: z.enum(["contains", "not_contains", "equals", "starts_with", "regex", "in", "gt", "lt", "gte", "lte"]).default("contains"),
+  // Must stay in sync with chip-filters/routes.ts, the chip_filters CHECK
+  // constraint and matchesChipFilter() in the worker scorer. The age_days_*
+  // operators back the default «Устаревшее» filter and were rejected here.
+  operator: z
+    .enum([
+      "contains",
+      "not_contains",
+      "equals",
+      "starts_with",
+      "regex",
+      "in",
+      "gt",
+      "lt",
+      "gte",
+      "lte",
+      "age_days_gt",
+      "age_days_gte",
+      "age_days_lt",
+      "age_days_lte",
+    ])
+    .default("contains"),
   scoreModifier: z.number().min(-100).max(100).default(0),
   color: z.string().max(20).default("default"),
   icon: z.string().max(50).optional(),

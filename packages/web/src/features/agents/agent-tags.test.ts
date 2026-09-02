@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildAgentTags, buildSettingsAgentCreatePayload } from './agent-tags';
+import {
+  buildAgentFormPayload,
+  buildAgentTags,
+  buildSettingsAgentCreatePayload,
+} from './agent-tags';
 
 describe('agent tag helpers', () => {
   it('includes the pending tag input when building agent tags', () => {
@@ -38,5 +42,48 @@ describe('agent tag helpers', () => {
       },
       position: 3,
     });
+  });
+});
+
+describe('buildAgentFormPayload', () => {
+  const base = {
+    name: '  DevOps  ',
+    description: ' infra news ',
+    icon: 'server',
+    color: '#0ea5e9',
+    subjectArea: 'devops',
+    targetAudience: '',
+    tone: ' professional ',
+    systemPrompt: '',
+    tags: ['kubernetes', 'terraform'],
+    tagInput: '',
+    scoringWeights: { relevance: 40, novelty: 20, hype: 15, practical: 15, local: 10 },
+  };
+
+  it('sends an empty tag array when the user cleared every tag', () => {
+    // `undefined` would be dropped from the JSON body, and the backend merges
+    // config — so the old tags survived and scoring kept using them.
+    const payload = buildAgentFormPayload({ ...base, tags: [], tagInput: '' });
+
+    expect(payload.config?.tags).toEqual([]);
+    expect(payload.config).toHaveProperty('tags');
+  });
+
+  it('folds the pending tag input into the saved tags', () => {
+    const payload = buildAgentFormPayload({ ...base, tagInput: 'Ansible' });
+
+    expect(payload.config?.tags).toEqual(['kubernetes', 'terraform', 'ansible']);
+  });
+
+  it('carries the scoring weight matrix through untouched', () => {
+    expect(buildAgentFormPayload(base).config?.scoringWeights).toEqual(base.scoringWeights);
+  });
+
+  it('trims the display fields', () => {
+    const payload = buildAgentFormPayload(base);
+
+    expect(payload.name).toBe('DevOps');
+    expect(payload.description).toBe('infra news');
+    expect(payload.config?.tone).toBe('professional');
   });
 });

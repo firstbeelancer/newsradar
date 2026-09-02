@@ -40,6 +40,7 @@ export async function processRawDedup(
       link: articles.link,
       guid: articles.guid,
       rawHash: articles.rawHash,
+      agentId: articles.agentId,
     })
     .from(articles)
     .where(eq(articles.id, articleId))
@@ -58,8 +59,11 @@ export async function processRawDedup(
       : computeRawHash(article.link, article.title);
   }
 
-  // Check for existing article with same hash (excluding self)
-  const existing = await findByRawHash(rawHash);
+  // Check for an existing article with the same hash *within the same agent*.
+  // A source attached to several agents intentionally produces one copy per
+  // agent so each thematic feed scores it against its own tags and weights;
+  // a global check would silently delete every copy but the first.
+  const existing = await findByRawHash(rawHash, article.agentId);
   if (existing && existing.id !== articleId) {
     // Duplicate found — mark as deduped
     logger.info(

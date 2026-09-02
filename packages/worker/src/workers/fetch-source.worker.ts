@@ -27,23 +27,96 @@ export interface FetchSourceJob {
   operationId?: string;
 }
 
+export interface AgentRef {
+  agentId: string;
+  workspaceId: string;
+}
+
 /**
- * Resolve the agent associated with a source via agent_sources junction table.
+ * Resolve every agent associated with a source via the agent_sources junction.
+ *
+ * This used to `.limit(1)`. Collection queues one fetch job per *source* (see
+ * deduplicateCollectionSources), so when a source was attached to two agents,
+ * only whichever junction row happened to come back first ever received the
+ * articles — the second agent's feed stayed silently empty and its tags and
+ * weight matrix were never applied to that source at all.
  */
-async function resolveAgentForSource(
-  sourceId: string
-): Promise<{ agentId: string; workspaceId: string } | null> {
-  const result = await db
+async function resolveAgentsForSource(sourceId: string): Promise<AgentRef[]> {
+  return db
     .select({
       agentId: agentSources.agentId,
       workspaceId: agents.workspaceId,
     })
     .from(agentSources)
     .innerJoin(agents, eq(agentSources.agentId, agents.id))
-    .where(eq(agentSources.sourceId, sourceId))
-    .limit(1);
+    .where(eq(agentSources.sourceId, sourceId));
+}
 
-  return result[0] ?? null;
+interface IngestItemInput {
+  title: string;
+  description: string;
+  content: string;
+  link: string;
+  guid: string | null;
+  publishedAt: Date | null;
+  author?: string | null;
+}
+
+/**
+ * Insert one fetched item into every agent subscribed to the source.
+ * Dedup runs per agent, so each thematic feed keeps its own copy to score.
+ */
+async function ingestItemForAgents(
+  item: IngestItemInput,
+  sourceId: string,
+  agentRefs: AgentRef[]
+): Promise<{ inserted: number; duplicates: number }> {
+  let inserted = 0;
+  let duplicates = 0;
+
+  for (const agentRef of agentRefs) {
+    const { isDuplicate, hash } = await checkRawDedup(
+      item.link,
+      item.title,
+      item.guid,
+      agentRef.agentId
+    );
+
+    if (isDuplicate) {
+      duplicates++;
+      continue;
+    }
+
+    const [article] = await db
+      .insert(articles)
+      .values({
+        title: item.title,
+        description: item.description,
+        content: item.content,
+        link: item.link,
+        guid: item.guid ?? item.link,
+        publishedAt: item.publishedAt,
+        author: item.author ?? undefined,
+        sourceId,
+        agentId: agentRef.agentId,
+        workspaceId: agentRef.workspaceId,
+        status: "fetched",
+        language: "auto",
+        needsTranslation: true,
+        rawHash: hash,
+      })
+      .returning();
+
+    inserted++;
+
+    await rawDedupQueue.add(
+      `raw-dedup-${article.id}`,
+      { articleId: article.id },
+      { jobId: `raw-dedup-${article.id}` }
+    );
+  }
+
+  return { inserted, duplicates };
 }
 
 function isFinalAttempt(job: Job<FetchSourceJob>): boolean {
@@ -80,8 +153,8 @@ export async function processFetchSource(
   }
 
   // Resolve agent/workspace
-  const agentRef = await resolveAgentForSource(sourceId);
-  if (!agentRef) {
+  const agentRefs = await resolveAgentsForSource(sourceId);
+  if (agentRefs.length === 0) {
     logger.warn({ sourceId }, "No agent linked to source");
     return { fetched: 0, newArticles: 0, duplicates: 0, skippedStale: 0, skippedUndated: 0 };
   }
@@ -128,13 +201,12 @@ export async function processFetchSource(
           continue;
         }
 
-        const { isDuplicate, hash } = await checkRawDedup(
-          item.link,
-          item.title,
-          item.guid
+        // Cheap pre-filter: if every subscribed agent already has this item,
+        // skip the expensive date lookup and full-text fetch below.
+        const preCheck = await Promise.all(
+          agentRefs.map((ref) => checkRawDedup(item.link, item.title, item.guid, ref.agentId))
         );
-
-        if (isDuplicate) {
+        if (preCheck.every((check) => check.isDuplicate)) {
           dupCount++;
           continue;
         }
@@ -179,35 +251,22 @@ export async function processFetchSource(
         const articleDescription = item.description || fetchedContent.slice(0, 700);
         const articleContent = item.content || fetchedContent || item.description;
 
-        // Insert new article
-        const [article] = await db
-          .insert(articles)
-          .values({
+        const ingested = await ingestItemForAgents(
+          {
             title: item.title,
             description: articleDescription,
             content: articleContent,
             link: item.link,
-            guid: item.guid || item.link,
+            guid: item.guid ?? null,
             publishedAt,
             author: item.author,
-            sourceId: source.id,
-            agentId: agentRef.agentId,
-            workspaceId: agentRef.workspaceId,
-            status: "fetched",
-            language: "auto",
-            needsTranslation: true,
-            rawHash: hash,
-          })
-          .returning();
-
-        newCount++;
-
-        // Queue for raw dedup processing
-        await rawDedupQueue.add(
-          `raw-dedup-${article.id}`,
-          { articleId: article.id },
-          { jobId: `raw-dedup-${article.id}` }
+          },
+          source.id,
+          agentRefs
         );
+
+        newCount += ingested.inserted;
+        dupCount += ingested.duplicates;
       }
     } else if (source.type === "telegram") {
       const username = source.channelUsername ?? source.url;
@@ -223,43 +282,21 @@ export async function processFetchSource(
           skippedStale++;
           continue;
         }
-        const { isDuplicate, hash } = await checkRawDedup(
-          item.link,
-          item.title,
-          item.messageId
-        );
-
-        if (isDuplicate) {
-          dupCount++;
-          continue;
-        }
-
-        const [article] = await db
-          .insert(articles)
-          .values({
+        const ingested = await ingestItemForAgents(
+          {
             title: item.title,
             description: item.content.slice(0, 500),
             content: item.content,
             link: item.link,
             guid: item.messageId,
             publishedAt: item.date,
-            sourceId: source.id,
-            agentId: agentRef.agentId,
-            workspaceId: agentRef.workspaceId,
-            status: "fetched",
-            language: "auto",
-            needsTranslation: true,
-            rawHash: hash,
-          })
-          .returning();
-
-        newCount++;
-
-        await rawDedupQueue.add(
-          `raw-dedup-${article.id}`,
-          { articleId: article.id },
-          { jobId: `raw-dedup-${article.id}` }
+          },
+          source.id,
+          agentRefs
         );
+
+        newCount += ingested.inserted;
+        dupCount += ingested.duplicates;
       }
     } else if (source.type === "web") {
       const result = await parseWebPage(source.url);
@@ -277,13 +314,10 @@ export async function processFetchSource(
           continue;
         }
 
-        const { isDuplicate, hash } = await checkRawDedup(
-          item.link,
-          item.title,
-          item.guid
+        const preCheck = await Promise.all(
+          agentRefs.map((ref) => checkRawDedup(item.link, item.title, item.guid, ref.agentId))
         );
-
-        if (isDuplicate) {
+        if (preCheck.every((check) => check.isDuplicate)) {
           dupCount++;
           continue;
         }
@@ -314,32 +348,21 @@ export async function processFetchSource(
           // description is enough
         }
 
-        const [article] = await db
-          .insert(articles)
-          .values({
+        const ingested = await ingestItemForAgents(
+          {
             title: item.title,
             description: (item.description || fullContent).slice(0, 700),
             content: fullContent || item.description,
             link: item.link,
-            guid: item.guid || item.link,
+            guid: item.guid ?? null,
             publishedAt,
-            sourceId: source.id,
-            agentId: agentRef.agentId,
-            workspaceId: agentRef.workspaceId,
-            status: "fetched",
-            language: "auto",
-            needsTranslation: true,
-            rawHash: hash,
-          })
-          .returning();
-
-        newCount++;
-
-        await rawDedupQueue.add(
-          `raw-dedup-${article.id}`,
-          { articleId: article.id },
-          { jobId: `raw-dedup-${article.id}` }
+          },
+          source.id,
+          agentRefs
         );
+
+        newCount += ingested.inserted;
+        dupCount += ingested.duplicates;
       }
     } else {
       throw new Error(`Unknown source type: ${source.type}`);

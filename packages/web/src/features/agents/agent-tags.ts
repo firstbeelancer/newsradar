@@ -14,6 +14,44 @@ export function buildAgentTags(existingTags: string[], pendingInput: string): st
   return [...byKey.values()];
 }
 
+export interface AgentFormValues {
+  name: string;
+  description: string;
+  icon: string;
+  color: string;
+  subjectArea?: string;
+  targetAudience: string;
+  tone: string;
+  systemPrompt: string;
+  tags: string[];
+  tagInput: string;
+  scoringWeights: Record<string, number>;
+}
+
+/**
+ * Build the agent create/update payload from the form state.
+ *
+ * `tags` is always sent as an array, including an empty one: `undefined` is
+ * dropped by JSON.stringify, and the backend merges config objects, so omitting
+ * the key made "clear all tags" a no-op and left scoring on the stale tag set.
+ */
+export function buildAgentFormPayload(values: AgentFormValues): CreateAgentDto {
+  return {
+    name: values.name.trim(),
+    description: values.description.trim(),
+    icon: values.icon,
+    color: values.color,
+    subjectArea: values.subjectArea,
+    config: {
+      targetAudience: values.targetAudience.trim() || undefined,
+      tone: values.tone.trim() || undefined,
+      systemPrompt: values.systemPrompt.trim() || undefined,
+      tags: buildAgentTags(values.tags, values.tagInput),
+      scoringWeights: values.scoringWeights,
+    },
+  } as CreateAgentDto;
+}
+
 export function buildSettingsAgentCreatePayload(
   data: CreateAgentDto | UpdateAgentDto,
   position: number
